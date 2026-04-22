@@ -798,3 +798,127 @@ async function autoPollQuotes() {
 
 setTimeout(autoPollQuotes, 5_000);
 setInterval(autoPollQuotes, AUTO_POLL_MS);
+
+// ---------- 경제 캘린더 자동 수집 (토스증권 공개 API) ----------
+// 토스증권이 토스인베스트 캘린더 페이지에서 공개로 노출하는 "이번 주 핵심 이벤트"
+// AI 큐레이션 엔드포인트를 그대로 사용한다. 이미 토스 측에서 중요도 높은 항목만
+// 선별되어 있어서 앞의 Top 5 만 추려 events.json 에 덮어쓴다.
+//
+//   GET https://wts-info-api.tossinvest.com/api/v1/calendar/ai-summary/key-events
+//     → result.eci.indicators[]  경제지표 (한국어 title 포함)
+//     → result.earnings[]        실적 발표 (한국어 회사명 포함)
+//
+// 실패하면 기존 events.json 은 그대로 둔다 (프런트가 빈 목록을 보지 않도록 보수적 처리).
+const TOSS_CALENDAR_URL = 'https://wts-info-api.tossinvest.com/api/v1/calendar/ai-summary/key-events';
+const EVENTS_REFRESH_MS = 6 * 60 * 60 * 1000; // 6시간
+const EVENTS_TOP_N = 5;
+
+function todayKST() {
+  return nowKST().slice(0, 10);
+}
+
+function slugifyRic(ric) {
+  return String(ric || '').toLowerCase().replace(/[^a-z0-9]+/g, '').slice(0, 14) || 'evt';
+}
+
+async function fetchTossKeyEvents() {
+  const r = await httpsGet(TOSS_CALENDAR_URL, {
+    timeoutMs: 8000,
+    headers: {
+      'Referer': 'https://www.tossinvest.com/calendar',
+      'Origin':  'https://www.tossinvest.com',
+    },
+  });
+  if (!r.ok) {
+    logLine('warn', 'toss.calendar.http', { status: r.status });
+    return null;
+  }
+  let j;
+  try { j = JSON.parse(r.body); }
+  catch (e) { logLine('warn', 'toss.calendar.parse', { err: String(e) }); return null; }
+
+  const events = [];
+
+  // 경제지표
+  const indicators = Array.isArray(j?.result?.eci?.indicators) ? j.result.eci.indicators : [];
+  for (const i of indicators) {
+    if (!i || !i.eciActDt || !i.title) continue;
+    const date = String(i.eciActDt).slice(0, 10);
+    if (!SAFE_DATE_RE.test(date)) continue;
+    const timeHHMM = /^\d{2}:\d{2}/.test(i.actValNs || '') ? String(i.actValNs).slice(0, 5) : '';
+    const country = String(i.ric || '').slice(0, 2).toUpperCase();
+    const tag = /^[A-Z]{2}$/.test(country) ? country : '지표';
+    let unitSuffix = '';
+    if (i.displayUnit) unitSuffix = i.displayUnit;
+    else if (i.unit === 'Percent') unitSuffix = '%';
+    const hist = (i.historical != null) ? `이전 ${i.historical}${unitSuffix ? ' ' + unitSuffix : ''}`.trim() : '';
+    events.push({
+      id: `ev-${date.replace(/-/g, '')}-${slugifyRic(i.ric)}`,
+      date,
+      title: timeHHMM ? `${i.title} (${timeHHMM} KST)` : i.title,
+      category: 'economic',
+      importance: 'high',
+      tag,
+      note: hist,
+    });
+  }
+
+  // 실적 발표
+  const earnings = Array.isArray(j?.result?.earnings) ? j.result.earnings : [];
+  for (const e of earnings) {
+    if (!e || !e.announceDateTime || !e.companyName) continue;
+    const date = String(e.announceDateTime).slice(0, 10);
+    if (!SAFE_DATE_RE.test(date)) continue;
+    const ms = String(e.announceMarketStatus || '');
+    const marketCountry = ms.split('_')[0] === 'KR' ? 'kr' : 'us';
+    const statusText = e.announceMarketStatusText ? ` (${e.announceMarketStatusText})` : '';
+    const code = String(e.companyCode || '').replace(/[^A-Za-z0-9]/g, '').slice(0, 10).toLowerCase();
+    const noteBits = [];
+    if (e.operatingProfitEstDisplay) noteBits.push(`영업이익 예상 ${e.operatingProfitEstDisplay}`);
+    if (e.salesEstDisplay) noteBits.push(`매출 예상 ${e.salesEstDisplay}`);
+    events.push({
+      id: `ev-${date.replace(/-/g, '')}-${marketCountry}${code || 'co'}`,
+      date,
+      title: `${e.companyName} 실적 발표${statusText}`,
+      category: 'earnings',
+      importance: 'critical',
+      tag: '실적',
+      note: noteBits.join(' · '),
+    });
+  }
+
+  return events;
+}
+
+async function refreshEvents() {
+  try {
+    const fresh = await fetchTossKeyEvents();
+    if (!fresh || !fresh.length) {
+      logLine('warn', 'events.refresh.empty');
+      return;
+    }
+    const today = todayKST();
+    const upcoming = fresh
+      .filter(e => e.date >= today)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .slice(0, EVENTS_TOP_N);
+
+    if (!upcoming.length) {
+      logLine('warn', 'events.refresh.no-upcoming', { total: fresh.length });
+      return;
+    }
+
+    writeJSON(EVENTS_FILE, {
+      version: 2,
+      updatedAt: nowKST(),
+      source: 'toss-invest-ai-key-events',
+      events: upcoming,
+    });
+    logLine('info', 'events.refresh.ok', { count: upcoming.length, first: upcoming[0].date, last: upcoming[upcoming.length - 1].date });
+  } catch (e) {
+    logLine('error', 'events.refresh.fail', { err: String(e && e.stack || e) });
+  }
+}
+
+setTimeout(refreshEvents, 10_000);
+setInterval(refreshEvents, EVENTS_REFRESH_MS);
