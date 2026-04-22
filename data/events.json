@@ -1,0 +1,141 @@
+{
+  "version": 2,
+  "updatedAt": "2026-04-20T18:10:00+09:00",
+  "events": [
+    {
+      "id": "ev-20260421-export20",
+      "date": "2026-04-21",
+      "title": "한국 4월 1~20일 수출 잠정치",
+      "category": "economic",
+      "importance": "high",
+      "tag": "KR",
+      "note": ""
+    },
+    {
+      "id": "ev-20260422-tsla",
+      "date": "2026-04-22",
+      "title": "Tesla Q1 2026 실적 (장 마감 후)",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": ""
+    },
+    {
+      "id": "ev-20260422-samsungq1",
+      "date": "2026-04-22",
+      "title": "삼성전자 Q1 잠정실적(예정)",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": ""
+    },
+    {
+      "id": "ev-20260423-skhynix",
+      "date": "2026-04-23",
+      "title": "SK하이닉스 Q1 2026 실적 발표 (오후 3시)",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": ""
+    },
+    {
+      "id": "ev-20260423-uspce",
+      "date": "2026-04-23",
+      "title": "미국 3월 PCE 물가",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": ""
+    },
+    {
+      "id": "ev-20260424-krbok",
+      "date": "2026-04-24",
+      "title": "한국 금융통화위원회 회의록",
+      "category": "economic",
+      "importance": "mid",
+      "tag": "KR",
+      "note": ""
+    },
+    {
+      "id": "ev-20260425-bigtech",
+      "date": "2026-04-25",
+      "title": "미국 Big Tech 실적 (MSFT/META)",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": ""
+    },
+    {
+      "id": "ev-20260428-msft",
+      "date": "2026-04-28",
+      "title": "Microsoft Q3 FY26 실적 (장 마감 후)",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": ""
+    },
+    {
+      "id": "ev-20260429-fomc",
+      "date": "2026-04-29",
+      "title": "FOMC 금리 결정 및 성명 (14:00 ET / 익일 03:00 KST)",
+      "category": "economic",
+      "importance": "critical",
+      "tag": "US",
+      "note": ""
+    },
+    {
+      "id": "ev-20260429-megatech",
+      "date": "2026-04-29",
+      "title": "Amazon · Meta · Alphabet Q1 실적 (장 마감 후)",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": ""
+    },
+    {
+      "id": "ev-20260430-aapl-sec",
+      "date": "2026-04-30",
+      "title": "Apple Q2 FY26 실적 / 삼성전자 Q1 컨퍼런스콜 10:00 KST",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": ""
+    },
+    {
+      "id": "ev-20260501-krexp",
+      "date": "2026-05-01",
+      "title": "한국 4월 수출입 동향",
+      "category": "economic",
+      "importance": "high",
+      "tag": "KR",
+      "note": ""
+    },
+    {
+      "id": "ev-20260508-usnfp",
+      "date": "2026-05-08",
+      "title": "미국 4월 고용보고서 (NFP, 실업률)",
+      "category": "economic",
+      "importance": "critical",
+      "tag": "US",
+      "note": ""
+    },
+    {
+      "id": "ev-20260512-uscpi",
+      "date": "2026-05-12",
+      "title": "미국 4월 CPI (08:30 ET)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": ""
+    },
+    {
+      "id": "ev-20260520-nvda",
+      "date": "2026-05-20",
+      "title": "Nvidia Q1 FY27 실적 (장 마감 후)",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": ""
+    }
+  ]
+}

@@ -1,0 +1,21 @@
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# 서버 런타임 산출물 (배포 후 자동 생성). 커밋하지 않는다.
+data/logs/
+data/quote-cache.json
+data/quote-cache.json.tmp
+data/*.corrupt-*.bak
+
+# OS / 에디터
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# 로컬 테스트용
+.env
+.env.local

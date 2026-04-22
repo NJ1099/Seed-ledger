@@ -1,0 +1,16 @@
+{
+  "name": "seed-public",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Seed (Liquid Ledger) 공개 배포판 — 개인 데이터는 브라우저 localStorage, 시세·이벤트만 서버 프록시.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pdf-parse": "^2.4.5"
+  }
+}

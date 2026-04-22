@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>자산 포트폴리오</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
+<link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="mark">○</span>
+      <span class="wordmark">자산 포트폴리오</span>
+      <span class="sub">Liquid Ledger</span>
+    </div>
+
+    <nav class="sidenav">
+      <button class="tab active" data-tab="assets"><span class="tab-ico">📊</span>대시보드</button>
+      <button class="tab" data-tab="spend"><span class="tab-ico">💳</span>소비</button>
+      <button class="tab" data-tab="graph"><span class="tab-ico">📈</span>그래프</button>
+    </nav>
+
+    <div class="sidenav-bottom">
+      <button class="snap-btn" id="snap-btn" title="오늘 총자산을 그래프용 스냅샷으로 저장">＋ 오늘 스냅샷</button>
+      <div class="foot-sync" id="foot-sync">—</div>
+    </div>
+  </aside>
+
+  <div class="workspace">
+    <header class="topbar">
+      <div class="ticker-strip" id="ticker-strip" aria-live="polite">
+        <div class="ts-row ts-row-index" id="ts-index"></div>
+        <div class="ts-row ts-row-own">
+          <span class="ts-date" id="ts-date">—</span>
+          <span class="ts-dot">·</span>
+          <span class="ts-quote" id="ts-quote">시세 불러오는 중…</span>
+        </div>
+      </div>
+
+      <div class="totals">
+        <div class="totals-label">총 자산</div>
+        <div class="totals-value" id="total-krw">—</div>
+        <div class="totals-delta" id="total-delta">&nbsp;</div>
+      </div>
+    </header>
+
+    <main>
+  <!-- =================== 자산 탭 =================== -->
+  <section class="panel" id="panel-assets">
+
+    <!-- 대시보드: KPI + 포트폴리오 구성 도넛 + 미니 스파크라인 -->
+    <div class="dashboard">
+      <div class="dash-kpis">
+        <div class="dkpi"><div class="d-lab">금융 자산</div><div class="d-val" id="dk-financial">—</div><div class="d-sub" id="dk-financial-sub">부동산 제외</div></div>
+        <div class="dkpi"><div class="d-lab">투자 자산</div><div class="d-val" id="dk-invest">—</div><div class="d-sub" id="dk-invest-sub">주식·코인</div></div>
+        <div class="dkpi"><div class="d-lab">평가 손익</div><div class="d-val" id="dk-pl">—</div><div class="d-sub" id="dk-pl-sub">&nbsp;</div></div>
+        <div class="dkpi"><div class="d-lab">이번 달 지출</div><div class="d-val" id="dk-spend">—</div><div class="d-sub" id="dk-spend-sub">저축 제외</div></div>
+      </div>
+
+      <div class="dash-split">
+        <div class="dash-card dash-donut">
+          <div class="dc-title">자산 구성</div>
+          <div class="dd-wrap">
+            <canvas id="alloc-donut" width="200" height="200"></canvas>
+            <div class="alloc-legend" id="alloc-legend"></div>
+          </div>
+        </div>
+
+        <div class="dash-card dash-portfolio">
+          <div class="dc-title">투자 포트폴리오</div>
+          <div class="pf-table" id="pf-table"><!-- 종목별 비중·손익 --></div>
+        </div>
+
+        <div class="dash-card dash-trend">
+          <div class="dc-title">최근 30일 총자산</div>
+          <div class="spark-wrap">
+            <canvas id="mini-spark" height="110"></canvas>
+            <div class="chart-tooltip spark-tooltip hidden" id="spark-tooltip"></div>
+          </div>
+          <div class="dt-stat" id="dt-stat">—</div>
+        </div>
+      </div>
+
+      <!-- 주요 이벤트 (가로 스트립 - 대시보드 최상단 배치) -->
+      <div class="dash-card events-card events-strip">
+        <div class="dc-title">
+          📅 주요 이벤트
+          <button type="button" class="btn-ghost btn-xs" id="ev-add-btn" title="이벤트 추가">＋ 추가</button>
+        </div>
+        <div class="ev-addform hidden" id="ev-addform">
+          <input type="date" id="ev-new-date" />
+          <input type="text" id="ev-new-title" placeholder="이벤트 제목" maxlength="120" />
+          <select id="ev-new-category">
+            <option value="economic" selected>경제지표</option>
+            <option value="earnings">실적</option>
+          </select>
+          <select id="ev-new-importance">
+            <option value="critical">최상</option>
+            <option value="high" selected>상</option>
+            <option value="mid">중</option>
+            <option value="low">하</option>
+          </select>
+          <input type="text" id="ev-new-tag" placeholder="태그 (KR/US 등)" maxlength="20" />
+          <button type="button" class="btn-primary btn-xs" id="ev-save-btn">저장</button>
+          <button type="button" class="btn-ghost btn-xs" id="ev-cancel-btn">취소</button>
+        </div>
+        <div class="ev-strip" id="ev-list"><!-- JS --></div>
+      </div>
+    </div>
+
+    <div class="eq-grid" id="eq-grid"><!-- 유형별 카드 동적 렌더 --></div>
+
+    <div class="add-card">
+      <div class="ac-head">
+        <h3>＋ 계좌 추가</h3>
+        <button type="button" class="btn-ghost" id="asset-import-open">📄 CSV / XLS / PDF 가져오기</button>
+      </div>
+      <form id="acc-form" class="acc-form" autocomplete="off">
+        <div class="field">
+          <label>유형</label>
+          <select name="type" required>
+            <option value="cash">현금</option>
+            <option value="savings">은행</option>
+            <option value="brokerage">증권 계좌 (ISA/IRP/연금)</option>
+            <option value="stock_kr">국내 주식 (단일 종목)</option>
+            <option value="stock_us">해외 주식 (단일 종목)</option>
+            <option value="crypto">암호화폐</option>
+            <option value="realestate">부동산</option>
+            <option value="custom">연금·펀드·기타 (원금+평가금액)</option>
+          </select>
+        </div>
+
+        <!-- 은행/증권사 선택 -->
+        <div class="field ff-institution">
+          <label>기관</label>
+          <select name="institution"><!-- JS 로 주입 --></select>
+        </div>
+
+        <!-- 은행 상품 -->
+        <div class="field ff-bank-product">
+          <label>상품</label>
+          <select name="product">
+            <option value="예금">예금</option>
+            <option value="적금">적금</option>
+            <option value="파킹통장">파킹통장</option>
+            <option value="수시입출">수시입출</option>
+            <option value="CMA">CMA</option>
+            <option value="대출">대출</option>
+          </select>
+        </div>
+
+        <!-- 증권 계좌 유형 -->
+        <div class="field ff-broker-account">
+          <label>계좌</label>
+          <select name="accountKind">
+            <option value="일반">일반 위탁</option>
+            <option value="ISA">ISA</option>
+            <option value="연금저축">연금저축</option>
+            <option value="IRP">퇴직연금(IRP)</option>
+            <option value="청년도약">청년도약계좌</option>
+          </select>
+        </div>
+
+        <div class="field grow ff-label">
+          <label>라벨</label>
+          <input name="label" maxlength="60" placeholder="예: 월급통장 / 송파구 아파트 (비워두면 자동)" />
+        </div>
+
+        <div class="field ff-amount">
+          <label>금액 (KRW)</label>
+          <input name="amountKRW" type="number" step="1" placeholder="0" />
+        </div>
+
+        <div class="field ff-principal">
+          <label>원금 (KRW)</label>
+          <input name="principalKRW" type="number" step="1" placeholder="0" />
+        </div>
+
+        <div class="field ff-ticker">
+          <label>티커 / 종목코드</label>
+          <input name="ticker" maxlength="20" placeholder="005930 / AAPL / KRW-BTC" />
+        </div>
+        <div class="field ff-qty">
+          <label>수량</label>
+          <input name="quantity" type="number" step="any" min="0" placeholder="0" />
+        </div>
+        <div class="field ff-avg">
+          <label>평균 단가</label>
+          <input name="avgCost" type="number" step="any" min="0" placeholder="0" />
+        </div>
+
+        <div class="field ff-rate">
+          <label>금리 (%)</label>
+          <input name="interestRate" type="number" step="0.01" placeholder="3.80" />
+        </div>
+        <div class="field ff-maturity">
+          <label>만기일</label>
+          <input name="maturityDate" type="date" />
+        </div>
+        <div class="field ff-start">
+          <label>시작일</label>
+          <input name="startDate" type="date" />
+        </div>
+        <div class="field ff-monthly">
+          <label>월 적립금 (KRW)</label>
+          <input name="monthlyDeposit" type="number" step="1" min="0" placeholder="0" />
+        </div>
+        <div class="field ff-tax">
+          <label>세율 (%)</label>
+          <input name="taxRate" type="number" step="0.01" min="0" max="99" placeholder="15.4" />
+        </div>
+
+        <!-- 증권 계좌 전용 -->
+        <div class="field ff-cash-krw">
+          <label>예수금 (KRW, 선택)</label>
+          <input name="cashKRW" type="number" step="1" min="0" placeholder="0" />
+        </div>
+
+        <div class="ff-holdings-editor">
+          <div class="he-head">
+            <h4>보유 종목</h4>
+            <button type="button" class="btn-ghost" id="he-add">＋ 종목 추가</button>
+          </div>
+          <div class="holdings-editor">
+            <div class="he-hdr">
+              <span>구분</span>
+              <span>티커</span>
+              <span>종목명</span>
+              <span>수량</span>
+              <span title="해외주식은 USD, 국내주식은 KRW">평단 <span class="he-hint">($ / ₩)</span></span>
+              <span></span>
+            </div>
+            <div class="he-rows" id="he-rows"></div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <label class="keep-mode" title="제출 후 유형·기관을 유지해 같은 카테고리에서 연속 입력할 수 있습니다">
+            <input type="checkbox" id="acc-keep-mode" /> 계속 추가
+          </label>
+          <button type="button" class="btn-ghost" id="acc-cancel" hidden>취소</button>
+          <button type="submit" class="btn-primary" id="acc-submit">추가</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- =================== 소비 탭 =================== -->
+  <section class="panel hidden" id="panel-spend">
+    <!-- 기간별 KPI (일/주/월/연) + 전월 대비 -->
+    <div class="spend-kpis">
+      <div class="kpi"><div class="k-label">오늘 지출</div><div class="k-value" id="sp-today">—</div><div class="k-sub" id="sp-today-sub"></div></div>
+      <div class="kpi"><div class="k-label">최근 7일</div><div class="k-value" id="sp-week">—</div><div class="k-sub" id="sp-week-sub"></div></div>
+      <div class="kpi"><div class="k-label">이번 달 총 지출</div><div class="k-value" id="sp-total">—</div><div class="k-sub" id="sp-total-sub"></div></div>
+      <div class="kpi"><div class="k-label">올해 누적</div><div class="k-value" id="sp-year">—</div><div class="k-sub" id="sp-year-sub"></div></div>
+    </div>
+
+    <div class="spend-kpis spend-kpis-2">
+      <div class="kpi kpi-sm"><div class="k-label">고정 지출</div><div class="k-value" id="sp-fixed">—</div></div>
+      <div class="kpi kpi-sm"><div class="k-label">변동 지출</div><div class="k-value" id="sp-var">—</div></div>
+      <div class="kpi kpi-sm"><div class="k-label">저축 기여</div><div class="k-value" id="sp-save">—</div></div>
+      <div class="kpi kpi-sm"><div class="k-label">수입</div><div class="k-value" id="sp-income">—</div></div>
+    </div>
+
+    <!-- 일별 추이 그래프 (이번 달) -->
+    <div class="trend-card">
+      <div class="trend-head">
+        <h3>일별 지출 추이</h3>
+        <div class="trend-month" id="trend-month"></div>
+      </div>
+      <canvas id="trend-chart" height="180"></canvas>
+    </div>
+
+    <div class="spend-layout">
+      <!-- 좌측: 달력 -->
+      <div class="cal-wrap">
+        <div class="cal-head">
+          <button type="button" class="btn-ghost cal-nav" id="cal-prev" title="이전 달">‹</button>
+          <h3 id="cal-title">—</h3>
+          <button type="button" class="btn-ghost cal-nav" id="cal-next" title="다음 달">›</button>
+          <button type="button" class="btn-ghost cal-today" id="cal-today">오늘</button>
+        </div>
+        <div class="cal-dow">
+          <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+        </div>
+        <div class="cal-grid" id="cal-grid"><!-- JS --></div>
+      </div>
+
+      <!-- 우측: 카테고리 도넛 -->
+      <div class="donut-wrap">
+        <canvas id="donut" width="240" height="240"></canvas>
+        <div class="donut-legend" id="donut-legend"></div>
+      </div>
+    </div>
+
+    <!-- 거래 리스트 + 검색 + 필터 -->
+    <div class="tx-col">
+      <div class="tx-toolbar">
+        <div class="tx-search">
+          <input type="search" id="tx-search" placeholder="🔍 라벨·카테고리·금액으로 검색" autocomplete="off" />
+        </div>
+        <button type="button" class="btn-ghost btn-xs" id="tx-reclassify" title="기존 거래를 현재 규칙으로 재분류 (증권사·거래소 이체 → 현금 카테고리)">🔄 자금이동 재분류</button>
+        <div class="tx-scope" id="tx-scope"></div>
+      </div>
+      <div class="tx-filters" id="tx-filters">
+        <button class="chip active" data-cat="all">전체</button>
+        <button class="chip" data-cat="card">카드</button>
+        <button class="chip" data-cat="cash">현금</button>
+        <button class="chip" data-cat="rent">월세</button>
+        <button class="chip" data-cat="utility">공과금</button>
+        <button class="chip" data-cat="subscription">구독</button>
+        <button class="chip" data-cat="savings">저축</button>
+        <button class="chip" data-cat="transfer">자금 이동</button>
+        <button class="chip" data-cat="other">기타</button>
+      </div>
+      <div class="tx-list" id="tx-list"><!-- 거래 --></div>
+    </div>
+
+    <div class="add-card">
+      <div class="ac-head">
+        <h3>＋ 거래 추가</h3>
+        <button type="button" class="btn-ghost" id="csv-open">📄 CSV / XLS / PDF 가져오기</button>
+      </div>
+      <form id="tx-form" class="tx-form" autocomplete="off">
+        <div class="field">
+          <label>날짜</label>
+          <input name="date" type="date" required />
+        </div>
+        <div class="field">
+          <label>유형</label>
+          <select name="type" required>
+            <option value="expense">지출</option>
+            <option value="income">수입</option>
+            <option value="savings_contribution">저축 기여</option>
+            <option value="transfer">자금 이동</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>카테고리</label>
+          <select name="category" required>
+            <option value="card">카드</option>
+            <option value="cash">현금</option>
+            <option value="rent">월세</option>
+            <option value="utility">공과금</option>
+            <option value="subscription">구독</option>
+            <option value="savings">저축</option>
+            <option value="other">기타</option>
+            <option value="transfer">자금 이동</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>금액 (KRW)</label>
+          <input name="amountKRW" type="number" step="1" min="0" required />
+        </div>
+        <div class="field grow">
+          <label>라벨</label>
+          <input name="label" required maxlength="100" placeholder="예: 점심 삼계탕 / 월세 4월" />
+        </div>
+        <div class="field ff-recurring">
+          <label class="cb"><input type="checkbox" name="recurring" /> 매월 반복</label>
+        </div>
+        <div class="actions">
+          <button type="submit" class="btn-primary">추가</button>
+        </div>
+      </form>
+    </div>
+  </section>
+
+  <!-- =================== 그래프 탭 =================== -->
+  <section class="panel hidden" id="panel-graph">
+    <div class="graph-head">
+      <div class="range-chips" id="range-chips">
+        <button class="chip active" data-range="30">30일</button>
+        <button class="chip" data-range="90">90일</button>
+        <button class="chip" data-range="180">180일</button>
+        <button class="chip" data-range="365">1년</button>
+        <button class="chip" data-range="all">전체</button>
+      </div>
+      <div class="graph-stats" id="graph-stats"><!-- 최고/최저/평균/변동성 --></div>
+    </div>
+
+    <div class="chart-wrap">
+      <canvas id="chart-total" height="240"></canvas>
+    </div>
+    <div class="chart-wrap">
+      <canvas id="chart-stack" height="240"></canvas>
+    </div>
+
+    <div class="graph-empty hidden" id="graph-empty">
+      <p>스냅샷이 3개 미만입니다. <button class="linklike" id="graph-snap-now">지금 스냅샷 저장</button> 하거나, 며칠 동안 서버를 돌려 기록을 쌓아주세요.</p>
+    </div>
+  </section>
+    </main>
+  </div>
+</div>
+
+<!-- =================== CSV 가져오기 모달 =================== -->
+<div class="modal hidden" id="csv-modal" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>CSV 가져오기</h3>
+      <button type="button" class="modal-x" id="csv-close">×</button>
+    </div>
+
+    <div id="csv-stage-file" class="modal-body">
+      <p class="csv-hint">
+        은행/카드사 홈페이지에서 내려받은 <strong>거래내역</strong> 을 불러옵니다.
+        지원 형식: <em>CSV · XLS · XLSX · PDF (텍스트 레이어 있는 경우)</em>.
+      </p>
+      <div class="field">
+        <label>기관 선택</label>
+        <select id="csv-preset"></select>
+      </div>
+      <div class="field">
+        <label>거래내역 파일</label>
+        <input type="file" id="csv-file" accept=".csv,.xls,.xlsx,.pdf,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf" />
+      </div>
+      <div class="field">
+        <label>비밀번호 (필요 시)</label>
+        <input type="password" id="csv-password" autocomplete="off" placeholder="암호 걸린 PDF/엑셀은 비밀번호 입력" />
+      </div>
+      <p class="csv-err" id="csv-err"></p>
+    </div>
+
+    <div id="csv-stage-preview" class="modal-body hidden">
+      <div class="csv-mapbox" id="csv-mapping"></div>
+      <div class="csv-summary" id="csv-count"></div>
+      <div class="csv-tablewrap">
+        <table class="csv-table" id="csv-preview"></table>
+      </div>
+      <div class="csv-actions">
+        <button type="button" class="btn-primary" id="csv-import">이 내용으로 불러오기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== 자산 CSV/XLS/PDF 가져오기 모달 =================== -->
+<div class="modal hidden" id="asset-modal" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>자산 가져오기 (CSV / XLS / XLSX / PDF)</h3>
+      <button type="button" class="modal-x" id="asset-close">×</button>
+    </div>
+
+    <div id="asset-stage-file" class="modal-body">
+      <p class="csv-hint">
+        증권사의 <strong>보유종목</strong>, 거래소의 <strong>보유 코인</strong>,
+        은행의 <strong>계좌 잔액 목록</strong> 내보내기 파일을 그대로 올리면
+        자산 목록에 자동으로 추가됩니다. <em>CSV · XLS · XLSX · PDF</em> 지원
+        (PDF 는 표 구조가 단순한 경우에 한해 자동 인식).
+      </p>
+      <div class="field">
+        <label>기관 선택</label>
+        <select id="asset-preset"></select>
+      </div>
+      <div class="field">
+        <label>파일</label>
+        <input type="file" id="asset-file" accept=".csv,.xls,.xlsx,.pdf,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf" />
+      </div>
+      <div class="field">
+        <label>비밀번호 (필요 시)</label>
+        <input type="password" id="asset-password" autocomplete="off" placeholder="암호 걸린 PDF/엑셀은 비밀번호 입력" />
+      </div>
+      <p class="csv-err" id="asset-err"></p>
+    </div>
+
+    <div id="asset-stage-preview" class="modal-body hidden">
+      <div class="csv-mapbox" id="asset-mapping"></div>
+      <div class="csv-summary" id="asset-count"></div>
+      <div class="csv-tablewrap">
+        <table class="csv-table" id="asset-preview"></table>
+      </div>
+      <div class="csv-actions">
+        <button type="button" class="btn-primary" id="asset-import">이 내용으로 불러오기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="foot">
+  <span>자산 포트폴리오 · Liquid Ledger · 개인 데이터는 브라우저에만 저장됩니다</span>
+</footer>
+
+<!-- =================== 종목 Historical 차트 모달 =================== -->
+<div class="modal hidden" id="chart-modal" role="dialog" aria-modal="true">
+  <div class="modal-card chart-modal-card">
+    <div class="modal-head">
+      <h3 id="chart-title">—</h3>
+      <button type="button" class="modal-x" id="chart-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="chart-meta" id="chart-meta">—</div>
+      <div class="chart-ranges" id="chart-ranges">
+        <button class="chip" data-range="1d">1일</button>
+        <button class="chip" data-range="1w">1주</button>
+        <button class="chip active" data-range="1mo">1개월</button>
+        <button class="chip" data-range="3mo">3개월</button>
+        <button class="chip" data-range="6mo">6개월</button>
+        <button class="chip" data-range="1y">1년</button>
+        <button class="chip" data-range="5y">5년</button>
+      </div>
+      <div class="chart-wrap">
+        <canvas id="history-chart"></canvas>
+        <div class="chart-tooltip hidden" id="chart-tooltip"></div>
+      </div>
+      <div class="chart-hint">커서를 가져가면 해당 시점 가격, 드래그하면 범위 수익률</div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="/app.js" defer></script>
+</body>
+</html>

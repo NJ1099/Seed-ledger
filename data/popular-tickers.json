@@ -1,0 +1,97 @@
+{
+  "comment": "자동 폴러가 이 목록의 시세를 주기적으로 캐시한다. 관리자가 항목을 자유롭게 수정 가능.",
+  "tickers": [
+    {
+      "type": "index",
+      "ticker": "KOSPI"
+    },
+    {
+      "type": "index",
+      "ticker": "KOSDAQ"
+    },
+    {
+      "type": "index",
+      "ticker": "SP500"
+    },
+    {
+      "type": "index",
+      "ticker": "NASDAQ"
+    },
+    {
+      "type": "index",
+      "ticker": "NIKKEI"
+    },
+    {
+      "type": "index",
+      "ticker": "GOLD"
+    },
+    {
+      "type": "index",
+      "ticker": "WTI"
+    },
+    {
+      "type": "index",
+      "ticker": "USDKRW"
+    },
+    {
+      "type": "stock_us",
+      "ticker": "AAPL"
+    },
+    {
+      "type": "stock_us",
+      "ticker": "MSFT"
+    },
+    {
+      "type": "stock_us",
+      "ticker": "NVDA"
+    },
+    {
+      "type": "stock_us",
+      "ticker": "TSLA"
+    },
+    {
+      "type": "stock_kr",
+      "ticker": "005930"
+    },
+    {
+      "type": "crypto",
+      "ticker": "KRW-BTC"
+    },
+    {
+      "type": "crypto",
+      "ticker": "BTC-USD"
+    },
+    {
+      "type": "crypto",
+      "ticker": "KRW-ETH"
+    },
+    {
+      "type": "crypto",
+      "ticker": "ETH-USD"
+    },
+    {
+      "type": "crypto",
+      "ticker": "KRW-SOL"
+    },
+    {
+      "type": "crypto",
+      "ticker": "SOL-USD"
+    },
+    {
+      "type": "crypto",
+      "ticker": "KRW-DOGE"
+    },
+    {
+      "type": "crypto",
+      "ticker": "DOGE-USD"
+    },
+    {
+      "type": "crypto",
+      "ticker": "KRW-USDT"
+    },
+    {
+      "type": "crypto",
+      "ticker": "KRW-USDC"
+    }
+  ]
+}

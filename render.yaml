@@ -1,0 +1,25 @@
+# Render Blueprint — Seed (Liquid Ledger) 공개 배포판
+#
+# 사용법:
+#   1. 이 저장소를 GitHub 에 푸시
+#   2. render.com 대시보드 → New → Blueprint → 저장소 선택
+#   3. Render 가 이 파일을 읽어 Web Service 자동 생성
+#
+# 주의:
+#   - seed-public 폴더를 루트로 하는 별도 저장소로 배포하거나,
+#     rootDir 를 "seed-public" 로 명시해서 모노레포 배포 둘 다 지원.
+services:
+  - type: web
+    name: seed-public
+    env: node
+    region: singapore                 # 한국과 가장 가까운 리전
+    plan: free                         # 무료 플랜. 트래픽 늘면 starter 로 승격 권장.
+    rootDir: .                          # 같은 저장소 하위 폴더로 배포할 경우 "seed-public" 로 변경
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # PORT 는 Render 가 주입함. 직접 설정 금지.
