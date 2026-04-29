@@ -1,52 +1,52 @@
 {
   "version": 2,
-  "updatedAt": "2026-04-22T15:59:33+09:00",
+  "updatedAt": "2026-04-29T13:49:23+09:00",
   "source": "toss-invest-ai-key-events",
   "events": [
     {
-      "id": "ev-20260422-kr207940",
-      "date": "2026-04-22",
-      "title": "삼성바이오로직스 실적 발표 (발표 후)",
+      "id": "ev-20260429-kr034020",
+      "date": "2026-04-29",
+      "title": "두산에너빌리티 실적 발표 (발표 후)",
       "category": "earnings",
       "importance": "critical",
       "tag": "실적",
-      "note": "영업이익 예상 6,120억 · 매출 예상 1조 2,981억"
+      "note": "영업이익 예상 1,970억 · 매출 예상 4조 749억"
     },
     {
-      "id": "ev-20260423-krgdpaeci",
-      "date": "2026-04-23",
-      "title": "경제성장률 발표(속보치) (08:00 KST)",
-      "category": "economic",
-      "importance": "high",
-      "tag": "KR",
-      "note": "이전 1.6 %"
+      "id": "ev-20260429-kr028260",
+      "date": "2026-04-29",
+      "title": "삼성물산 실적 발표 (발표 후)",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": "영업이익 예상 8,945억 · 매출 예상 10조 4,506억"
     },
     {
-      "id": "ev-20260423-usjobeci",
-      "date": "2026-04-23",
-      "title": "신규 실업수당 청구건수 (21:30 KST)",
-      "category": "economic",
-      "importance": "high",
-      "tag": "US",
-      "note": "이전 207 만 명"
+      "id": "ev-20260429-usnys05mdrve",
+      "date": "2026-04-29",
+      "title": "비자 실적 발표 (오전 5시 이후)",
+      "category": "earnings",
+      "importance": "critical",
+      "tag": "실적",
+      "note": "매출 예상 107억"
     },
     {
-      "id": "ev-20260423-usnas006xy7e",
-      "date": "2026-04-23",
-      "title": "테슬라 실적 발표 (오전 5시 이후)",
+      "id": "ev-20260429-usnys00dyyxe",
+      "date": "2026-04-29",
+      "title": "애브비 실적 발표 (오후 9시 이후)",
       "category": "earnings",
       "importance": "critical",
       "tag": "실적",
       "note": ""
     },
     {
-      "id": "ev-20260424-usum1feci",
-      "date": "2026-04-24",
-      "title": "미시간대 인플레이션 기대치(수정치) (23:00 KST)",
+      "id": "ev-20260430-usfomceci",
+      "date": "2026-04-30",
+      "title": "FOMC 회의 결과 발표 (03:00 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 4.8 %"
+      "note": "이전 3.75 %"
     }
   ]
 }

@@ -308,10 +308,16 @@ async function apiPost(url, body) {
   const p = u.pathname;
 
   try {
-    if (p === '/api/accounts') return localAccountsOp(body);
-    if (p === '/api/transactions') return localTxOp(body);
-    if (p === '/api/snapshot') return localSnapshotSave(body);
-    if (p === '/api/events') return localEventsOp(body);
+    let result;
+    if (p === '/api/accounts')      result = localAccountsOp(body);
+    else if (p === '/api/transactions') result = localTxOp(body);
+    else if (p === '/api/snapshot')     result = localSnapshotSave(body);
+    else if (p === '/api/events')       result = localEventsOp(body);
+    if (result !== undefined) {
+      // 사용자 데이터 변경 → 디바운스 백업 예약
+      try { notifyDataChanged && notifyDataChanged(); } catch {}
+      return result;
+    }
   } catch (e) {
     throw new Error(e.message || String(e));
   }
@@ -4094,6 +4100,414 @@ function schedulePolling() {
 }
 
 // ---------- 진입 ----------
+// ============================================================================
+// 기기 간 동기화 (Telegram 봇 기반)
+// ----------------------------------------------------------------------------
+// 1) 페어링: 사용자가 텔레그램에서 봇 시작 → 서버가 chatId 확인 → cred 발급 → localStorage
+// 2) 백업: localStorage 전체 → POST /api/sync/push (Bearer cred) → 서버가 텔레그램 채팅에 JSON 핀
+// 3) 복원: POST /api/sync/pull → 서버가 핀된 메시지 다운로드 → 클라가 localStorage 덮어쓰기
+// ============================================================================
+
+const SYNC_LS_CRED = 'seed:sync:cred';
+const SYNC_LS_META = 'seed:sync:meta';   // { chatId, userName, lastPushAt, lastPushBytes }
+const SYNC_DEBOUNCE_MS = 6000;
+
+const syncState = {
+  enabled: false,
+  bot: null,
+  pairCode: null,
+  pairExpiresAt: 0,
+  pairTimer: null,
+  pairCheckTimer: null,
+  pushDebounce: null,
+  pushing: false,
+  pulling: false,
+};
+
+function syncReadCred() {
+  try { return localStorage.getItem(SYNC_LS_CRED) || null; } catch { return null; }
+}
+function syncWriteCred(cred) {
+  try { if (cred) localStorage.setItem(SYNC_LS_CRED, cred); else localStorage.removeItem(SYNC_LS_CRED); } catch {}
+}
+function syncReadMeta() {
+  try { return JSON.parse(localStorage.getItem(SYNC_LS_META) || '{}'); } catch { return {}; }
+}
+function syncWriteMeta(m) {
+  try { localStorage.setItem(SYNC_LS_META, JSON.stringify(m || {})); } catch {}
+}
+
+function snapshotForSync() {
+  // 사용자별 데이터 전체 (localStorage 의 seed:* 키들). 시세/봇 cred 는 제외.
+  const out = {};
+  for (const k of Object.keys(LS_KEYS)) {
+    const lsKey = LS_KEYS[k];
+    try {
+      const raw = localStorage.getItem(lsKey);
+      if (raw != null) out[lsKey] = JSON.parse(raw);
+    } catch {}
+  }
+  return out;
+}
+
+function restoreFromSyncPayload(payload) {
+  if (!payload || typeof payload !== 'object') throw new Error('invalid payload');
+  const known = new Set(Object.values(LS_KEYS));
+  let n = 0;
+  for (const [key, value] of Object.entries(payload)) {
+    if (!known.has(key)) continue;   // 알 수 없는 키는 무시 (보안)
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+      n++;
+    } catch {}
+  }
+  return n;
+}
+
+async function syncFetchStatus() {
+  try {
+    const r = await fetch('/api/sync/status');
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
+async function syncInitPair() {
+  const r = await fetch('/api/sync/init', { method: 'POST' });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok || !j.ok) throw new Error(j.error || `init failed (${r.status})`);
+  return j;
+}
+
+async function syncCheckPair(code) {
+  const r = await fetch('/api/sync/check?code=' + encodeURIComponent(code));
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok && r.status !== 404) throw new Error(j.error || `check failed (${r.status})`);
+  return { status: r.status, ...j };
+}
+
+async function syncPushNow() {
+  const cred = syncReadCred();
+  if (!cred) throw new Error('not paired');
+  if (syncState.pushing) return null;
+  syncState.pushing = true;
+  updateSyncBtn();
+  try {
+    const snap = snapshotForSync();
+    const r = await fetch('/api/sync/push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + cred },
+      body: JSON.stringify(snap),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) {
+      if (r.status === 401) syncWriteCred(null);
+      throw new Error(j.error || `push failed (${r.status})`);
+    }
+    const meta = syncReadMeta();
+    meta.lastPushAt = j.savedAt;
+    meta.lastPushBytes = j.bytes;
+    syncWriteMeta(meta);
+    return j;
+  } finally {
+    syncState.pushing = false;
+    updateSyncBtn();
+  }
+}
+
+async function syncPullNow() {
+  const cred = syncReadCred();
+  if (!cred) throw new Error('not paired');
+  if (syncState.pulling) return null;
+  syncState.pulling = true;
+  updateSyncBtn();
+  try {
+    const r = await fetch('/api/sync/pull', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + cred },
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) {
+      if (r.status === 401) syncWriteCred(null);
+      throw new Error(j.error || `pull failed (${r.status})`);
+    }
+    const n = restoreFromSyncPayload(j.payload);
+    return { ...j, restoredKeys: n };
+  } finally {
+    syncState.pulling = false;
+    updateSyncBtn();
+  }
+}
+
+async function syncDisconnectNow() {
+  const cred = syncReadCred();
+  if (cred) {
+    try {
+      await fetch('/api/sync/disconnect', {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + cred },
+      });
+    } catch {}
+  }
+  syncWriteCred(null);
+  syncWriteMeta({});
+  updateSyncBtn();
+}
+
+function schedulePushDebounced() {
+  if (!syncReadCred()) return;
+  if (syncState.pushDebounce) clearTimeout(syncState.pushDebounce);
+  syncState.pushDebounce = setTimeout(() => {
+    syncPushNow().catch((e) => {
+      console.warn('[sync] auto-push failed', e);
+    });
+  }, SYNC_DEBOUNCE_MS);
+}
+
+// localStorage 변경 후 호출. apiPost wrapping 으로 자동 트리거.
+function notifyDataChanged() {
+  schedulePushDebounced();
+}
+
+function updateSyncBtn() {
+  const btn = document.getElementById('sync-btn');
+  const ico = document.getElementById('sync-ico');
+  const lab = document.getElementById('sync-lab');
+  if (!btn) return;
+  btn.classList.remove('is-on', 'is-syncing');
+  if (!syncState.enabled) {
+    lab.textContent = '동기화 비활성';
+    ico.textContent = '☁';
+    return;
+  }
+  const cred = syncReadCred();
+  if (cred) {
+    btn.classList.add('is-on');
+    if (syncState.pushing || syncState.pulling) {
+      btn.classList.add('is-syncing');
+      lab.textContent = syncState.pushing ? '백업 중…' : '복원 중…';
+      ico.textContent = '↻';
+    } else {
+      const meta = syncReadMeta();
+      lab.textContent = '동기화됨';
+      if (meta.lastPushAt) {
+        const t = String(meta.lastPushAt).slice(11, 16);
+        lab.textContent = '동기화 ' + t;
+      }
+      ico.textContent = '✓';
+    }
+  } else {
+    lab.textContent = '기기 동기화';
+    ico.textContent = '☁';
+  }
+}
+
+function showSyncStage(name) {
+  for (const id of ['disabled', 'idle', 'pairing', 'active']) {
+    const el = document.getElementById('sync-stage-' + id);
+    if (el) el.classList.toggle('hidden', id !== name);
+  }
+}
+
+function openSyncModal() {
+  const modal = document.getElementById('sync-modal');
+  if (!modal) return;
+  modal.classList.remove('hidden');
+  if (!syncState.enabled) { showSyncStage('disabled'); return; }
+  if (syncReadCred()) renderSyncActiveStage();
+  else showSyncStage('idle');
+}
+function closeSyncModal() {
+  const modal = document.getElementById('sync-modal');
+  if (modal) modal.classList.add('hidden');
+  // 페어링 진행 중이었다면 정리
+  if (syncState.pairTimer) { clearInterval(syncState.pairTimer); syncState.pairTimer = null; }
+  if (syncState.pairCheckTimer) { clearInterval(syncState.pairCheckTimer); syncState.pairCheckTimer = null; }
+  syncState.pairCode = null;
+}
+
+function renderSyncActiveStage() {
+  showSyncStage('active');
+  const meta = syncReadMeta();
+  const nameEl = document.getElementById('sync-active-name');
+  const metaEl = document.getElementById('sync-active-meta');
+  nameEl.textContent = meta.userName ? `${meta.userName}님 — 텔레그램 연동됨` : '텔레그램 연동됨';
+  let metaText = '';
+  if (meta.chatId) metaText += `chat: ${meta.chatId}`;
+  if (meta.lastPushAt) metaText += `${metaText ? ' · ' : ''}마지막 백업 ${meta.lastPushAt}`;
+  if (meta.lastPushBytes) metaText += `${metaText ? ' · ' : ''}${meta.lastPushBytes.toLocaleString('en-US')} bytes`;
+  metaEl.textContent = metaText || '아직 백업 없음';
+  document.getElementById('sync-action-status').textContent = '';
+}
+
+async function startPairingFlow() {
+  showSyncStage('pairing');
+  document.getElementById('sync-pair-status').textContent = '⏳ 코드 발급 중…';
+  document.getElementById('sync-pair-status').className = 'sync-pair-status';
+  try {
+    const init = await syncInitPair();
+    syncState.pairCode = init.code;
+    syncState.pairExpiresAt = Date.now() + (init.expiresInSec * 1000);
+    document.getElementById('sync-pair-code').textContent = init.code;
+    const link = document.getElementById('sync-deeplink');
+    link.href = init.deepLink;
+    link.textContent = `텔레그램에서 @${init.bot} 열기 →`;
+    document.getElementById('sync-pair-status').textContent = '⏳ 텔레그램에서 봇이 시작되기를 기다리는 중…';
+
+    if (syncState.pairTimer) clearInterval(syncState.pairTimer);
+    syncState.pairTimer = setInterval(() => {
+      const left = Math.max(0, syncState.pairExpiresAt - Date.now());
+      const m = Math.floor(left / 60000);
+      const s = Math.floor((left % 60000) / 1000);
+      document.getElementById('sync-pair-expires').textContent =
+        left > 0 ? `${m}분 ${String(s).padStart(2, '0')}초 안에 완료` : '⏰ 만료됨 — 다시 시작해주세요';
+      if (left <= 0) {
+        clearInterval(syncState.pairTimer);
+        syncState.pairTimer = null;
+        if (syncState.pairCheckTimer) clearInterval(syncState.pairCheckTimer);
+        syncState.pairCheckTimer = null;
+      }
+    }, 1000);
+
+    if (syncState.pairCheckTimer) clearInterval(syncState.pairCheckTimer);
+    syncState.pairCheckTimer = setInterval(async () => {
+      if (!syncState.pairCode) return;
+      try {
+        const r = await syncCheckPair(syncState.pairCode);
+        if (r.paired && r.cred) {
+          clearInterval(syncState.pairCheckTimer);
+          syncState.pairCheckTimer = null;
+          if (syncState.pairTimer) clearInterval(syncState.pairTimer);
+          syncState.pairTimer = null;
+          syncWriteCred(r.cred);
+          syncWriteMeta({ chatId: r.chatId, userName: r.userName, pairedAt: new Date().toISOString() });
+          // 페어링 직후 자동 동작:
+          //   - 새 기기로 연결한 거라면 텔레그램에 백업이 이미 있을 가능성 → 우선 pull 시도해 복원 제안
+          //   - 백업이 없으면 즉시 첫 백업 push
+          showSyncStage('active');
+          renderSyncActiveStage();
+          updateSyncBtn();
+          await tryFirstSyncAction();
+        } else if (r.status === 404) {
+          // 만료
+          clearInterval(syncState.pairCheckTimer);
+          syncState.pairCheckTimer = null;
+          document.getElementById('sync-pair-status').textContent = '⏰ 코드 만료. 다시 시도해주세요.';
+          document.getElementById('sync-pair-status').className = 'sync-pair-status err';
+        }
+      } catch (e) { /* swallow */ }
+    }, 2500);
+  } catch (e) {
+    document.getElementById('sync-pair-status').textContent = '오류: ' + (e.message || e);
+    document.getElementById('sync-pair-status').className = 'sync-pair-status err';
+  }
+}
+
+async function tryFirstSyncAction() {
+  // 새로 페어링했을 때 자동 결정:
+  //  - 텔레그램에 핀된 백업이 있으면, 사용자에게 "복원할까?" 묻기
+  //  - 없으면 자동으로 첫 백업 시도
+  const status = document.getElementById('sync-action-status');
+  status.textContent = '☁ 텔레그램 채팅 확인 중…';
+  status.className = 'sync-action-status';
+  try {
+    const result = await syncPullNow();
+    if (result && result.payload) {
+      const localCount = (() => {
+        const a = lsGetAccounts(); const t = lsGetTx(); const s = lsGetSnapshots();
+        return (a.accounts?.length || 0) + (t.transactions?.length || 0) + Object.keys(s).length;
+      })();
+      const ok = localCount === 0
+        || confirm(`텔레그램에 백업이 있어 (${result.savedAt || ''}). 이 기기의 현재 데이터를 그 백업으로 덮어쓸까?\n\n로컬 데이터: ${localCount}건\n취소하면 로컬 데이터를 유지하고 다음 백업 때 텔레그램이 갱신돼.`);
+      if (ok) {
+        // restoreFromSyncPayload 는 syncPullNow 안에서 이미 적용됨. 화면 리로드.
+        await loadAll();
+        renderAssets(); renderSpend(); renderTotals(); renderDashboard();
+        status.textContent = `✓ ${result.savedAt || ''} 백업 복원됨 (${result.bytes.toLocaleString('en-US')} bytes)`;
+        status.className = 'sync-action-status ok';
+      } else {
+        // 사용자가 거절 → 로컬 그대로 두고, 즉시 push 로 텔레그램 백업 갱신
+        await syncPushNow();
+        status.textContent = '✓ 로컬 데이터를 텔레그램에 새로 백업했어';
+        status.className = 'sync-action-status ok';
+      }
+    }
+  } catch (e) {
+    if (String(e).includes('no-backup') || String(e).includes('no-document')) {
+      // 첫 페어링이고 백업 없음 → 즉시 push
+      try {
+        const j = await syncPushNow();
+        status.textContent = `✓ 첫 백업 완료 (${j.bytes.toLocaleString('en-US')} bytes)`;
+        status.className = 'sync-action-status ok';
+      } catch (e2) {
+        status.textContent = '백업 실패: ' + (e2.message || e2);
+        status.className = 'sync-action-status err';
+      }
+    } else {
+      status.textContent = '복원 실패: ' + (e.message || e);
+      status.className = 'sync-action-status err';
+    }
+  }
+  renderSyncActiveStage();
+  updateSyncBtn();
+}
+
+async function setupSync() {
+  // 서버 동기화 활성 여부 조회
+  const status = await syncFetchStatus();
+  syncState.enabled = !!(status && status.enabled);
+  syncState.bot = status?.bot || null;
+  updateSyncBtn();
+
+  document.getElementById('sync-btn')?.addEventListener('click', openSyncModal);
+  document.getElementById('sync-close')?.addEventListener('click', closeSyncModal);
+  document.getElementById('sync-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'sync-modal') closeSyncModal();
+  });
+  document.getElementById('sync-pair-start')?.addEventListener('click', startPairingFlow);
+  document.getElementById('sync-pair-cancel')?.addEventListener('click', () => {
+    if (syncState.pairCheckTimer) clearInterval(syncState.pairCheckTimer);
+    syncState.pairCheckTimer = null;
+    if (syncState.pairTimer) clearInterval(syncState.pairTimer);
+    syncState.pairTimer = null;
+    syncState.pairCode = null;
+    showSyncStage('idle');
+  });
+  document.getElementById('sync-push-now')?.addEventListener('click', async () => {
+    const status = document.getElementById('sync-action-status');
+    status.textContent = '백업 중…'; status.className = 'sync-action-status';
+    try {
+      const j = await syncPushNow();
+      status.textContent = `✓ 백업 완료 (${j.bytes.toLocaleString('en-US')} bytes, ${j.savedAt})`;
+      status.className = 'sync-action-status ok';
+      renderSyncActiveStage();
+    } catch (e) {
+      status.textContent = '실패: ' + (e.message || e);
+      status.className = 'sync-action-status err';
+    }
+  });
+  document.getElementById('sync-pull-now')?.addEventListener('click', async () => {
+    const status = document.getElementById('sync-action-status');
+    if (!confirm('텔레그램에 핀된 최신 백업으로 이 기기 데이터를 덮어써. 진행할까?')) return;
+    status.textContent = '복원 중…'; status.className = 'sync-action-status';
+    try {
+      const j = await syncPullNow();
+      await loadAll();
+      renderAssets(); renderSpend(); renderTotals(); renderDashboard();
+      status.textContent = `✓ ${j.savedAt} 복원 (${j.bytes.toLocaleString('en-US')} bytes)`;
+      status.className = 'sync-action-status ok';
+    } catch (e) {
+      status.textContent = '실패: ' + (e.message || e);
+      status.className = 'sync-action-status err';
+    }
+  });
+  document.getElementById('sync-disconnect')?.addEventListener('click', async () => {
+    if (!confirm('이 기기의 동기화 자격을 폐기할까? (텔레그램 채팅의 백업 파일은 그대로 남음)')) return;
+    await syncDisconnectNow();
+    closeSyncModal();
+  });
+}
+
 async function boot() {
   setupTabs();
   setupAccForm();
@@ -4125,6 +4539,7 @@ async function boot() {
   renderDashboard();
   renderTickerStrip();
   schedulePolling();
+  setupSync();
 }
 
 // ---------- 종목 Historical 차트 모달 ----------

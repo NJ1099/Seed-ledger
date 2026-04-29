@@ -19,3 +19,7 @@ Thumbs.db
 # 로컬 테스트용
 .env
 .env.local
+
+# Claude Code 로컬 설정 (권한 허용 룰 등 개인 환경)
+.claude/
+

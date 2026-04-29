@@ -20,6 +20,7 @@ const http = require('http');
 const https = require('https');
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 // pdfImport 는 pdfjs-dist + @napi-rs/canvas 를 쓰므로 호스트에 네이티브 의존이 필요.
 // 실패해도 나머지 기능은 살리기 위해 try-require.
@@ -656,6 +657,14 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/history')       return await handleHistory(req, res);
     if (urlPath === '/api/import-pdf')    return await handleImportPdf(req, res);
 
+    // 기기 간 동기화 (텔레그램 봇 기반)
+    if (urlPath === '/api/sync/status')      return await handleSyncStatus(req, res);
+    if (urlPath === '/api/sync/init')        return await handleSyncInit(req, res);
+    if (urlPath === '/api/sync/check')       return await handleSyncCheck(req, res);
+    if (urlPath === '/api/sync/push')        return await handleSyncPush(req, res);
+    if (urlPath === '/api/sync/pull')        return await handleSyncPull(req, res);
+    if (urlPath === '/api/sync/disconnect')  return await handleSyncDisconnect(req, res);
+
     // 공개 배포판에서 차단되는 쓰기 엔드포인트 — 클라이언트가 실수로 호출해도 안전하게 반환.
     if (urlPath === '/api/accounts' ||
         urlPath === '/api/transactions' ||
@@ -922,3 +931,383 @@ async function refreshEvents() {
 
 setTimeout(refreshEvents, 10_000);
 setInterval(refreshEvents, EVENTS_REFRESH_MS);
+
+// ============================================================================
+// 기기 간 동기화 (Telegram 봇을 클라우드 저장소로)
+// ----------------------------------------------------------------------------
+// 사용자가 텔레그램에서 봇과 채팅을 시작 → 봇이 사용자의 채팅에 자산 데이터를
+// JSON 파일로 보내고 핀(고정) → 다른 기기에서 같은 텔레그램 계정으로 페어링하면
+// 핀된 메시지를 다시 받아 복원. Render 무료 플랜의 휘발성 디스크 문제를 피해서
+// 서버는 stateless 로 동작. 사용자 데이터는 자기 텔레그램 클라우드에만 보관.
+// ============================================================================
+
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || '';
+const SYNC_ENABLED = !!TELEGRAM_BOT_TOKEN;
+let TELEGRAM_BOT_USERNAME = '';   // 부팅 시 getMe 로 채움
+const SYNC_SECRET = SYNC_ENABLED
+  ? crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN + ':seed-sync-v1').digest('hex')
+  : null;
+
+const SYNC_PAIR_TTL_MS = 8 * 60 * 1000;     // 페어링 코드 만료
+const SYNC_POLL_TTL_MS = 8 * 60 * 1000;     // 페어링 폴링 워커 수명
+const SYNC_MAX_BODY = 4 * 1024 * 1024;      // 4MB (텔레그램 sendDocument 한도 50MB 와는 별개로 클라가 보내는 JSON 한도)
+
+const pendingPairs = new Map();             // code -> { createdAt, chatId? , userName? }
+let syncPollerActive = false;
+let syncPollerOffset = 0;
+
+function tgPostJson(method, body) {
+  return new Promise((resolve, reject) => {
+    if (!SYNC_ENABLED) return reject(new Error('TELEGRAM_BOT_TOKEN not set'));
+    const json = Buffer.from(JSON.stringify(body || {}));
+    const opts = {
+      method: 'POST',
+      hostname: 'api.telegram.org',
+      path: `/bot${TELEGRAM_BOT_TOKEN}/${method}`,
+      headers: { 'Content-Type': 'application/json', 'Content-Length': json.length },
+      timeout: 30_000,
+    };
+    const r = https.request(opts, (resp) => {
+      let buf = '';
+      resp.on('data', (c) => { buf += c.toString('utf8'); });
+      resp.on('end', () => {
+        try {
+          const j = JSON.parse(buf);
+          if (j.ok) resolve(j.result);
+          else reject(new Error(`telegram ${method}: ${j.description || resp.statusCode}`));
+        } catch (e) { reject(e); }
+      });
+    });
+    r.on('error', reject);
+    r.on('timeout', () => { try { r.destroy(new Error('telegram timeout')); } catch {} });
+    r.write(json); r.end();
+  });
+}
+
+function tgPostMultipart(method, fields, fileField, fileName, fileBuffer, contentType) {
+  return new Promise((resolve, reject) => {
+    if (!SYNC_ENABLED) return reject(new Error('TELEGRAM_BOT_TOKEN not set'));
+    const boundary = '----seed' + crypto.randomBytes(8).toString('hex');
+    const parts = [];
+    for (const [k, v] of Object.entries(fields || {})) {
+      parts.push(Buffer.from(
+        `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${String(v)}\r\n`,
+        'utf8'));
+    }
+    parts.push(Buffer.from(
+      `--${boundary}\r\nContent-Disposition: form-data; name="${fileField}"; filename="${fileName}"\r\nContent-Type: ${contentType}\r\n\r\n`,
+      'utf8'));
+    parts.push(fileBuffer);
+    parts.push(Buffer.from(`\r\n--${boundary}--\r\n`, 'utf8'));
+    const body = Buffer.concat(parts);
+    const opts = {
+      method: 'POST',
+      hostname: 'api.telegram.org',
+      path: `/bot${TELEGRAM_BOT_TOKEN}/${method}`,
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Content-Length': body.length },
+      timeout: 60_000,
+    };
+    const r = https.request(opts, (resp) => {
+      let buf = '';
+      resp.on('data', (c) => { buf += c.toString('utf8'); });
+      resp.on('end', () => {
+        try {
+          const j = JSON.parse(buf);
+          if (j.ok) resolve(j.result);
+          else reject(new Error(`telegram ${method}: ${j.description || resp.statusCode}`));
+        } catch (e) { reject(e); }
+      });
+    });
+    r.on('error', reject);
+    r.on('timeout', () => { try { r.destroy(new Error('telegram timeout')); } catch {} });
+    r.write(body); r.end();
+  });
+}
+
+function tgDownloadFile(filePath) {
+  return new Promise((resolve, reject) => {
+    const opts = {
+      method: 'GET',
+      hostname: 'api.telegram.org',
+      path: `/file/bot${TELEGRAM_BOT_TOKEN}/${filePath}`,
+      timeout: 30_000,
+    };
+    const r = https.request(opts, (resp) => {
+      if (resp.statusCode !== 200) {
+        reject(new Error('download status ' + resp.statusCode));
+        resp.resume(); return;
+      }
+      const chunks = [];
+      resp.on('data', (c) => chunks.push(c));
+      resp.on('end', () => resolve(Buffer.concat(chunks)));
+    });
+    r.on('error', reject);
+    r.on('timeout', () => { try { r.destroy(new Error('download timeout')); } catch {} });
+    r.end();
+  });
+}
+
+function signCred(chatId) {
+  const sig = crypto.createHmac('sha256', SYNC_SECRET).update(String(chatId)).digest('hex').slice(0, 32);
+  return `${chatId}:${sig}`;
+}
+function verifyCred(s) {
+  if (!s || typeof s !== 'string' || !s.includes(':')) return null;
+  const idx = s.lastIndexOf(':');
+  const chatId = s.slice(0, idx);
+  const sig = s.slice(idx + 1);
+  if (!/^-?\d{1,20}$/.test(chatId)) return null;
+  const expected = crypto.createHmac('sha256', SYNC_SECRET).update(chatId).digest('hex').slice(0, 32);
+  if (sig.length !== expected.length) return null;
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
+  } catch { return null; }
+  return chatId;
+}
+
+function newPairCode() {
+  for (let i = 0; i < 20; i++) {
+    const c = String(Math.floor(100000 + Math.random() * 900000));
+    if (!pendingPairs.has(c)) return c;
+  }
+  return null;
+}
+
+function gcPendingPairs() {
+  const now = Date.now();
+  for (const [k, v] of pendingPairs) {
+    if (now - v.createdAt > SYNC_PAIR_TTL_MS) pendingPairs.delete(k);
+  }
+}
+
+async function startPairingPoller() {
+  if (syncPollerActive) return;
+  syncPollerActive = true;
+  const stopAt = Date.now() + SYNC_POLL_TTL_MS;
+  logLine('info', 'tg.poll.start');
+  try {
+    while (syncPollerActive && Date.now() < stopAt && pendingPairs.size > 0) {
+      try {
+        const updates = await tgPostJson('getUpdates', {
+          offset: syncPollerOffset || undefined,
+          timeout: 25,
+          allowed_updates: ['message'],
+        });
+        for (const u of (updates || [])) {
+          if (u.update_id >= syncPollerOffset) syncPollerOffset = u.update_id + 1;
+          const msg = u.message;
+          if (!msg || !msg.text || !msg.chat) continue;
+          const m = /^\/start\s+link_(\d{6})\b/.exec(msg.text);
+          if (!m) continue;
+          const code = m[1];
+          const pair = pendingPairs.get(code);
+          if (!pair) {
+            // 만료/잘못된 코드
+            try {
+              await tgPostJson('sendMessage', {
+                chat_id: msg.chat.id,
+                text: '⚠️ 페어링 코드가 만료됐거나 유효하지 않아. 앱에서 새 코드를 받아주세요.',
+              });
+            } catch {}
+            continue;
+          }
+          pair.chatId = String(msg.chat.id);
+          pair.userName = msg.from?.first_name || msg.chat?.first_name || '';
+          pair.pairedAt = Date.now();
+          pendingPairs.set(code, pair);
+          try {
+            await tgPostJson('sendMessage', {
+              chat_id: msg.chat.id,
+              text: `✅ Seed Ledger 연동 완료, ${pair.userName || '사용자'}님.\n앞으로 자산 데이터가 이 채팅에 JSON 파일로 안전하게 백업됩니다.`,
+            });
+          } catch (e) {
+            logLine('warn', 'tg.pair.replyfail', { err: String(e) });
+          }
+          logLine('info', 'tg.pair.ok', { code, chatId: pair.chatId });
+        }
+        gcPendingPairs();
+      } catch (e) {
+        logLine('warn', 'tg.poll.iter', { err: String(e) });
+        await new Promise(r => setTimeout(r, 3000));
+      }
+    }
+  } finally {
+    syncPollerActive = false;
+    logLine('info', 'tg.poll.stop', { remaining: pendingPairs.size });
+  }
+}
+
+async function bootTelegram() {
+  if (!SYNC_ENABLED) {
+    logLine('info', 'sync.disabled', { reason: 'TELEGRAM_BOT_TOKEN env var not set' });
+    return;
+  }
+  try {
+    const me = await tgPostJson('getMe', {});
+    TELEGRAM_BOT_USERNAME = me.username || '';
+    // 다른 인스턴스가 webhook 을 걸어둔 적 있다면 폴링이 막혀서 충돌. 보장 차원에서 webhook 해제.
+    try { await tgPostJson('deleteWebhook', { drop_pending_updates: false }); } catch {}
+    logLine('info', 'sync.enabled', { bot: TELEGRAM_BOT_USERNAME });
+  } catch (e) {
+    logLine('error', 'sync.boot.fail', { err: String(e) });
+  }
+}
+setTimeout(bootTelegram, 2000);
+
+// ---------- /api/sync/* 핸들러 ----------
+
+async function handleSyncStatus(req, res) {
+  return reply(res, 200, {
+    ok: true,
+    enabled: SYNC_ENABLED,
+    bot: TELEGRAM_BOT_USERNAME || null,
+  });
+}
+
+async function handleSyncInit(req, res) {
+  if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled', hint: '서버에 TELEGRAM_BOT_TOKEN 이 설정되지 않음.' });
+  if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
+  if (!TELEGRAM_BOT_USERNAME) {
+    try { await bootTelegram(); } catch {}
+    if (!TELEGRAM_BOT_USERNAME) return reply(res, 503, { ok: false, error: 'bot-not-ready' });
+  }
+  gcPendingPairs();
+  const code = newPairCode();
+  if (!code) return reply(res, 503, { ok: false, error: 'too-many-pending' });
+  pendingPairs.set(code, { createdAt: Date.now() });
+  startPairingPoller().catch(() => {});
+  return reply(res, 200, {
+    ok: true,
+    code,
+    bot: TELEGRAM_BOT_USERNAME,
+    deepLink: `https://t.me/${TELEGRAM_BOT_USERNAME}?start=link_${code}`,
+    expiresInSec: Math.floor(SYNC_PAIR_TTL_MS / 1000),
+  });
+}
+
+async function handleSyncCheck(req, res) {
+  if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
+  const url = new URL(req.url, 'http://localhost');
+  const code = url.searchParams.get('code') || '';
+  if (!/^\d{6}$/.test(code)) return reply(res, 400, { ok: false, error: 'bad-code' });
+  gcPendingPairs();
+  const pair = pendingPairs.get(code);
+  if (!pair) return reply(res, 404, { ok: false, error: 'expired' });
+  if (!pair.chatId) return reply(res, 200, { ok: true, paired: false });
+  // 1회용: 인증된 cred 를 한 번 발급하고 즉시 제거
+  pendingPairs.delete(code);
+  return reply(res, 200, {
+    ok: true,
+    paired: true,
+    cred: signCred(pair.chatId),
+    chatId: pair.chatId,
+    userName: pair.userName || '',
+  });
+}
+
+function getCredFromHeaders(req) {
+  const h = req.headers['authorization'] || req.headers['Authorization'] || '';
+  const m = /^Bearer\s+(.+)$/i.exec(String(h));
+  return m ? m[1].trim() : null;
+}
+
+async function handleSyncPush(req, res) {
+  if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
+  if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
+  const cred = getCredFromHeaders(req);
+  const chatId = verifyCred(cred);
+  if (!chatId) return reply(res, 401, { ok: false, error: 'bad-cred' });
+  let body;
+  try { body = await readBody(req, SYNC_MAX_BODY); }
+  catch (e) { return reply(res, 413, { ok: false, error: 'too-large' }); }
+  let parsed;
+  try { parsed = JSON.parse(body); }
+  catch { return reply(res, 400, { ok: false, error: 'bad-json' }); }
+  // 클라가 보내는 payload 는 그대로 받아서 텔레그램에 다시 JSON 으로 업로드.
+  // 무결성 + 시점 메타데이터 추가.
+  const payload = {
+    schema: 'seed-ledger/v1',
+    savedAt: nowKST(),
+    payload: parsed,
+  };
+  const fileBuf = Buffer.from(JSON.stringify(payload), 'utf8');
+  const stamp = nowKST().replace(/[^0-9]/g, '').slice(0, 14); // YYYYMMDDHHMMSS
+  const filename = `seed-state-${stamp}.json`;
+  try {
+    const sent = await tgPostMultipart('sendDocument',
+      {
+        chat_id: chatId,
+        caption: `📦 Seed Ledger 자산 백업\n저장 시각: ${payload.savedAt}\n바이트: ${fileBuf.length.toLocaleString('en-US')}`,
+        disable_notification: 'true',
+      },
+      'document', filename, fileBuf, 'application/json',
+    );
+    // 핀: 가장 최근 백업을 채팅 상단에 고정. 텔레그램은 1회 1핀(직전 핀 자동 해제)이 되므로 unpin 호출 불필요.
+    try {
+      await tgPostJson('pinChatMessage', {
+        chat_id: chatId,
+        message_id: sent.message_id,
+        disable_notification: true,
+      });
+    } catch (e) {
+      logLine('warn', 'tg.pin.fail', { err: String(e) });
+    }
+    return reply(res, 200, {
+      ok: true,
+      messageId: sent.message_id,
+      bytes: fileBuf.length,
+      savedAt: payload.savedAt,
+    });
+  } catch (e) {
+    logLine('error', 'tg.push.fail', { err: String(e) });
+    return reply(res, 502, { ok: false, error: 'telegram-push-failed', detail: String(e.message || e) });
+  }
+}
+
+async function handleSyncPull(req, res) {
+  if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
+  if (req.method !== 'POST' && req.method !== 'GET') return reply(res, 405, { ok: false, error: 'method' });
+  const cred = getCredFromHeaders(req);
+  const chatId = verifyCred(cred);
+  if (!chatId) return reply(res, 401, { ok: false, error: 'bad-cred' });
+  try {
+    const chat = await tgPostJson('getChat', { chat_id: chatId });
+    const pinned = chat && chat.pinned_message;
+    if (!pinned) return reply(res, 404, { ok: false, error: 'no-backup' });
+    const doc = pinned.document;
+    if (!doc || !doc.file_id) return reply(res, 404, { ok: false, error: 'no-document' });
+    const fileInfo = await tgPostJson('getFile', { file_id: doc.file_id });
+    const buf = await tgDownloadFile(fileInfo.file_path);
+    let parsed;
+    try { parsed = JSON.parse(buf.toString('utf8')); }
+    catch (e) { return reply(res, 502, { ok: false, error: 'corrupt-backup' }); }
+    return reply(res, 200, {
+      ok: true,
+      savedAt: parsed.savedAt || null,
+      schema: parsed.schema || null,
+      payload: parsed.payload != null ? parsed.payload : parsed,
+      bytes: buf.length,
+    });
+  } catch (e) {
+    logLine('error', 'tg.pull.fail', { err: String(e) });
+    return reply(res, 502, { ok: false, error: 'telegram-pull-failed', detail: String(e.message || e) });
+  }
+}
+
+async function handleSyncDisconnect(req, res) {
+  // 서버 측에는 사용자별 영구 상태가 없으므로, 사실상 클라이언트가 cred 를 폐기하는 것으로 끝.
+  // 다만 텔레그램 채팅에서 핀을 해제하는 편의 동작은 제공.
+  if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
+  if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
+  const cred = getCredFromHeaders(req);
+  const chatId = verifyCred(cred);
+  if (!chatId) return reply(res, 401, { ok: false, error: 'bad-cred' });
+  try {
+    await tgPostJson('unpinAllChatMessages', { chat_id: chatId }).catch(() => {});
+    await tgPostJson('sendMessage', {
+      chat_id: chatId,
+      text: '🔌 Seed Ledger 연동을 이 기기에서 해제했어. 다른 기기에서 다시 페어링하면 그때까지의 백업은 그대로 복원돼.',
+    }).catch(() => {});
+  } catch {}
+  return reply(res, 200, { ok: true });
+}

@@ -25,6 +25,10 @@
 
     <div class="sidenav-bottom">
       <button class="snap-btn" id="snap-btn" title="오늘 총자산을 그래프용 스냅샷으로 저장">＋ 오늘 스냅샷</button>
+      <button class="sync-btn" id="sync-btn" title="다른 기기에서도 같은 데이터를 보려면 텔레그램 연동">
+        <span class="sync-ico" id="sync-ico">☁</span>
+        <span class="sync-lab" id="sync-lab">기기 동기화</span>
+      </button>
       <div class="foot-sync" id="foot-sync">—</div>
     </div>
   </aside>
@@ -508,6 +512,74 @@
         <div class="chart-tooltip hidden" id="chart-tooltip"></div>
       </div>
       <div class="chart-hint">커서를 가져가면 해당 시점 가격, 드래그하면 범위 수익률</div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== 기기 동기화 (Telegram) 모달 =================== -->
+<div class="modal hidden" id="sync-modal" role="dialog" aria-modal="true">
+  <div class="modal-card sync-modal-card">
+    <div class="modal-head">
+      <h3>기기 간 동기화</h3>
+      <button type="button" class="modal-x" id="sync-close">×</button>
+    </div>
+
+    <!-- 비활성 상태 (서버에 봇 토큰 없음) -->
+    <div class="modal-body sync-stage hidden" id="sync-stage-disabled">
+      <p class="sync-explain">
+        이 인스턴스에는 텔레그램 봇이 설정되지 않았어. 운영자가 <code>TELEGRAM_BOT_TOKEN</code>
+        환경 변수를 추가하면 다른 PC·모바일 간 동기화가 가능해져.
+      </p>
+    </div>
+
+    <!-- 미연결 상태 -->
+    <div class="modal-body sync-stage hidden" id="sync-stage-idle">
+      <p class="sync-explain">
+        텔레그램 계정을 한 번 연동해두면 모든 자산·거래·스냅샷이 너의 텔레그램 채팅에
+        암호화 백업돼. 다른 PC 에서 같은 텔레그램으로 페어링하면 그대로 복원.
+      </p>
+      <ul class="sync-bullets">
+        <li>서버는 데이터를 갖고 있지 않음 — 봇이 너의 채팅에 JSON 파일을 보내고 핀(고정)함</li>
+        <li>비밀번호 없음 — 텔레그램 계정 자체가 인증 수단</li>
+        <li>해제는 언제든 가능, 텔레그램에서 봇 차단으로도 가능</li>
+      </ul>
+      <button type="button" class="btn btn-primary" id="sync-pair-start">텔레그램으로 연동 시작</button>
+    </div>
+
+    <!-- 페어링 진행 -->
+    <div class="modal-body sync-stage hidden" id="sync-stage-pairing">
+      <p class="sync-explain">아래 버튼을 누르면 텔레그램이 열려. <b>"시작" 만 누르면 연동 완료</b>.</p>
+      <div class="sync-pair-card">
+        <div class="sync-code-box">
+          <div class="sync-code-label">페어링 코드</div>
+          <div class="sync-code" id="sync-pair-code">— — — — — —</div>
+          <div class="sync-code-expires" id="sync-pair-expires">8분 안에 완료해주세요</div>
+        </div>
+        <a class="btn btn-primary sync-deeplink" id="sync-deeplink" target="_blank" rel="noopener">텔레그램에서 봇 열기 →</a>
+        <div class="sync-pair-status" id="sync-pair-status">⏳ 텔레그램에서 봇이 시작되기를 기다리는 중…</div>
+        <button type="button" class="btn btn-ghost" id="sync-pair-cancel">취소</button>
+      </div>
+    </div>
+
+    <!-- 연결됨 상태 -->
+    <div class="modal-body sync-stage hidden" id="sync-stage-active">
+      <div class="sync-active-head">
+        <div>
+          <div class="sync-active-name" id="sync-active-name">텔레그램 연동됨</div>
+          <div class="sync-active-meta" id="sync-active-meta">—</div>
+        </div>
+        <span class="sync-pill ok">CONNECTED</span>
+      </div>
+      <div class="sync-actions">
+        <button type="button" class="btn btn-primary" id="sync-push-now">지금 백업</button>
+        <button type="button" class="btn btn-ghost" id="sync-pull-now">최신 백업 복원</button>
+      </div>
+      <div class="sync-action-status" id="sync-action-status"></div>
+      <details class="sync-danger">
+        <summary>연동 해제</summary>
+        <p>이 기기의 동기화 자격을 폐기해. 텔레그램 채팅의 백업 파일은 그대로 남아.</p>
+        <button type="button" class="btn btn-danger" id="sync-disconnect">이 기기 연동 해제</button>
+      </details>
     </div>
   </div>
 </div>
