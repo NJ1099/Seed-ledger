@@ -30,6 +30,7 @@
         <span class="sync-lab" id="sync-lab">기기 동기화</span>
       </button>
       <div class="foot-sync" id="foot-sync">—</div>
+      <div class="powered-by">POWERED BY 리어카</div>
     </div>
   </aside>
 
@@ -61,8 +62,8 @@
       <div class="welcome-banner-body">
         <div class="welcome-banner-title">환영합니다</div>
         <div class="welcome-banner-text">
-          너의 자산 데이터는 <b>이 브라우저에만 저장</b>되고 서버로 가지 않습니다.
-          다른 PC 에서도 같은 데이터를 보려면 좌측 하단 <b>☁ 기기 동기화</b> 로 텔레그램 연동하세요.
+          입력하신 자산 데이터는 <b>이 브라우저에만 저장</b>되고 서버로 가지 않습니다.
+          다른 PC 에서도 같은 데이터를 보시려면 좌측 하단 <b>☁ 기기 동기화</b> 로 텔레그램을 연동해주세요.
         </div>
         <div class="welcome-banner-actions">
           <button type="button" class="welcome-banner-link" id="welcome-open-privacy">자세히 보기 →</button>
@@ -542,15 +543,15 @@
     </div>
     <div class="modal-body privacy-body">
       <p class="privacy-intro">
-        이 사이트는 너의 자산 데이터를 서버에 저장하지 않습니다. 데이터가 어디에 어떻게 흐르는지
+        이 사이트는 입력하신 자산 데이터를 서버에 저장하지 않습니다. 데이터가 어디에 어떻게 흐르는지
         그대로 적었습니다.
       </p>
 
       <details class="privacy-section" open>
         <summary>① 데이터가 저장되는 곳</summary>
         <ul>
-          <li><b>너의 자산·거래·스냅샷·개인 이벤트</b> → <b>이 브라우저의 localStorage</b> (이 기기에만, 서버 불가시).</li>
-          <li><b>시세 캐시</b> (티커별 현재가, 환율 등) → <b>서버 공유 캐시</b>. 모든 사용자가 동일한 캐시를 사용. 누가 어떤 종목을 보유 중인지는 서버가 모름 (조회 시 티커 심볼만 받음).</li>
+          <li><b>입력하신 자산·거래·스냅샷·개인 이벤트</b> → <b>이 브라우저의 localStorage</b> (이 기기에만, 서버 불가시).</li>
+          <li><b>시세 캐시</b> (티커별 현재가, 환율 등) → <b>서버 공유 캐시</b>. 모든 사용자가 동일한 캐시를 사용합니다. 누가 어떤 종목을 보유 중인지는 서버가 알 수 없습니다 (조회 시 티커 심볼만 전달).</li>
           <li><b>경제 캘린더 Top 5</b> → 서버 (공유 콘텐츠, 토스증권 공개 API 에서 6시간마다 자동 수집).</li>
         </ul>
       </details>
@@ -559,23 +560,23 @@
         <summary>② 서버가 보는 것 / 못 보는 것</summary>
         <p><b>볼 수 있음:</b></p>
         <ul>
-          <li>너가 시세 조회한 티커 심볼 (예: AAPL, KRW-BTC, 005930) — 익명, 어떤 사용자가 조회했는지 매핑하지 않음.</li>
-          <li>너의 IP 주소 (HTTP 요청 표준 메타데이터). 로그에 남을 수 있으나 자산 정보와 연결되지 않음.</li>
+          <li>시세 조회한 티커 심볼 (예: AAPL, KRW-BTC, 005930) — 익명, 어떤 사용자가 조회했는지 매핑하지 않습니다.</li>
+          <li>IP 주소 (HTTP 요청 표준 메타데이터). 로그에 남을 수 있으나 자산 정보와 연결되지 않습니다.</li>
         </ul>
         <p><b>볼 수 없음:</b></p>
         <ul>
           <li>보유 수량, 잔액, 평균단가, 평가금액, 손익.</li>
           <li>거래 내역 (카드 사용, 월세, 저축 등 모든 항목).</li>
-          <li>너의 계좌 라벨, 메모, 만기일 등 모든 사용자 입력 내용.</li>
+          <li>계좌 라벨, 메모, 만기일 등 모든 사용자 입력 내용.</li>
         </ul>
       </details>
 
       <details class="privacy-section">
         <summary>③ 텔레그램 동기화 시 격리 보장</summary>
         <ul>
-          <li><b>저장소 = 너의 1:1 봇 채팅.</b> 서버는 사용자 데이터를 영구 저장하지 않습니다 — 봇이 너의 텔레그램 채팅에 JSON 파일을 보내 핀(고정)할 뿐. 데이터의 영구 보관은 너의 텔레그램 클라우드가 담당.</li>
-          <li><b>cred = chat_id × HMAC.</b> 자격 증명은 너의 chat_id 와 봇 토큰 기반 비밀로 만든 HMAC 서명. 봇 토큰을 모르면 가짜 cred 위조 불가.</li>
-          <li><b>다른 사용자는 너의 데이터에 접근 불가.</b> 봇은 사용자 각각의 1:1 채팅에만 메시지를 쓰며, A 의 채팅에서 B 의 채팅을 볼 방법이 없습니다.</li>
+          <li><b>저장소 = 본인의 1:1 봇 채팅.</b> 서버는 사용자 데이터를 영구 저장하지 않습니다 — 봇이 본인의 텔레그램 채팅에 JSON 파일을 보내 핀(고정)할 뿐, 데이터의 영구 보관은 텔레그램 클라우드가 담당합니다.</li>
+          <li><b>cred = chat_id × HMAC.</b> 자격 증명은 본인의 chat_id 와 봇 토큰 기반 비밀로 만든 HMAC 서명입니다. 봇 토큰을 모르면 가짜 cred 위조가 불가능합니다.</li>
+          <li><b>다른 사용자는 본인의 데이터에 접근 불가.</b> 봇은 사용자 각각의 1:1 채팅에만 메시지를 쓰며, A 의 채팅에서 B 의 채팅을 볼 방법이 없습니다.</li>
           <li><b>4자리 확인 단계.</b> 어깨너머 도용 차단을 위해, 텔레그램에서 봇 시작 → 봇이 보내준 4자리 코드를 앱에 입력해야 페어링이 완료됩니다. 정상 사용자만 본인의 텔레그램 알림으로 그 4자리를 받을 수 있습니다.</li>
         </ul>
       </details>
@@ -591,7 +592,7 @@
 
       <p class="privacy-footnote">
         오픈소스 — 동작은 <a href="https://github.com/NJ1099/Seed-ledger" target="_blank" rel="noopener">GitHub</a> 에서
-        직접 확인 가능. 서버 코드(<code>server.js</code>) 의 모든 엔드포인트 동작이 그대로 공개되어 있습니다.
+        직접 확인하실 수 있습니다. 서버 코드(<code>server.js</code>) 의 모든 엔드포인트 동작이 그대로 공개되어 있습니다.
       </p>
     </div>
   </div>
@@ -608,29 +609,29 @@
     <!-- 비활성 상태 (서버에 봇 토큰 없음) -->
     <div class="modal-body sync-stage hidden" id="sync-stage-disabled">
       <p class="sync-explain">
-        이 인스턴스에는 텔레그램 봇이 설정되지 않았어. 운영자가 <code>TELEGRAM_BOT_TOKEN</code>
-        환경 변수를 추가하면 다른 PC·모바일 간 동기화가 가능해져.
+        이 인스턴스에는 텔레그램 봇이 설정되지 않았습니다. 운영자가 <code>TELEGRAM_BOT_TOKEN</code>
+        환경 변수를 추가하면 다른 PC·모바일 간 동기화가 가능해집니다.
       </p>
     </div>
 
     <!-- 미연결 상태 -->
     <div class="modal-body sync-stage hidden" id="sync-stage-idle">
       <p class="sync-explain">
-        텔레그램 계정을 한 번 연동해두면 모든 자산·거래·스냅샷이 <b>너의 텔레그램 채팅</b> 에
-        백업돼. 다른 PC 에서 같은 텔레그램으로 페어링하면 그대로 복원.
+        텔레그램 계정을 한 번 연동해두면 모든 자산·거래·스냅샷이 <b>본인의 텔레그램 채팅</b> 에
+        백업됩니다. 다른 PC 에서 같은 텔레그램으로 페어링하시면 그대로 복원됩니다.
       </p>
       <ul class="sync-bullets">
-        <li><b>저장소 = 너의 채팅.</b> 서버는 데이터를 영구 보관하지 않음 — 봇이 JSON 파일을 너의 채팅에 보내고 핀(고정)함</li>
-        <li><b>다른 사용자가 접근 불가.</b> 자격 증명은 너의 chat_id 와 봇 토큰 기반 HMAC 서명. 봇은 너의 1:1 채팅에만 메시지 작성 가능</li>
+        <li><b>저장소 = 본인의 채팅.</b> 서버는 데이터를 영구 보관하지 않습니다 — 봇이 JSON 파일을 본인의 채팅에 보내고 핀(고정)합니다</li>
+        <li><b>다른 사용자가 접근 불가.</b> 자격 증명은 본인의 chat_id 와 봇 토큰 기반 HMAC 서명. 봇은 본인의 1:1 채팅에만 메시지 작성 가능</li>
         <li><b>2단계 페어링.</b> 6자리 코드 → 텔레그램에서 봇 시작 → 봇이 보낸 4자리 확인 코드를 앱에 입력. 어깨너머 도용 차단</li>
-        <li>해제는 언제든 가능, 텔레그램에서 봇 차단으로도 가능</li>
+        <li>해제는 언제든 가능하며, 텔레그램에서 봇 차단으로도 가능합니다</li>
       </ul>
       <button type="button" class="btn btn-primary" id="sync-pair-start">텔레그램으로 연동 시작</button>
     </div>
 
     <!-- 페어링 진행 (1단계: 6자리 코드 + 텔레그램 deep link) -->
     <div class="modal-body sync-stage hidden" id="sync-stage-pairing">
-      <p class="sync-explain">아래 버튼을 누르면 텔레그램이 열려. <b>"시작"</b> 누른 뒤 <b>봇이 보내준 4자리 확인 코드를 받아 다음 화면에 입력</b>해주세요.</p>
+      <p class="sync-explain">아래 버튼을 누르면 텔레그램이 열립니다. <b>"시작"</b> 누른 뒤 <b>봇이 보내준 4자리 확인 코드를 받아 다음 화면에 입력</b>해주세요.</p>
       <div class="sync-pair-card">
         <div class="sync-code-box">
           <div class="sync-code-label">페어링 코드</div>
@@ -646,8 +647,8 @@
     <!-- 페어링 2단계: 4자리 확인 코드 입력 -->
     <div class="modal-body sync-stage hidden" id="sync-stage-confirming">
       <p class="sync-explain">
-        텔레그램의 봇 채팅에 <b>4자리 확인 코드</b> 가 도착했어. 그 숫자를 아래에 입력하면 페어링이 완료돼.
-        본인이 시작하지 않은 페어링이면 입력하지 말고 그대로 두세요 (자동 폐기).
+        텔레그램의 봇 채팅에 <b>4자리 확인 코드</b> 가 도착했습니다. 그 숫자를 아래에 입력하시면 페어링이 완료됩니다.
+        본인이 시작하지 않은 페어링이면 입력하지 마시고 그대로 두세요 (자동 폐기).
       </p>
       <div class="sync-confirm-card">
         <input
@@ -683,11 +684,11 @@
       </div>
       <div class="sync-action-status" id="sync-action-status"></div>
       <p class="sync-active-footnote">
-        chat_id 가 노출되더라도 데이터 접근은 봇과 너의 1:1 채팅 안에서만 가능합니다 (봇은 다른 사용자의 채팅에 메시지를 쓸 수 없음).
+        chat_id 가 노출되더라도 데이터 접근은 봇과 본인의 1:1 채팅 안에서만 가능합니다 (봇은 다른 사용자의 채팅에 메시지를 쓸 수 없습니다).
       </p>
       <details class="sync-danger">
         <summary>연동 해제</summary>
-        <p>이 기기의 동기화 자격을 폐기해. 텔레그램 채팅의 백업 파일은 그대로 남아.</p>
+        <p>이 기기의 동기화 자격을 폐기합니다. 텔레그램 채팅의 백업 파일은 그대로 남습니다.</p>
         <button type="button" class="btn btn-danger" id="sync-disconnect">이 기기 연동 해제</button>
       </details>
     </div>

@@ -4518,7 +4518,7 @@ async function tryFirstSyncAction() {
         return (a.accounts?.length || 0) + (t.transactions?.length || 0) + Object.keys(s).length;
       })();
       const ok = localCount === 0
-        || confirm(`텔레그램에 백업이 있어 (${result.savedAt || ''}). 이 기기의 현재 데이터를 그 백업으로 덮어쓸까?\n\n로컬 데이터: ${localCount}건\n취소하면 로컬 데이터를 유지하고 다음 백업 때 텔레그램이 갱신돼.`);
+        || confirm(`텔레그램에 백업이 있습니다 (${result.savedAt || ''}). 이 기기의 현재 데이터를 그 백업으로 덮어쓸까요?\n\n로컬 데이터: ${localCount}건\n취소하시면 로컬 데이터를 유지하고 다음 백업 때 텔레그램이 갱신됩니다.`);
       if (ok) {
         // restoreFromSyncPayload 는 syncPullNow 안에서 이미 적용됨. 화면 리로드.
         await loadAll();
@@ -4528,7 +4528,7 @@ async function tryFirstSyncAction() {
       } else {
         // 사용자가 거절 → 로컬 그대로 두고, 즉시 push 로 텔레그램 백업 갱신
         await syncPushNow();
-        status.textContent = '✓ 로컬 데이터를 텔레그램에 새로 백업했어';
+        status.textContent = '✓ 로컬 데이터를 텔레그램에 새로 백업했습니다';
         status.className = 'sync-action-status ok';
       }
     }
@@ -4651,7 +4651,7 @@ async function setupSync() {
   });
   document.getElementById('sync-pull-now')?.addEventListener('click', async () => {
     const status = document.getElementById('sync-action-status');
-    if (!confirm('텔레그램에 핀된 최신 백업으로 이 기기 데이터를 덮어써. 진행할까?')) return;
+    if (!confirm('텔레그램에 핀된 최신 백업으로 이 기기 데이터를 덮어씁니다. 진행할까요?')) return;
     status.textContent = '복원 중…'; status.className = 'sync-action-status';
     try {
       const j = await syncPullNow();
@@ -4665,7 +4665,7 @@ async function setupSync() {
     }
   });
   document.getElementById('sync-disconnect')?.addEventListener('click', async () => {
-    if (!confirm('이 기기의 동기화 자격을 폐기할까? (텔레그램 채팅의 백업 파일은 그대로 남음)')) return;
+    if (!confirm('이 기기의 동기화 자격을 폐기할까요? (텔레그램 채팅의 백업 파일은 그대로 남습니다)')) return;
     await syncDisconnectNow();
     closeSyncModal();
   });

@@ -1115,7 +1115,7 @@ async function startPairingPoller() {
             try {
               await tgPostJson('sendMessage', {
                 chat_id: msg.chat.id,
-                text: '⚠️ 페어링 코드가 만료됐거나 유효하지 않아. 앱에서 새 코드를 받아주세요.',
+                text: '⚠️ 페어링 코드가 만료됐거나 유효하지 않습니다. 앱에서 새 코드를 받아주세요.',
               });
             } catch {}
             continue;
@@ -1131,7 +1131,7 @@ async function startPairingPoller() {
           try {
             await tgPostJson('sendMessage', {
               chat_id: msg.chat.id,
-              text: `🔐 Seed Ledger 페어링 확인 코드\n\n*${pair.confirmCode}*\n\n앱에 이 4자리를 5분 안에 입력해주세요. 너 본인이 시작한 페어링이 아니라면 그냥 무시하면 자동으로 폐기됩니다.`,
+              text: `🔐 Seed Ledger 페어링 확인 코드\n\n*${pair.confirmCode}*\n\n앱에 이 4자리를 5분 안에 입력해주세요. 본인이 시작한 페어링이 아니라면 그냥 무시하시면 자동으로 폐기됩니다.`,
               parse_mode: 'Markdown',
             });
           } catch (e) {
@@ -1400,7 +1400,7 @@ async function handleSyncDisconnect(req, res) {
     await tgPostJson('unpinAllChatMessages', { chat_id: chatId }).catch(() => {});
     await tgPostJson('sendMessage', {
       chat_id: chatId,
-      text: '🔌 Seed Ledger 연동을 이 기기에서 해제했어. 다른 기기에서 다시 페어링하면 그때까지의 백업은 그대로 복원돼.',
+      text: '🔌 Seed Ledger 연동을 이 기기에서 해제했습니다. 다른 기기에서 다시 페어링하시면 그때까지의 백업이 그대로 복원됩니다.',
     }).catch(() => {});
   } catch {}
   return reply(res, 200, { ok: true });
