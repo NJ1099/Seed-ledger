@@ -661,6 +661,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/sync/status')      return await handleSyncStatus(req, res);
     if (urlPath === '/api/sync/init')        return await handleSyncInit(req, res);
     if (urlPath === '/api/sync/check')       return await handleSyncCheck(req, res);
+    if (urlPath === '/api/sync/confirm')     return await handleSyncConfirm(req, res);
     if (urlPath === '/api/sync/push')        return await handleSyncPush(req, res);
     if (urlPath === '/api/sync/pull')        return await handleSyncPull(req, res);
     if (urlPath === '/api/sync/disconnect')  return await handleSyncDisconnect(req, res);
@@ -948,7 +949,9 @@ const SYNC_SECRET = SYNC_ENABLED
   ? crypto.createHash('sha256').update(TELEGRAM_BOT_TOKEN + ':seed-sync-v1').digest('hex')
   : null;
 
-const SYNC_PAIR_TTL_MS = 8 * 60 * 1000;     // 페어링 코드 만료
+const SYNC_PAIR_TTL_MS = 8 * 60 * 1000;     // 1단계: 6자리 코드 만료 (텔레그램에서 /start 누르기 전까지)
+const SYNC_CONFIRM_TTL_MS = 5 * 60 * 1000;  // 2단계: 4자리 확인 만료 (텔레그램에서 /start 누른 뒤부터)
+const SYNC_CONFIRM_MAX_ATTEMPTS = 3;        // 4자리 오답 허용 횟수
 const SYNC_POLL_TTL_MS = 8 * 60 * 1000;     // 페어링 폴링 워커 수명
 const SYNC_MAX_BODY = 4 * 1024 * 1024;      // 4MB (텔레그램 sendDocument 한도 50MB 와는 별개로 클라가 보내는 JSON 한도)
 
@@ -1076,7 +1079,13 @@ function newPairCode() {
 function gcPendingPairs() {
   const now = Date.now();
   for (const [k, v] of pendingPairs) {
-    if (now - v.createdAt > SYNC_PAIR_TTL_MS) pendingPairs.delete(k);
+    if (v.confirmCreatedAt) {
+      // 2단계 (4자리 확인 대기) 만료
+      if (now - v.confirmCreatedAt > SYNC_CONFIRM_TTL_MS) pendingPairs.delete(k);
+    } else {
+      // 1단계 (6자리 코드 발급, /start 대기) 만료
+      if (now - v.createdAt > SYNC_PAIR_TTL_MS) pendingPairs.delete(k);
+    }
   }
 }
 
@@ -1114,16 +1123,24 @@ async function startPairingPoller() {
           pair.chatId = String(msg.chat.id);
           pair.userName = msg.from?.first_name || msg.chat?.first_name || '';
           pair.pairedAt = Date.now();
+          // 2단계: 4자리 확인 코드 발급 (어깨너머 도용 차단)
+          pair.confirmCode = String(1000 + Math.floor(Math.random() * 9000));
+          pair.confirmCreatedAt = Date.now();
+          pair.confirmAttempts = 0;
           pendingPairs.set(code, pair);
           try {
             await tgPostJson('sendMessage', {
               chat_id: msg.chat.id,
-              text: `✅ Seed Ledger 연동 완료, ${pair.userName || '사용자'}님.\n앞으로 자산 데이터가 이 채팅에 JSON 파일로 안전하게 백업됩니다.`,
+              text: `🔐 Seed Ledger 페어링 확인 코드\n\n*${pair.confirmCode}*\n\n앱에 이 4자리를 5분 안에 입력해주세요. 너 본인이 시작한 페어링이 아니라면 그냥 무시하면 자동으로 폐기됩니다.`,
+              parse_mode: 'Markdown',
             });
           } catch (e) {
-            logLine('warn', 'tg.pair.replyfail', { err: String(e) });
+            logLine('warn', 'tg.pair.confirm-send-fail', { err: String(e) });
+            // 메시지 못 보낸 경우 페어링 폐기 (사용자가 4자리 못 받음 → 입력 불가)
+            pendingPairs.delete(code);
+            continue;
           }
-          logLine('info', 'tg.pair.ok', { code, chatId: pair.chatId });
+          logLine('info', 'tg.pair.confirm-sent', { code, chatId: pair.chatId });
         }
         gcPendingPairs();
       } catch (e) {
@@ -1193,8 +1210,21 @@ async function handleSyncCheck(req, res) {
   gcPendingPairs();
   const pair = pendingPairs.get(code);
   if (!pair) return reply(res, 404, { ok: false, error: 'expired' });
-  if (!pair.chatId) return reply(res, 200, { ok: true, paired: false });
-  // 1회용: 인증된 cred 를 한 번 발급하고 즉시 제거
+  if (!pair.chatId) {
+    // 1단계 대기 — 텔레그램에서 /start 아직 안 누름
+    return reply(res, 200, { ok: true, paired: false });
+  }
+  if (pair.confirmCode) {
+    // 2단계 진입 — 텔레그램으로 4자리 코드 갔고, 사용자 입력 대기 중
+    const elapsed = Date.now() - (pair.confirmCreatedAt || 0);
+    return reply(res, 200, {
+      ok: true,
+      paired: false,
+      awaitingConfirm: true,
+      confirmExpiresInSec: Math.max(0, Math.floor((SYNC_CONFIRM_TTL_MS - elapsed) / 1000)),
+    });
+  }
+  // 백워드 호환: confirmCode 없이 chatId 만 세팅된 경우 (구버전 페어 — 기능적으로 폐기)
   pendingPairs.delete(code);
   return reply(res, 200, {
     ok: true,
@@ -1202,6 +1232,70 @@ async function handleSyncCheck(req, res) {
     cred: signCred(pair.chatId),
     chatId: pair.chatId,
     userName: pair.userName || '',
+  });
+}
+
+// 4자리 확인 코드 검증 → 일치 시 cred 발급, 불일치 시 시도 카운터 증가, 3회 초과 시 폐기.
+async function handleSyncConfirm(req, res) {
+  if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
+  if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
+  let body;
+  try { body = await readBody(req, 1024); }
+  catch { return reply(res, 400, { ok: false, error: 'bad-body' }); }
+  let parsed;
+  try { parsed = JSON.parse(body); }
+  catch { return reply(res, 400, { ok: false, error: 'bad-json' }); }
+  const code = String(parsed.code || '');
+  const confirm = String(parsed.confirm || '');
+  if (!/^\d{6}$/.test(code)) return reply(res, 400, { ok: false, error: 'bad-code' });
+  if (!/^\d{4}$/.test(confirm)) return reply(res, 400, { ok: false, error: 'bad-confirm-format' });
+
+  gcPendingPairs();
+  const pair = pendingPairs.get(code);
+  if (!pair || !pair.confirmCode) {
+    return reply(res, 404, { ok: false, error: 'no-pending-confirm' });
+  }
+  // 만료 (gc 가 잡지 못한 경계 케이스)
+  if (Date.now() - pair.confirmCreatedAt > SYNC_CONFIRM_TTL_MS) {
+    pendingPairs.delete(code);
+    return reply(res, 410, { ok: false, error: 'confirm-expired' });
+  }
+  pair.confirmAttempts = (pair.confirmAttempts || 0) + 1;
+
+  // 일치
+  if (confirm === pair.confirmCode) {
+    pendingPairs.delete(code);
+    const cred = signCred(pair.chatId);
+    // 텔레그램에 완료 알림 (실패해도 cred 는 발급)
+    tgPostJson('sendMessage', {
+      chat_id: pair.chatId,
+      text: `✅ Seed Ledger 연동 완료, ${pair.userName || '사용자'}님.\n앞으로 자산 데이터가 이 채팅에 JSON 파일로 안전하게 백업됩니다.`,
+    }).catch((e) => logLine('warn', 'tg.confirm.replyfail', { err: String(e) }));
+    logLine('info', 'tg.confirm.ok', { code, chatId: pair.chatId, attempts: pair.confirmAttempts });
+    return reply(res, 200, {
+      ok: true,
+      paired: true,
+      cred,
+      chatId: pair.chatId,
+      userName: pair.userName || '',
+    });
+  }
+
+  // 불일치
+  if (pair.confirmAttempts >= SYNC_CONFIRM_MAX_ATTEMPTS) {
+    pendingPairs.delete(code);
+    tgPostJson('sendMessage', {
+      chat_id: pair.chatId,
+      text: '⚠️ Seed Ledger 페어링 시도 3회를 초과해 폐기됐습니다. 앱에서 다시 시작해주세요.',
+    }).catch(() => {});
+    logLine('warn', 'tg.confirm.too-many', { code, chatId: pair.chatId });
+    return reply(res, 429, { ok: false, error: 'too-many-attempts' });
+  }
+  pendingPairs.set(code, pair);
+  return reply(res, 200, {
+    ok: false,
+    error: 'wrong-code',
+    remainingAttempts: SYNC_CONFIRM_MAX_ATTEMPTS - pair.confirmAttempts,
   });
 }
 

@@ -4119,6 +4119,7 @@ const syncState = {
   pairExpiresAt: 0,
   pairTimer: null,
   pairCheckTimer: null,
+  confirmTimer: null,
   pushDebounce: null,
   pushing: false,
   pulling: false,
@@ -4183,6 +4184,16 @@ async function syncCheckPair(code) {
   const r = await fetch('/api/sync/check?code=' + encodeURIComponent(code));
   const j = await r.json().catch(() => ({}));
   if (!r.ok && r.status !== 404) throw new Error(j.error || `check failed (${r.status})`);
+  return { status: r.status, ...j };
+}
+
+async function syncConfirmPair(code, confirm) {
+  const r = await fetch('/api/sync/confirm', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code, confirm }),
+  });
+  const j = await r.json().catch(() => ({}));
   return { status: r.status, ...j };
 }
 
@@ -4303,9 +4314,91 @@ function updateSyncBtn() {
 }
 
 function showSyncStage(name) {
-  for (const id of ['disabled', 'idle', 'pairing', 'active']) {
+  for (const id of ['disabled', 'idle', 'pairing', 'confirming', 'active']) {
     const el = document.getElementById('sync-stage-' + id);
     if (el) el.classList.toggle('hidden', id !== name);
+  }
+}
+
+// 페어링 2단계: 4자리 확인 코드 입력 화면으로 전환 + 5분 카운트다운 시작
+function enterConfirmStage(expiresInSec) {
+  showSyncStage('confirming');
+  const input = document.getElementById('sync-confirm-input');
+  const errEl = document.getElementById('sync-confirm-error');
+  const expEl = document.getElementById('sync-confirm-expires');
+  if (input) { input.value = ''; setTimeout(() => input.focus(), 50); }
+  if (errEl) errEl.textContent = '';
+
+  if (syncState.confirmTimer) clearInterval(syncState.confirmTimer);
+  let remaining = Math.max(60, expiresInSec || 300);
+  const tick = () => {
+    if (remaining <= 0) {
+      clearInterval(syncState.confirmTimer);
+      syncState.confirmTimer = null;
+      // idle 로 복귀
+      if (errEl) errEl.textContent = '';
+      showSyncStage('idle');
+      return;
+    }
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    if (expEl) expEl.textContent = `${m}분 ${String(s).padStart(2, '0')}초 안에 완료해주세요`;
+    remaining--;
+  };
+  tick();
+  syncState.confirmTimer = setInterval(tick, 1000);
+}
+
+async function submitConfirmCode() {
+  const input = document.getElementById('sync-confirm-input');
+  const errEl = document.getElementById('sync-confirm-error');
+  const submitBtn = document.getElementById('sync-confirm-submit');
+  const v = (input?.value || '').trim();
+  if (!/^\d{4}$/.test(v)) {
+    if (errEl) errEl.textContent = '4자리 숫자를 입력해주세요';
+    return;
+  }
+  if (!syncState.pairCode) {
+    if (errEl) errEl.textContent = '페어링 세션이 만료됐습니다. 처음부터 다시 시작해주세요.';
+    return;
+  }
+  if (submitBtn) submitBtn.disabled = true;
+  try {
+    const r = await syncConfirmPair(syncState.pairCode, v);
+    if (r.ok && r.cred) {
+      // 성공 → 활성 단계
+      if (syncState.confirmTimer) clearInterval(syncState.confirmTimer);
+      syncState.confirmTimer = null;
+      syncState.pairCode = null;
+      syncWriteCred(r.cred);
+      syncWriteMeta({ chatId: r.chatId, userName: r.userName, pairedAt: new Date().toISOString() });
+      showSyncStage('active');
+      renderSyncActiveStage();
+      updateSyncBtn();
+      await tryFirstSyncAction();
+      return;
+    }
+    // 실패 분기
+    if (r.error === 'wrong-code') {
+      if (errEl) errEl.textContent = `잘못된 코드. 남은 시도 ${r.remainingAttempts ?? '?'}회`;
+      if (input) { input.value = ''; input.focus(); }
+    } else if (r.error === 'too-many-attempts' || r.status === 429) {
+      if (syncState.confirmTimer) clearInterval(syncState.confirmTimer);
+      syncState.confirmTimer = null;
+      syncState.pairCode = null;
+      if (errEl) errEl.textContent = '시도 3회 초과로 폐기됐습니다. 처음부터 다시 시작해주세요.';
+      setTimeout(() => showSyncStage('idle'), 2000);
+    } else if (r.error === 'confirm-expired' || r.status === 410 || r.status === 404) {
+      if (syncState.confirmTimer) clearInterval(syncState.confirmTimer);
+      syncState.confirmTimer = null;
+      syncState.pairCode = null;
+      if (errEl) errEl.textContent = '확인 단계 만료. 처음부터 다시 시작해주세요.';
+      setTimeout(() => showSyncStage('idle'), 2000);
+    } else {
+      if (errEl) errEl.textContent = `오류: ${r.error || r.status}`;
+    }
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
   }
 }
 
@@ -4320,9 +4413,10 @@ function openSyncModal() {
 function closeSyncModal() {
   const modal = document.getElementById('sync-modal');
   if (modal) modal.classList.add('hidden');
-  // 페어링 진행 중이었다면 정리
+  // 페어링 진행 중이었다면 정리 (confirm 단계 포함)
   if (syncState.pairTimer) { clearInterval(syncState.pairTimer); syncState.pairTimer = null; }
   if (syncState.pairCheckTimer) { clearInterval(syncState.pairCheckTimer); syncState.pairCheckTimer = null; }
+  if (syncState.confirmTimer) { clearInterval(syncState.confirmTimer); syncState.confirmTimer = null; }
   syncState.pairCode = null;
 }
 
@@ -4374,16 +4468,22 @@ async function startPairingFlow() {
       if (!syncState.pairCode) return;
       try {
         const r = await syncCheckPair(syncState.pairCode);
-        if (r.paired && r.cred) {
+        if (r.awaitingConfirm) {
+          // 텔레그램에서 /start 가 수신됐고, 봇이 이미 4자리 코드를 그 채팅에 보냄.
+          // 이제 사용자가 4자리 코드를 입력하길 기다림 → 폴링은 정지하고 확인 단계로 전환.
+          clearInterval(syncState.pairCheckTimer);
+          syncState.pairCheckTimer = null;
+          if (syncState.pairTimer) clearInterval(syncState.pairTimer);
+          syncState.pairTimer = null;
+          enterConfirmStage(r.confirmExpiresInSec || 300);
+        } else if (r.paired && r.cred) {
+          // (백워드 호환) 구버전 페어 — confirmCode 없이 즉시 발급
           clearInterval(syncState.pairCheckTimer);
           syncState.pairCheckTimer = null;
           if (syncState.pairTimer) clearInterval(syncState.pairTimer);
           syncState.pairTimer = null;
           syncWriteCred(r.cred);
           syncWriteMeta({ chatId: r.chatId, userName: r.userName, pairedAt: new Date().toISOString() });
-          // 페어링 직후 자동 동작:
-          //   - 새 기기로 연결한 거라면 텔레그램에 백업이 이미 있을 가능성 → 우선 pull 시도해 복원 제안
-          //   - 백업이 없으면 즉시 첫 백업 push
           showSyncStage('active');
           renderSyncActiveStage();
           updateSyncBtn();
@@ -4452,6 +4552,52 @@ async function tryFirstSyncAction() {
   updateSyncBtn();
 }
 
+// ============================================================================
+// 프라이버시 안내 모달 + 첫 방문 환영 배너
+// ============================================================================
+const WELCOME_DISMISSED_KEY = 'seed:welcome:dismissed';
+
+function openPrivacyModal() {
+  const modal = document.getElementById('privacy-modal');
+  if (modal) modal.classList.remove('hidden');
+}
+function closePrivacyModal() {
+  const modal = document.getElementById('privacy-modal');
+  if (modal) modal.classList.add('hidden');
+}
+
+function setupPrivacyModal() {
+  document.getElementById('open-privacy')?.addEventListener('click', openPrivacyModal);
+  document.getElementById('privacy-close')?.addEventListener('click', closePrivacyModal);
+  document.getElementById('privacy-modal')?.addEventListener('click', (e) => {
+    if (e.target.id === 'privacy-modal') closePrivacyModal();
+  });
+  // ESC 로도 닫기
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const m = document.getElementById('privacy-modal');
+      if (m && !m.classList.contains('hidden')) closePrivacyModal();
+    }
+  });
+}
+
+function setupWelcomeBanner() {
+  const banner = document.getElementById('welcome-banner');
+  if (!banner) return;
+  const dismissed = (() => { try { return !!localStorage.getItem(WELCOME_DISMISSED_KEY); } catch { return false; } })();
+  const accountsEmpty = (lsGetAccounts().accounts || []).length === 0;
+  const txEmpty = (lsGetTx().transactions || []).length === 0;
+  // 첫 방문 = dismiss 안 함 + 계좌/거래 모두 0건
+  const showBanner = !dismissed && accountsEmpty && txEmpty;
+  banner.classList.toggle('hidden', !showBanner);
+
+  document.getElementById('welcome-open-privacy')?.addEventListener('click', openPrivacyModal);
+  document.getElementById('welcome-dismiss')?.addEventListener('click', () => {
+    try { localStorage.setItem(WELCOME_DISMISSED_KEY, '1'); } catch {}
+    banner.classList.add('hidden');
+  });
+}
+
 async function setupSync() {
   // 서버 동기화 활성 여부 조회
   const status = await syncFetchStatus();
@@ -4470,6 +4616,23 @@ async function setupSync() {
     syncState.pairCheckTimer = null;
     if (syncState.pairTimer) clearInterval(syncState.pairTimer);
     syncState.pairTimer = null;
+    syncState.pairCode = null;
+    showSyncStage('idle');
+  });
+  // 4자리 확인 단계 버튼
+  document.getElementById('sync-confirm-submit')?.addEventListener('click', submitConfirmCode);
+  document.getElementById('sync-confirm-input')?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); submitConfirmCode(); }
+  });
+  document.getElementById('sync-confirm-input')?.addEventListener('input', (e) => {
+    // 숫자만 허용 + 4자리에 도달하면 자동 제출
+    const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+    if (v !== e.target.value) e.target.value = v;
+    if (v.length === 4) submitConfirmCode();
+  });
+  document.getElementById('sync-confirm-cancel')?.addEventListener('click', () => {
+    if (syncState.confirmTimer) clearInterval(syncState.confirmTimer);
+    syncState.confirmTimer = null;
     syncState.pairCode = null;
     showSyncStage('idle');
   });
@@ -4540,6 +4703,8 @@ async function boot() {
   renderTickerStrip();
   schedulePolling();
   setupSync();
+  setupPrivacyModal();
+  setupWelcomeBanner();
 }
 
 // ---------- 종목 Historical 차트 모달 ----------
