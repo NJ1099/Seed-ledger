@@ -342,13 +342,51 @@ const TYPE_LABEL = {
 const TYPE_ORDER = ['cash','savings','deposit','stock_kr','stock_us','crypto','brokerage','realestate','custom'];
 
 const CAT_LABEL = {
+  // 지출
   card: '카드', cash: '현금', rent: '월세', utility: '공과금',
-  subscription: '구독', savings: '저축', other: '기타', transfer: '자금 이동',
+  subscription: '구독', other: '기타',
+  // 저축 기여
+  savings: '저축',
+  // 자금 이동
+  transfer: '자금 이동',
+  // 수입
+  salary: '월급',
+  parttime: '아르바이트',
+  bonus: '보너스 / 인센티브',
+  interest: '이자 / 배당',
+  crypto_income: '코인',
+  stock_income: '주식',
+  realestate_income: '부동산',
+  recurring_income: '고정 수입',
+  refund: '환급 / 리펀드',
+  other_income: '기타 수입',
 };
 const CAT_COLOR = {
+  // 지출
   card: '#3182F6', cash: '#8B95A1', rent: '#F04452',
-  utility: '#0AC17B', subscription: '#F7BE2E', savings: '#7E5BEF', other: '#B0B8C1',
-  transfer: '#64748B',
+  utility: '#0AC17B', subscription: '#F7BE2E', other: '#B0B8C1',
+  // 저축 / 이동
+  savings: '#7E5BEF', transfer: '#64748B',
+  // 수입 — 녹색·청색·골드 계열로 시각 구분
+  salary: '#0AC17B',
+  parttime: '#34D399',
+  bonus: '#F59E0B',
+  interest: '#06B6D4',
+  crypto_income: '#A855F7',
+  stock_income: '#3B82F6',
+  realestate_income: '#84CC16',
+  recurring_income: '#14B8A6',
+  refund: '#FBBF24',
+  other_income: '#94A3B8',
+};
+
+// 유형별로 보여줄 카테고리 — type 변경 시 카테고리 드롭다운이 이 목록으로 재구성됨.
+// 사용자 커스텀 카테고리는 어떤 유형에서도 선택 가능하도록 모든 유형 목록 끝에 합쳐진다.
+const TYPE_CATS = {
+  expense:              ['card', 'cash', 'rent', 'utility', 'subscription', 'other'],
+  income:               ['salary', 'parttime', 'bonus', 'interest', 'crypto_income', 'stock_income', 'realestate_income', 'recurring_income', 'refund', 'other_income'],
+  savings_contribution: ['savings'],
+  transfer:             ['transfer'],
 };
 
 // 사용자 커스텀 카테고리 — localStorage 에 저장. 기본 카테고리 외에 자유 추가 가능.
@@ -2781,19 +2819,32 @@ function setupTxForm() {
   const origSubmitText = submitBtn ? submitBtn.textContent : '추가';
   form.elements.date.value = todayKST();
 
-  // 카테고리 드롭다운을 동적 목록으로 교체. + 새 카테고리 추가 옵션.
+  // 카테고리 드롭다운을 type 별 목록으로 동적 교체. + 새 카테고리 추가 옵션.
+  // 유형이 바뀌면 적합한 카테고리만 표시 (예: 수입 → 월급/아르바이트/코인 등).
   const catSel = form.elements.category;
+  const typeSel = form.elements.type;
   const refreshCatOptions = (selected) => {
-    const cur = selected || catSel.value || 'card';
-    const cats = allCategories();
+    const type = typeSel.value || 'expense';
+    const baseCats = TYPE_CATS[type] || TYPE_CATS.expense;
+    const customCats = getCustomCats();
+    // 거래 내역에서 발견된 카테고리 중 표준에도 커스텀에도 없는 것 (이전 버전 데이터 호환)
+    const legacy = [];
+    for (const t of state.transactions) {
+      if (t.type !== type) continue;
+      const c = t.category;
+      if (c && !baseCats.includes(c) && !customCats.includes(c) && !legacy.includes(c)) legacy.push(c);
+    }
+    const cats = [...baseCats, ...customCats, ...legacy];
+    const cur = selected || catSel.value;
     catSel.innerHTML = [
       ...cats.map(c => `<option value="${esc(c)}">${esc(catLabel(c))}</option>`),
       `<option value="__new__" style="font-style:italic">＋ 새 카테고리 추가...</option>`,
     ].join('');
-    // 현재 값 보존 (존재하지 않으면 card)
-    catSel.value = cats.includes(cur) ? cur : 'card';
+    // 현재 값 보존 — 새 type 의 목록에 있으면 유지, 없으면 첫 옵션
+    catSel.value = cats.includes(cur) ? cur : (cats[0] || '');
   };
   refreshCatOptions();
+  typeSel.addEventListener('change', () => refreshCatOptions());
   catSel.addEventListener('change', () => {
     if (catSel.value !== '__new__') return;
     const name = prompt('새 카테고리 이름 (한글/영문/숫자/공백, 최대 30자):');
@@ -2802,7 +2853,7 @@ function setupTxForm() {
       // 필터 칩에도 즉시 반영
       renderSpend();
     } else {
-      refreshCatOptions('card');
+      refreshCatOptions();
       if (name) alert('카테고리 형식이 올바르지 않습니다.');
     }
   });
@@ -2819,8 +2870,9 @@ function setupTxForm() {
     if (!t) return;
     state.editingTxId = id;
     form.elements.date.value = t.date;
+    // type 을 먼저 설정하고 카테고리 옵션을 그 type 에 맞게 갱신한 뒤, 저장된 카테고리 값을 적용
     form.elements.type.value = t.type;
-    form.elements.category.value = t.category;
+    refreshCatOptions(t.category);
     form.elements.amountKRW.value = t.amountKRW;
     form.elements.label.value = t.label || '';
     if (form.elements.recurring) form.elements.recurring.checked = !!t.recurring;
