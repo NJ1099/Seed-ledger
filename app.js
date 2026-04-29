@@ -1177,9 +1177,21 @@ function evalAccount(a) {
   switch (a.type) {
     case 'cash':
     case 'savings':
-    case 'deposit':
       out.valueKRW = Number(a.amountKRW || 0);
       break;
+    case 'deposit': {
+      // 적금/예금: 시작일이 있으면 경과 개월수만큼 적립·이자 누적해서 평가
+      const r = calcDepositAccrued(a);
+      out.valueKRW = r.value;
+      // 보조 정보 (UI 가 활용) — 원금/이자 분리, 손익 표시용
+      out.depositAccrued = r;
+      if (r.calculable && r.months > 0) {
+        out.cost = r.principal;                // 현재까지의 누적 원금
+        out.pl = r.interestAfterTax;           // 누적 세후 이자
+        out.plPct = r.principal > 0 ? (r.interestAfterTax / r.principal) * 100 : null;
+      }
+      break;
+    }
     case 'realestate':
       out.valueKRW = Number(a.amountKRW || 0);
       // 6개월 이상 묵은 부동산은 stale
@@ -1312,6 +1324,15 @@ function renderAssets() {
         subs.push(`${tag}${a.interestRate ? ' · ' + a.interestRate + '%' : ''}`);
         if (a.monthlyDeposit) subs.push(`월 ₩${Math.round(a.monthlyDeposit).toLocaleString('ko-KR')}`);
       }
+      // 적금 누적 정보: 경과 개월수 + 누적 원금 (이자는 손익 영역에서 표시되므로 중복 회피)
+      if (a.type === 'deposit' && ev.depositAccrued && ev.depositAccrued.months > 0) {
+        const r = ev.depositAccrued;
+        if (r.matured) {
+          subs.push(`만기 도달 · ${r.months}개월 납입`);
+        } else {
+          subs.push(`${r.months}개월 경과 · 원금 ₩${Math.round(r.principal).toLocaleString('ko-KR')}`);
+        }
+      }
       if (ev.priceKRW && !a.maturityDate) {
         subs.push(`@ ₩${Math.round(ev.priceKRW).toLocaleString('ko-KR')}`);
       }
@@ -1431,6 +1452,76 @@ function emptyAssets() {
       현금 · 은행 · 예적금 · 주식 · 코인 · 부동산 — 현금화 가능한 모든 자산.
     </p>
   </div>`;
+}
+
+// ---------- 적금 누적 평가 (현재 시점) ----------
+// 시작일부터 오늘까지 경과 개월수만큼 매월 적립이 일어났다고 가정해
+// 현재 시점의 (원금 + 누적 세후이자) 를 평가액으로 산출.
+//
+//   원금   = amountKRW + monthlyDeposit × N
+//   이자   = (amountKRW × rate × N/12) + (monthlyDeposit × N(N+1)/2 × rate/12)
+//   세후   = 이자 × (1 - taxRate)
+//   평가액 = 원금 + 세후이자
+//
+// 만기 이후라면 calcDepositMaturity 의 만기 수령액을 그대로 사용.
+// startDate 가 없으면 누적 계산 불가능 → amountKRW 그대로 반환.
+function calcDepositAccrued(a) {
+  const seed    = Number(a.amountKRW || 0);
+  const monthly = Number(a.monthlyDeposit || 0);
+  const rate    = Number(a.interestRate || 0) / 100;
+  const tax     = Number(a.taxRate != null ? a.taxRate : 15.4) / 100;
+  const start   = a.startDate;
+  const mat     = a.maturityDate;
+
+  if (!start) {
+    return { value: seed, principal: seed, interestAfterTax: 0, months: 0, matured: false, calculable: false };
+  }
+  const sMs = new Date(start + 'T00:00:00+09:00').getTime();
+  if (!isFinite(sMs)) {
+    return { value: seed, principal: seed, interestAfterTax: 0, months: 0, matured: false, calculable: false };
+  }
+
+  // 만기 이후 → 만기 수령액 그대로
+  if (mat) {
+    const mMs = new Date(mat + 'T00:00:00+09:00').getTime();
+    if (isFinite(mMs) && Date.now() >= mMs) {
+      const r = calcDepositMaturity(a);
+      if (r) return {
+        value: r.maturity, principal: r.principal, interestAfterTax: r.afterTax,
+        months: r.months, matured: true, calculable: true,
+      };
+    }
+  }
+
+  // 경과 개월수 (만기까지 캡)
+  let n = Math.floor((Date.now() - sMs) / (30.4375 * 86400000));
+  if (n < 0) n = 0;
+  if (mat) {
+    const mMs = new Date(mat + 'T00:00:00+09:00').getTime();
+    if (isFinite(mMs) && mMs > sMs) {
+      const totalMonths = Math.max(1, Math.round((mMs - sMs) / (30.4375 * 86400000)));
+      if (n > totalMonths) n = totalMonths;
+    }
+  }
+
+  if (n === 0) {
+    // 시작일이 오늘이거나 미래 → 그냥 시드만
+    return { value: seed, principal: seed, interestAfterTax: 0, months: 0, matured: false, calculable: true };
+  }
+
+  const principal       = seed + monthly * n;
+  const interestSeed    = seed * rate * (n / 12);
+  const interestRecur   = monthly * (n * (n + 1) / 2) * (rate / 12);
+  const interestPre     = interestSeed + interestRecur;
+  const interestAfterTax = interestPre * (1 - tax);
+  return {
+    value: principal + interestAfterTax,
+    principal,
+    interestAfterTax,
+    months: n,
+    matured: false,
+    calculable: true,
+  };
 }
 
 // ---------- 적금 만기 예상 계산 (단리 적금 공식) ----------
