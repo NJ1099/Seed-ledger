@@ -132,6 +132,19 @@
       </div>
     </div>
 
+    <!-- 카드 선택 시 표시되는 상단 액션 바 — "PDF로 갱신" / "선택 해제" -->
+    <div class="asset-action-bar hidden" id="asset-action-bar">
+      <div class="aab-info">
+        <span class="aab-label">선택됨:</span>
+        <span class="aab-account" id="aab-account">—</span>
+      </div>
+      <div class="aab-actions">
+        <button type="button" class="btn-replace-pdf" id="aab-replace-pdf">📄 PDF로 잔고 갱신</button>
+        <button type="button" class="btn-cancel-select" id="aab-cancel">선택 해제</button>
+      </div>
+      <input type="file" id="aab-pdf-file" accept=".pdf,application/pdf" hidden />
+    </div>
+
     <div class="eq-grid" id="eq-grid"><!-- 유형별 카드 동적 렌더 --></div>
 
     <div class="add-card">
@@ -401,6 +414,26 @@
     </div>
     <div class="chart-wrap">
       <canvas id="chart-stack" height="240"></canvas>
+    </div>
+
+    <!-- 일자별 잔고 표 — 스냅샷 시계열을 종가표처럼 일/변화/누적 컬럼으로 표시 -->
+    <div class="graph-table-wrap" id="graph-table-wrap">
+      <div class="graph-table-head">
+        <div class="gt-title">일자별 잔고 변화</div>
+        <div class="gt-sub" id="graph-table-sub">—</div>
+      </div>
+      <table class="graph-table" id="graph-table">
+        <thead>
+          <tr>
+            <th>날짜</th>
+            <th>총자산</th>
+            <th>일간 변화</th>
+            <th>누적 변화</th>
+            <th>주요 시세 메모</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
     </div>
 
     <div class="graph-empty hidden" id="graph-empty">

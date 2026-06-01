@@ -1,44 +1,8 @@
 {
   "version": 2,
-  "updatedAt": "2026-04-29T14:30:39+09:00",
+  "updatedAt": "2026-04-30T14:30:29+09:00",
   "source": "toss-invest-ai-key-events",
   "events": [
-    {
-      "id": "ev-20260429-kr034020",
-      "date": "2026-04-29",
-      "title": "두산에너빌리티 실적 발표 (발표 후)",
-      "category": "earnings",
-      "importance": "critical",
-      "tag": "실적",
-      "note": "영업이익 예상 1,970억 · 매출 예상 4조 749억"
-    },
-    {
-      "id": "ev-20260429-kr028260",
-      "date": "2026-04-29",
-      "title": "삼성물산 실적 발표 (발표 후)",
-      "category": "earnings",
-      "importance": "critical",
-      "tag": "실적",
-      "note": "영업이익 예상 8,945억 · 매출 예상 10조 4,506억"
-    },
-    {
-      "id": "ev-20260429-usnys05mdrve",
-      "date": "2026-04-29",
-      "title": "비자 실적 발표 (오전 5시 이후)",
-      "category": "earnings",
-      "importance": "critical",
-      "tag": "실적",
-      "note": "매출 예상 107억"
-    },
-    {
-      "id": "ev-20260429-usnys00dyyxe",
-      "date": "2026-04-29",
-      "title": "애브비 실적 발표 (오후 9시 이후)",
-      "category": "earnings",
-      "importance": "critical",
-      "tag": "실적",
-      "note": ""
-    },
     {
       "id": "ev-20260430-usfomceci",
       "date": "2026-04-30",
@@ -47,6 +11,42 @@
       "importance": "high",
       "tag": "US",
       "note": "이전 3.75 %"
+    },
+    {
+      "id": "ev-20260430-uspceyeci",
+      "date": "2026-04-30",
+      "title": "개인소비지출 물가지수 발표(전년 대비) (21:30 KST)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": "이전 2.8 %"
+    },
+    {
+      "id": "ev-20260430-uspceeci",
+      "date": "2026-04-30",
+      "title": "개인소비지출(PCE) 물가지수 발표(전월 대비) (21:30 KST)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": "이전 0.4 %"
+    },
+    {
+      "id": "ev-20260430-usgpcseci",
+      "date": "2026-04-30",
+      "title": "개인소비지출(PCE) 발표 (21:30 KST)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": "이전 0.5 %"
+    },
+    {
+      "id": "ev-20260430-uspce2eci",
+      "date": "2026-04-30",
+      "title": "근원 개인소비지출 물가지수 발표(전년 대비) (21:30 KST)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": "이전 3 %"
     }
   ]
 }

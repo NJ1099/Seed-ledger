@@ -1315,7 +1315,7 @@ function renderAssets() {
       if (a.type === 'custom' && a.principalKRW) {
         subs.push(`원금 ₩${Math.round(a.principalKRW).toLocaleString('ko-KR')}`);
       }
-      // 암호화폐 그룹 child 는 "기관명 (수량)" 만 간단히 표시하고 티커는 헤더에서.
+      // 암호화폐 그룹 child 는 라벨이 메인, 기관명·수량은 부정보(L1307의 push)에서 자연스럽게 노출.
       if (!indent && a.ticker) subs.push(`${esc(a.ticker)}${a.quantity ? ' · ' + fmtQty(a.quantity) : ''}`);
       if (indent && a.quantity) subs.push(`${fmtQty(a.quantity)}개`);
       if (a.type === 'deposit' && a.maturityDate) {
@@ -1349,7 +1349,8 @@ function renderAssets() {
           estBadge = `<button type="button" class="est-badge" data-estimate="${a.id}" title="만기 수령액 세부내역">예상 ${fmtKRWShort(est.maturity)}</button>`;
         }
       }
-      const labelText = indent ? esc(a.institution || a.label) : esc(a.label);
+      // 크립토 child(indent=true)도 라벨이 우선. 라벨이 없을 때만 기관명으로 폴백.
+      const labelText = indent ? esc(a.label || a.institution) : esc(a.label);
       return `
         <div class="acc-line${ev.stale ? ' stale' : ''}${indent ? ' acc-child' : ''}" data-id="${a.id}">
           <div class="lbl" title="${esc(a.label)}">
@@ -1425,13 +1426,17 @@ function renderAssets() {
       ? `<span class="eq-pl ${sumPl >= 0 ? 'up' : 'down'}">${sumPl >= 0 ? '+' : ''}${fmtKRWShort(sumPl)}${sumPlPct != null ? ' · ' + fmtPct(sumPlPct, 1) : ''}</span>`
       : '';
 
-    // 긴 카드(특히 암호화폐)는 기본 접힘 + "전체 보기" 토글.
+    // 긴 카드는 기본 접힘 + "전체 보기" 토글. 사용자가 펼친 카드는 state.expandedCardTypes 에
+    // 기억해 시세 폴링 등으로 인한 재렌더가 발생해도 펼침 상태를 유지한다.
     const lineCount = (linesHTML.match(/class="acc-line/g) || []).length;
-    const collapseThreshold = type === 'crypto' ? 8 : 20;
-    const needsCollapse = lineCount > collapseThreshold;
+    const collapseThreshold = type === 'crypto' ? 12 : 20;
+    const canCollapse = lineCount > collapseThreshold;
+    state.expandedCardTypes = state.expandedCardTypes || new Set();
+    const isExpanded = state.expandedCardTypes.has(type);
+    const needsCollapse = canCollapse && !isExpanded;
     const collapsedClass = needsCollapse ? ' eq-lines--collapsed' : '';
-    const expandBtn = needsCollapse
-      ? `<button type="button" class="eq-expand-btn" data-toggle-expand>＋ 전체 보기 (${lineCount})</button>`
+    const expandBtn = canCollapse
+      ? `<button type="button" class="eq-expand-btn" data-toggle-expand data-card-type="${type}">${needsCollapse ? `＋ 전체 보기 (${lineCount})` : '− 접기'}</button>`
       : '';
 
     blocks.push(`
@@ -2274,7 +2279,9 @@ function setupAccForm() {
     applyTypeClass();
     submitBtn.textContent = '추가';
     cancelBtn.hidden = true;
-    document.querySelectorAll('#eq-grid .acc-line.editing').forEach(el => el.classList.remove('editing'));
+    document.querySelectorAll('#eq-grid .acc-line.editing, #eq-grid .acc-line.selected')
+      .forEach(el => el.classList.remove('editing', 'selected'));
+    hideAssetActionBar();
   };
 
   cancelBtn.addEventListener('click', resetToCreate);
@@ -2309,8 +2316,11 @@ function setupAccForm() {
     }
     submitBtn.textContent = '수정 저장';
     cancelBtn.hidden = false;
-    document.querySelectorAll('#eq-grid .acc-line.editing').forEach(el => el.classList.remove('editing'));
-    document.querySelector(`#eq-grid .acc-line[data-id="${id}"]`)?.classList.add('editing');
+    document.querySelectorAll('#eq-grid .acc-line.editing, #eq-grid .acc-line.selected')
+      .forEach(el => el.classList.remove('editing', 'selected'));
+    const lineEl = document.querySelector(`#eq-grid .acc-line[data-id="${id}"]`);
+    lineEl?.classList.add('editing', 'selected');
+    showAssetActionBar(a);
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
 
@@ -2461,6 +2471,13 @@ function setupAccForm() {
         const collapsed = linesEl.classList.toggle('eq-lines--collapsed');
         const n = linesEl.querySelectorAll('.acc-line').length;
         expandBtn.textContent = collapsed ? `＋ 전체 보기 (${n})` : '− 접기';
+        // 펼침 상태를 모듈 변수에 보존 — 시세 폴링 후 재렌더에도 유지.
+        const cardType = expandBtn.getAttribute('data-card-type');
+        if (cardType) {
+          state.expandedCardTypes = state.expandedCardTypes || new Set();
+          if (collapsed) state.expandedCardTypes.delete(cardType);
+          else state.expandedCardTypes.add(cardType);
+        }
       }
       return;
     }
@@ -3210,14 +3227,17 @@ function setupGraph() {
 function renderGraph() {
   const snaps = state.snapshots.slice().sort((a, b) => a.date < b.date ? -1 : 1);
   const empty = $('#graph-empty');
+  const tableWrap = $('#graph-table-wrap');
   if (snaps.length < 3) {
     empty.classList.remove('hidden');
     if (state.charts.total) { state.charts.total.destroy(); state.charts.total = null; }
     if (state.charts.stack) { state.charts.stack.destroy(); state.charts.stack = null; }
     $('#graph-stats').innerHTML = '';
+    if (tableWrap) tableWrap.classList.add('hidden');
     return;
   }
   empty.classList.add('hidden');
+  if (tableWrap) tableWrap.classList.remove('hidden');
 
   // 기간 필터
   let filtered = snaps;
@@ -3231,9 +3251,57 @@ function renderGraph() {
   const labels = filtered.map(s => s.date);
   const totals = filtered.map(s => s.totalKRW);
 
-  // 라인 차트
+  // 라인 차트 — 포인트마다 잔고 수치 라벨을 직접 표시 (포인트 수가 많으면 간격을 두어 가독성 유지).
   const ctx1 = $('#chart-total').getContext('2d');
   if (state.charts.total) state.charts.total.destroy();
+
+  // 라벨 간격: 포인트가 많을수록 듬성하게. 최소 첫·마지막·최고·최저는 항상 표시.
+  const maxVal = Math.max(...totals);
+  const minVal = Math.min(...totals);
+  const maxIdx = totals.indexOf(maxVal);
+  const minIdx = totals.indexOf(minVal);
+  const lastIdx = totals.length - 1;
+  const labelStride = totals.length <= 12 ? 1
+                     : totals.length <= 30 ? 3
+                     : totals.length <= 90 ? 7
+                     : Math.ceil(totals.length / 12);
+  const showLabelAt = (i) => i === 0 || i === lastIdx || i === maxIdx || i === minIdx || (i % labelStride === 0);
+
+  // 캔버스 위에 SVG 오버레이로 라벨을 그리는 플러그인 — Chart.js datalabels 없이 의존성 0.
+  const overlayPlugin = {
+    id: 'point-value-overlay',
+    afterDatasetsDraw(chart) {
+      const { ctx } = chart;
+      const meta = chart.getDatasetMeta(0);
+      if (!meta || !meta.data) return;
+      ctx.save();
+      ctx.font = '600 10px ui-sans-serif, -apple-system, "Segoe UI", sans-serif';
+      ctx.fillStyle = '#1F3A5F';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      meta.data.forEach((pt, i) => {
+        if (!showLabelAt(i)) return;
+        const v = totals[i];
+        const text = fmtKRWShort(v);
+        // 배경(가독성)
+        const m = ctx.measureText(text);
+        const pad = 3;
+        const w = m.width + pad * 2;
+        const h = 14;
+        const x = pt.x;
+        const y = pt.y - 6;
+        ctx.fillStyle = 'rgba(255,255,255,0.92)';
+        ctx.fillRect(x - w / 2, y - h, w, h);
+        ctx.strokeStyle = 'rgba(31,58,95,0.18)';
+        ctx.lineWidth = 0.5;
+        ctx.strokeRect(x - w / 2, y - h, w, h);
+        ctx.fillStyle = '#1F3A5F';
+        ctx.fillText(text, x, y - 2);
+      });
+      ctx.restore();
+    },
+  };
+
   state.charts.total = new Chart(ctx1, {
     type: 'line',
     data: {
@@ -3246,14 +3314,16 @@ function renderGraph() {
         borderWidth: 1.5,
         fill: true,
         tension: 0.25,
-        pointRadius: 0,
-        pointHoverRadius: 4,
+        pointRadius: (c) => showLabelAt(c.dataIndex) ? 3 : 0,
+        pointBackgroundColor: '#1F3A5F',
+        pointHoverRadius: 5,
       }],
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
+      layout: { padding: { top: 22 } }, // 라벨 잘림 방지
       plugins: {
         legend: { display: false },
         tooltip: {
@@ -3273,6 +3343,7 @@ function renderGraph() {
         },
       },
     },
+    plugins: [overlayPlugin],
   });
 
   // 스택 영역
@@ -3334,6 +3405,52 @@ function renderGraph() {
     <div class="gs"><span class="lab">평균</span><span class="v">${fmtKRWShort(avg)}</span></div>
     <div class="gs"><span class="lab">${state.graphRange === 365 ? 'CAGR' : '변동성(σ)'}</span><span class="v">${state.graphRange === 365 ? cagrStr : fmtKRWShort(stdev)}</span></div>
   `;
+
+  renderGraphTable(filtered);
+}
+
+// 그래프 하단 일자별 잔고 표 — 주식 종가표 분위기. 최신이 맨 위.
+function renderGraphTable(filtered) {
+  const tbody = $('#graph-table tbody');
+  const sub = $('#graph-table-sub');
+  if (!tbody || !filtered || !filtered.length) return;
+
+  const first = filtered[0]?.totalKRW || 0;
+  // 최신 → 과거 순으로 표시 (위쪽 = 최신, 종가표 관례).
+  const reversed = filtered.slice().reverse();
+
+  const rowsHTML = reversed.map((s, i) => {
+    const date = s.date;
+    const total = s.totalKRW || 0;
+    // i=0 이 최신. 이전 일자(reversed[i+1])와의 차이가 일간 변화.
+    const prev = reversed[i + 1];
+    const dayDelta = prev ? total - (prev.totalKRW || 0) : null;
+    const cumDelta = total - first; // 기간 시작 대비 누적 변화.
+
+    const deltaCls = (n) => n == null ? 'flat' : (n > 0 ? 'up' : (n < 0 ? 'down' : 'flat'));
+    const deltaSign = (n) => n == null ? '—' : (n > 0 ? '+' : '');
+    const fmtDelta = (n) => n == null ? '—' : `${deltaSign(n)}${fmtKRWShort(n)}`;
+
+    // 시세 메모: 그날 큰 영향 줬을 법한 자산 1개를 간단히 표기.
+    let memo = '';
+    if (s.breakdown) {
+      const entries = Object.entries(s.breakdown).filter(([, v]) => v > 0);
+      const topType = entries.sort((a, b) => b[1] - a[1])[0];
+      if (topType) memo = `${TYPE_LABEL[topType[0]] || topType[0]} ${fmtKRWShort(topType[1])}`;
+    }
+
+    const latestCls = i === 0 ? ' gt-latest' : '';
+    return `<tr class="${latestCls.trim()}">
+      <td>${esc(date)}</td>
+      <td class="tnum">${fmtKRW(total)}</td>
+      <td class="tnum ${deltaCls(dayDelta)}">${fmtDelta(dayDelta)}</td>
+      <td class="tnum ${deltaCls(cumDelta)}">${fmtDelta(cumDelta)}</td>
+      <td class="gt-memo">${esc(memo)}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.innerHTML = rowsHTML;
+  if (sub) sub.textContent = `${filtered.length}건 · ${filtered[0].date} ~ ${filtered[filtered.length - 1].date}`;
 }
 
 // ---------- 스냅샷 ----------
@@ -3774,6 +3891,148 @@ function shortHash(s) {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = (h * 33) ^ s.charCodeAt(i);
   return (h >>> 0).toString(36).slice(0, 10);
+}
+
+// ---------- 자산 카드 선택 액션 바 (PDF로 잔고 갱신) ----------
+// 사용자가 카드를 클릭하면 편집 폼이 열리는 동시에 상단 액션 바가 나타나고,
+// "PDF로 잔고 갱신" 버튼으로 같은 기관·유형의 PDF를 올려 holdings/cashKRW 만 갈아끼울 수 있다.
+
+function showAssetActionBar(account) {
+  const bar = document.getElementById('asset-action-bar');
+  if (!bar) return;
+  const accountEl = document.getElementById('aab-account');
+  const replaceBtn = document.getElementById('aab-replace-pdf');
+  const typeLabel = TYPE_LABEL[account.type] || account.type;
+  const instLabel = account.institution ? `${account.institution} · ` : '';
+  if (accountEl) accountEl.textContent = `${typeLabel} · ${instLabel}${account.label}`;
+  // PDF 갱신은 brokerage 타입(잔고증명서·주식잔고)에만 의미. 외 유형은 버튼 비활성.
+  if (replaceBtn) {
+    const supported = account.type === 'brokerage';
+    replaceBtn.disabled = !supported;
+    replaceBtn.title = supported
+      ? '같은 기관·유형의 PDF 잔고증명서를 올리면 현재 보유 종목/예수금을 갈아끼웁니다.'
+      : 'PDF 갱신은 증권 계좌(잔고증명서·주식잔고)에서만 지원합니다.';
+  }
+  bar.classList.remove('hidden');
+}
+
+function hideAssetActionBar() {
+  const bar = document.getElementById('asset-action-bar');
+  if (bar) bar.classList.add('hidden');
+  const fileInput = document.getElementById('aab-pdf-file');
+  if (fileInput) fileInput.value = '';
+}
+
+function setupAssetActionBar() {
+  const replaceBtn = document.getElementById('aab-replace-pdf');
+  const cancelBtn = document.getElementById('aab-cancel');
+  const fileInput = document.getElementById('aab-pdf-file');
+  if (!replaceBtn || !cancelBtn || !fileInput) return;
+
+  replaceBtn.addEventListener('click', () => {
+    if (replaceBtn.disabled) return;
+    fileInput.value = ''; // 같은 파일 재선택 허용
+    fileInput.click();
+  });
+
+  cancelBtn.addEventListener('click', () => {
+    // 편집 폼의 취소 버튼(#acc-cancel) 과 같은 경로 — editingAccountId 해제 + 폼 리셋.
+    const formCancel = document.getElementById('acc-cancel');
+    if (formCancel && state.editingAccountId && !formCancel.hidden) formCancel.click();
+    else hideAssetActionBar();
+  });
+
+  fileInput.addEventListener('change', async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const id = state.editingAccountId;
+    if (!id) { alert('먼저 갱신할 계좌를 선택하세요.'); return; }
+    await replaceAccountFromPdf(id, file);
+    fileInput.value = '';
+  });
+}
+
+// 선택된 계좌의 holdings/cashKRW 를 PDF 파싱 결과로 교체.
+// 매칭 규칙: PDF 에서 추출된 계좌 중 institution 이 동일하고 (type 도 brokerage 인) 것 우선.
+async function replaceAccountFromPdf(accountId, file) {
+  const existing = state.accounts.find(x => x.id === accountId);
+  if (!existing) { alert('대상 계좌를 찾을 수 없습니다.'); return; }
+  if (existing.type !== 'brokerage') {
+    alert('PDF 갱신은 증권 계좌(잔고증명서·주식잔고)에만 지원됩니다.');
+    return;
+  }
+
+  const replaceBtn = document.getElementById('aab-replace-pdf');
+  const prevText = replaceBtn?.textContent;
+  if (replaceBtn) { replaceBtn.disabled = true; replaceBtn.textContent = '파싱 중…'; }
+
+  try {
+    const buf = await file.arrayBuffer();
+    const r = await fetch('/api/import-pdf', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/pdf' },
+      body: buf,
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!j.ok) throw new Error(j.error || 'PDF 파싱 실패');
+
+    const parsed = Array.isArray(j.accounts) ? j.accounts : [];
+    if (!parsed.length) throw new Error('PDF 에서 계좌 정보를 추출하지 못했습니다.');
+
+    // 1순위: institution + (계좌번호 일부 일치) 매칭. 2순위: institution 동일.
+    const sameInst = parsed.filter(a => a.institution && existing.institution
+      && a.institution.trim() === existing.institution.trim());
+    if (!sameInst.length) {
+      throw new Error(
+        `PDF 기관이 다릅니다. PDF: "${parsed.map(a => a.institution).filter(Boolean).join(', ') || '미상'}" / 선택된 계좌: "${existing.institution || '미상'}". 같은 기관 PDF 를 올려주세요.`
+      );
+    }
+    // brokerage 끼리만
+    const sameKind = sameInst.filter(a => a.type === 'brokerage');
+    if (!sameKind.length) throw new Error('PDF 의 계좌 유형이 증권 계좌가 아닙니다.');
+
+    // 가장 비슷한 1건 선택 — accountNo 텍스트가 라벨에 포함되면 우선.
+    const target = sameKind.find(a => {
+      const newNo = String(a.label || '').match(/\d{3}-\d{2}-\d{6}/)?.[0];
+      const oldNo = String(existing.label || '').match(/\d{3}-\d{2}-\d{6}/)?.[0];
+      return newNo && oldNo && newNo === oldNo;
+    }) || sameKind[0];
+
+    // 사용자 확인 — 종목 수가 크게 줄어드는 경우 등 실수 방지.
+    const oldN = Array.isArray(existing.holdings) ? existing.holdings.length : 0;
+    const newN = Array.isArray(target.holdings) ? target.holdings.length : 0;
+    const oldCash = existing.cashKRW || 0;
+    const newCash = target.cashKRW || 0;
+    const ok = confirm(
+      `다음 PDF 내용으로 "${existing.label}" 계좌의 보유 종목/예수금을 갈아끼웁니다.\n\n`
+      + `종목 수: ${oldN} → ${newN}\n`
+      + `예수금: ₩${oldCash.toLocaleString('ko-KR')} → ₩${newCash.toLocaleString('ko-KR')}\n\n`
+      + `진행할까요?`
+    );
+    if (!ok) return;
+
+    // 기존 id/dedupeKey/label/institution 은 유지하고 holdings·cashKRW·manualUpdatedAt 만 교체.
+    const updated = {
+      ...existing,
+      holdings: target.holdings || [],
+      manualUpdatedAt: target.manualUpdatedAt || todayKST(),
+      source: existing.source || target.source,
+    };
+    if (target.cashKRW != null) updated.cashKRW = target.cashKRW;
+    else delete updated.cashKRW;
+    if (target.accountKind && target.accountKind !== '일반') updated.accountKind = target.accountKind;
+
+    const resp = await apiPost(API.accounts, { op: 'update', account: updated });
+    state.accounts = resp.accounts || [];
+    await refreshQuotes();
+    await autoSnapshot();
+    renderAll();
+    alert(`✅ "${existing.label}" 갱신 완료 — 종목 ${newN}건${newCash ? ` · 예수금 ₩${newCash.toLocaleString('ko-KR')}` : ''}`);
+  } catch (ex) {
+    alert('갱신 실패: ' + (ex.message || ex));
+  } finally {
+    if (replaceBtn) { replaceBtn.disabled = false; replaceBtn.textContent = prevText || '📄 PDF로 잔고 갱신'; }
+  }
 }
 
 // ---------- 자산 CSV/XLS/PDF 가져오기 ----------
@@ -4820,6 +5079,7 @@ async function boot() {
   setupTxForm();
   setupCsvImport();
   setupAssetImport();
+  setupAssetActionBar();
   setupGraph();
   setupEvents();
   setupHistoryChart();

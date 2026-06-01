@@ -56,6 +56,7 @@ const TOSS_US_ETF_PATTERNS = [
   { pat: /프로셰어즈.*울트라.*S&?P/i, ticker: 'SSO' },
   { pat: /디렉시온.*반도체.*3배/i, ticker: 'SOXL' },
   { pat: /iShares.*20\+.*국채|TLT/i, ticker: 'TLT' },
+  { pat: /라운드힐.*메모리/i, ticker: 'RMEM' },
 ];
 
 function resolveUsTicker(name, rawCode) {
@@ -92,7 +93,12 @@ function detectFormat(text) {
   if (/잔고증명서/.test(text) && /신한투자증권|신한금융투자/.test(text)) {
     return 'shinhan_balance_cert';
   }
-  if (/주식잔고/.test(text) && /\d{3}-\d{2}-\d{6}/.test(text)) {
+  if (
+    /주식잔고/.test(text) &&
+    /\d{3}-\d{2}-\d{6}/.test(text) &&
+    /잔고\s*내역/.test(text) &&
+    /보유\s*비중/.test(text)
+  ) {
     return 'shinhan_stock_balance';
   }
   if (/금융상품/.test(text) && /IRP|퇴직연금|연금저축/.test(text)) {
@@ -135,9 +141,11 @@ function parseTossBalanceCert(text) {
   if (krSection) {
     // 한 줄 포맷: "일반 <이름> (A<6-7자리>) <qty> <제한> <price> <eval>"
     // 이름에 "(H)" 같은 괄호가 있어도 되도록 .+? 로 허용하고, 코드 괄호는 A?\d{6}... 로 특정.
-    const re = /일반\s+(.+?)\s+\((A?\d{6}[A-Z0-9]{0,2})\)\s+([\d,.]+)\s+[\d,.]+\s+([\d,.]+)\s+([\d,.]+)/g;
+    // 줄바꿈으로 종목명/코드가 끊기는 케이스 대비해 flat 처리 후 매치.
+    const flatKr = krSection.replace(/\s+/g, ' ');
+    const re = /일반\s+(.+?)\s+\(\s*(A?\d{6}[A-Z0-9]{0,2})\s*\)\s+([\d,.]+)\s+[\d,.]+\s+([\d,.]+)\s+([\d,.]+)/g;
     let m;
-    while ((m = re.exec(krSection)) !== null) {
+    while ((m = re.exec(flatKr)) !== null) {
       const [, name, rawCode, qty, price] = m;
       const code = rawCode.replace(/^A/, '');
       const qtyN = parseNumber(qty);
@@ -205,6 +213,99 @@ function parseTossBalanceCert(text) {
     accounts,
     warnings,
     meta: { accountNo: acctNo, baseDate, fxRate, holdings: holdings.length, cashKRW: Math.round(cashKRW) },
+  };
+}
+
+// ---------- 신한투자증권 주식잔고 파서 ----------
+// 텍스트 레이어가 있는 신한 "주식잔고" PDF (ISA/일반/IRP) 를 파싱.
+// 행 포맷: "<코드> <종목명...> 현금 <잔고수량> <주문가능> <평균단가> <현재가> <평가금액> <미실현손익> <손익률> <보유비중>"
+// 종목명은 1~3 토큰까지 가능, 줄바꿈으로 끊길 수 있어 flat 처리 후 매치.
+function parseShinhanStockBalance(text) {
+  const warnings = [];
+
+  // 계좌번호 — "계좌번호 270-72-127981" 또는 줄바꿈 변형.
+  const acctMatch = text.match(/계좌번호\s+(\d{3}-\d{2}-\d{6})/);
+  const acctNo = acctMatch ? acctMatch[1] : `unknown-${Date.now()}`;
+
+  // 상품 키워드 — PDF 본문에 "ISA"/"IRP"/"연금" 보이면 분류.
+  let accountKind = '일반';
+  if (/\bISA\b|개인종합자산관리계좌/.test(text)) accountKind = 'ISA';
+  else if (/\bIRP\b|개인형\s*퇴직연금|퇴직연금/.test(text)) accountKind = 'IRP';
+  else if (/연금저축/.test(text)) accountKind = '연금저축';
+
+  // 텍스트 flat 처리 — 줄바꿈을 공백으로 (긴 종목명이 줄바꿈된 케이스 대응).
+  // 계좌번호 끝 6자리가 종목코드 패턴([0-9][0-9A-Z]{5})과 충돌해 첫 행을 잡아먹는 케이스를 막기 위해
+  // "보유비중" 헤더(테이블의 마지막 컬럼명) 이후만 잘라낸다.
+  const rawFlat = text.replace(/\s+/g, ' ');
+  const headerIdx = rawFlat.search(/보유\s*비중/);
+  const flat = headerIdx >= 0 ? rawFlat.slice(headerIdx) : rawFlat;
+
+  // 행 매칭:
+  //   <코드(6자리 영숫자)> <종목명(1~80자, lazy)> 현금 <8개 수치>
+  // 수치는 정수 또는 소수 (예: 평균단가 "279,090.4762"), 8번째는 보유비중 (소수).
+  const num = '[\\d,]+(?:\\.\\d+)?';
+  const re = new RegExp(
+    `([0-9][0-9A-Z]{5})\\s+(.+?)\\s+현금\\s+(${num})\\s+(${num})\\s+(${num})\\s+(${num})\\s+(${num})\\s+-?(${num})\\s+-?(${num})\\s+(${num})`,
+    'g'
+  );
+
+  const holdings = [];
+  let m;
+  while ((m = re.exec(flat)) !== null) {
+    const [, code, rawName, qtyStr, , avgStr, , evalStr] = m;
+    const qty = parseNumber(qtyStr);
+    const avg = parseNumber(avgStr);
+    if (!isFinite(qty) || qty <= 0) continue;
+
+    // 종목명 정리 — 다중 공백 정리, 80자 컷.
+    let stockName = String(rawName).replace(/\s+/g, ' ').trim();
+    if (!stockName) continue;
+
+    // 코드가 6자리 숫자가 아니면(예: "0180V0") 워닝.
+    if (!/^\d{6}$/.test(code)) {
+      warnings.push(`종목 코드가 비표준입니다: ${code} (${stockName}) — 시세 조회가 안 될 수 있음`);
+    }
+
+    // 코드가 잡힐 때 자주 헤더 단어("보유비중", "잔고", "수량" 등)가 종목명에 섞이는 케이스 차단.
+    // 종목명에 "구분"/"코드"/"종목명" 같은 헤더 키워드가 들어가면 스킵.
+    if (/코드|종목명|구분|보유비중|평가금액/.test(stockName)) continue;
+
+    holdings.push({
+      assetType: 'stock_kr',
+      ticker: code,
+      label: stockName.slice(0, 80),
+      quantity: qty,
+      avgCost: isFinite(avg) ? Math.round(avg * 10000) / 10000 : 0,
+      currency: 'KRW',
+      _priceHint: parseNumber(evalStr),
+    });
+  }
+
+  const dedupeKey = `asset:brokerage:shinhan:${acctNo}`;
+  const label = accountKind === '일반'
+    ? `신한투자증권 ${acctNo}`
+    : `신한투자증권 ${accountKind} ${acctNo}`;
+  const acc = {
+    id: `acc-brokerage-shinhan_${acctNo.replace(/-/g, '_')}`,
+    type: 'brokerage',
+    label,
+    institution: '신한투자증권',
+    accountKind,
+    currency: 'KRW',
+    manualUpdatedAt: todayKST(),
+    source: 'pdf_shinhan_stock',
+    dedupeKey,
+    holdings: holdings.map(({ _priceHint, ...h }) => h),
+  };
+
+  if (holdings.length === 0) {
+    warnings.push('신한 주식잔고 PDF 에서 보유 종목을 한 건도 추출하지 못했습니다. PDF 포맷이 변경되었거나 빈 계좌일 수 있습니다.');
+  }
+
+  return {
+    accounts: [acc],
+    warnings,
+    meta: { accountNo: acctNo, baseDate: todayKST(), holdings: holdings.length },
   };
 }
 
@@ -290,7 +391,12 @@ async function parsePdfBuffer(buffer, password) {
     return { ok: true, format, accounts, warnings, meta };
   }
 
-  if (format === 'shinhan_balance_cert' || format === 'shinhan_stock_balance' || format === 'shinhan_financial_product') {
+  if (format === 'shinhan_stock_balance') {
+    const { accounts, warnings, meta } = parseShinhanStockBalance(text);
+    return { ok: true, format, accounts, warnings, meta };
+  }
+
+  if (format === 'shinhan_balance_cert' || format === 'shinhan_financial_product') {
     return {
       ok: false,
       error: '신한투자증권 PDF 는 현재 자동 파싱을 지원하지 않습니다 (대부분 텍스트 없는 이미지 PDF). 수동으로 입력해 주세요.',
