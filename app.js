@@ -1351,8 +1351,10 @@ function renderAssets() {
       }
       // 크립토 child(indent=true)도 라벨이 우선. 라벨이 없을 때만 기관명으로 폴백.
       const labelText = indent ? esc(a.label || a.institution) : esc(a.label);
+      // 편집 중인 라인은 .editing.selected 로 하이라이트를 재렌더 후에도 유지.
+      const editingCls = state.editingAccountId === a.id ? ' editing selected' : '';
       return `
-        <div class="acc-line${ev.stale ? ' stale' : ''}${indent ? ' acc-child' : ''}" data-id="${a.id}">
+        <div class="acc-line${ev.stale ? ' stale' : ''}${indent ? ' acc-child' : ''}${editingCls}" data-id="${a.id}">
           <div class="lbl" title="${esc(a.label)}">
             ${labelText}
             ${subHTML}
@@ -2320,6 +2322,15 @@ function setupAccForm() {
       .forEach(el => el.classList.remove('editing', 'selected'));
     const lineEl = document.querySelector(`#eq-grid .acc-line[data-id="${id}"]`);
     lineEl?.classList.add('editing', 'selected');
+    // 편집 라인이 접힘 카드(eq-lines--collapsed) 내부 스크롤 영역 밖이면 보이게 끌어올림.
+    const scrollParent = lineEl?.closest('.eq-lines--collapsed');
+    if (scrollParent && lineEl) {
+      const lineRect = lineEl.getBoundingClientRect();
+      const parentRect = scrollParent.getBoundingClientRect();
+      if (lineRect.top < parentRect.top || lineRect.bottom > parentRect.bottom) {
+        lineEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      }
+    }
     showAssetActionBar(a);
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
   };
@@ -3328,12 +3339,37 @@ function renderGraph() {
         legend: { display: false },
         tooltip: {
           callbacks: {
-            label: (c) => fmtKRW(c.parsed.y),
+            // 날짜를 헤더로
+            title: (items) => items[0]?.label || '',
+            // 잔고 + 전일 대비% + 시작 대비%
+            label: (c) => {
+              const i = c.dataIndex;
+              const v = c.parsed.y;
+              const lines = [`총자산: ${fmtKRW(v)}`];
+              if (i > 0 && totals[i - 1]) {
+                const dPct = ((v - totals[i - 1]) / totals[i - 1]) * 100;
+                lines.push(`전일 대비: ${dPct >= 0 ? '+' : ''}${dPct.toFixed(2)}% (${dPct >= 0 ? '+' : ''}${fmtKRWShort(v - totals[i - 1])})`);
+              }
+              if (totals[0]) {
+                const sPct = ((v - totals[0]) / totals[0]) * 100;
+                lines.push(`시작 대비: ${sPct >= 0 ? '+' : ''}${sPct.toFixed(2)}% (${sPct >= 0 ? '+' : ''}${fmtKRWShort(v - totals[0])})`);
+              }
+              return lines;
+            },
           },
         },
       },
       scales: {
-        x: { grid: { color: '#EAE5D8' }, ticks: { color: '#6f7480', font: { size: 10 } } },
+        x: {
+          grid: { color: '#EAE5D8' },
+          ticks: {
+            color: '#6f7480', font: { size: 10 },
+            // 7일 이하면 모든 날짜 표시. 그 이상은 Chart.js 자동 간격.
+            autoSkip: labels.length > 14,
+            maxRotation: 0,
+            minRotation: 0,
+          },
+        },
         y: {
           grid: { color: '#EAE5D8' },
           ticks: {
@@ -3362,6 +3398,9 @@ function renderGraph() {
       borderWidth: 0,
       fill: true,
     }));
+  // 스택 차트는 각 날짜의 자산별 비중을 툴팁으로 보여줌.
+  // dataIndex 가 같은 모든 dataset 의 합을 분모로 % 계산.
+  const dayTotal = (i) => stackDatasets.reduce((s, d) => s + (Number(d.data[i]) || 0), 0);
   state.charts.stack = new Chart(ctx2, {
     type: 'line',
     data: { labels, datasets: stackDatasets },
@@ -3369,16 +3408,42 @@ function renderGraph() {
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      plugins: { legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 10 } } },
+      interaction: { mode: 'index', intersect: false }, // 한 날짜의 모든 자산을 한 번에
+      plugins: {
+        legend: { position: 'bottom', labels: { font: { size: 11 }, boxWidth: 10 } },
+        tooltip: {
+          callbacks: {
+            title: (items) => items[0]?.label || '',
+            label: (c) => {
+              const v = Number(c.parsed.y) || 0;
+              if (v <= 0) return null; // 0인 자산은 라인 숨김
+              const tot = dayTotal(c.dataIndex);
+              const pct = tot > 0 ? (v / tot) * 100 : 0;
+              return `${c.dataset.label}: ${fmtKRW(v)} (${pct.toFixed(1)}%)`;
+            },
+            footer: (items) => {
+              if (!items.length) return '';
+              const tot = dayTotal(items[0].dataIndex);
+              return `합계: ${fmtKRW(tot)}`;
+            },
+          },
+        },
+      },
       scales: {
-        x: { stacked: true, grid: { color: '#EAE5D8' }, ticks: { color: '#6f7480', font: { size: 10 } } },
+        x: {
+          stacked: true, grid: { color: '#EAE5D8' },
+          ticks: {
+            color: '#6f7480', font: { size: 10 },
+            autoSkip: labels.length > 14, maxRotation: 0, minRotation: 0,
+          },
+        },
         y: {
           stacked: true,
           grid: { color: '#EAE5D8' },
           ticks: { color: '#6f7480', font: { size: 10 }, callback: (v) => fmtKRWShort(v) },
         },
       },
-      elements: { line: { tension: 0.2, borderWidth: 0 }, point: { radius: 0 } },
+      elements: { line: { tension: 0.2, borderWidth: 0 }, point: { radius: 0, hoverRadius: 4 } },
     },
   });
 

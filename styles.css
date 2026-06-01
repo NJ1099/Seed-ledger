@@ -927,14 +927,23 @@ main {
   color: var(--up);
 }
 
-/* 카드 접힘 + 예상 배지 */
+/* 카드 접힘 — 휠로 내부 스크롤 가능. 페이드 마스크 대신 inset shadow 로
+   "아래에 더 있다" 어포던스. "전체 보기" 버튼으로 max-height 해제. */
 .eq-lines--collapsed {
   max-height: 360px;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   position: relative;
-  mask-image: linear-gradient(180deg, #000 82%, transparent);
-  -webkit-mask-image: linear-gradient(180deg, #000 82%, transparent);
+  box-shadow: inset 0 -18px 16px -16px rgba(31, 58, 95, 0.12);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(31, 58, 95, 0.25) transparent;
 }
+.eq-lines--collapsed::-webkit-scrollbar { width: 6px; }
+.eq-lines--collapsed::-webkit-scrollbar-thumb {
+  background: rgba(31, 58, 95, 0.25);
+  border-radius: 3px;
+}
+.eq-lines--collapsed::-webkit-scrollbar-track { background: transparent; }
 .eq-expand-btn {
   margin-top: 6px;
   width: 100%;
