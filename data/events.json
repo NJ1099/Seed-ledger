@@ -1,52 +1,52 @@
 {
   "version": 2,
-  "updatedAt": "2026-04-30T14:30:29+09:00",
+  "updatedAt": "2026-06-01T12:35:46+09:00",
   "source": "toss-invest-ai-key-events",
   "events": [
     {
-      "id": "ev-20260430-usfomceci",
-      "date": "2026-04-30",
-      "title": "FOMC 회의 결과 발표 (03:00 KST)",
+      "id": "ev-20260601-uspmieci",
+      "date": "2026-06-01",
+      "title": "ISM 제조업 구매관리자지수 발표 (23:00 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 3.75 %"
+      "note": "이전 52.7"
     },
     {
-      "id": "ev-20260430-uspceyeci",
-      "date": "2026-04-30",
-      "title": "개인소비지출 물가지수 발표(전년 대비) (21:30 KST)",
+      "id": "ev-20260602-usjolteci",
+      "date": "2026-06-02",
+      "title": "노동시장 신규 구인건수(JOLTs) 발표 (23:00 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 2.8 %"
+      "note": "이전 6.866"
     },
     {
-      "id": "ev-20260430-uspceeci",
-      "date": "2026-04-30",
-      "title": "개인소비지출(PCE) 물가지수 발표(전월 대비) (21:30 KST)",
+      "id": "ev-20260603-usnpmieci",
+      "date": "2026-06-03",
+      "title": "ISM 서비스업 구매관리자지수 발표 (23:00 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 0.4 %"
+      "note": "이전 53.6"
     },
     {
-      "id": "ev-20260430-usgpcseci",
-      "date": "2026-04-30",
-      "title": "개인소비지출(PCE) 발표 (21:30 KST)",
+      "id": "ev-20260603-usadpeci",
+      "date": "2026-06-03",
+      "title": "비농업부문 고용변화량(ADP) 발표 (21:15 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 0.5 %"
+      "note": "이전 109"
     },
     {
-      "id": "ev-20260430-uspce2eci",
-      "date": "2026-04-30",
-      "title": "근원 개인소비지출 물가지수 발표(전년 대비) (21:30 KST)",
+      "id": "ev-20260604-usjobeci",
+      "date": "2026-06-04",
+      "title": "신규 실업수당 청구건수 (21:30 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 3 %"
+      "note": "이전 215 만 명"
     }
   ]
 }
