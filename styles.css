@@ -2541,3 +2541,354 @@ main {
   color: var(--ink);
   border-color: var(--ink-5);
 }
+
+/* ============ STOCK TAB ============ */
+
+.stock-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.stock-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+}
+.stock-updated {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.stock-section {
+  margin-bottom: 28px;
+}
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin-bottom: 12px;
+  letter-spacing: -0.01em;
+}
+.section-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+.section-title-row .section-title { margin-bottom: 0; }
+
+/* 8개 경제지표 그리드 (4x2) */
+.indices-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+.index-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-height: 92px;
+  transition: box-shadow 160ms, transform 160ms;
+}
+.index-card:hover {
+  box-shadow: var(--shadow-md);
+}
+.index-card.loading {
+  background: var(--surface-2);
+  color: var(--ink-4);
+}
+.idx-label {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+}
+.idx-price {
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.1;
+}
+.idx-change {
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+.idx-change.up   { color: var(--up); }
+.idx-change.down { color: var(--down); }
+
+/* 검색 */
+.stock-search {
+  position: relative;
+  max-width: 520px;
+}
+.stock-search input {
+  width: 100%;
+  height: 44px;
+  padding: 0 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  font: inherit;
+  font-size: 15px;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 160ms, box-shadow 160ms;
+  box-sizing: border-box;
+}
+.stock-search input::placeholder { color: var(--ink-4); }
+.stock-search input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.stock-search-results {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-lg);
+  max-height: 360px;
+  overflow-y: auto;
+  z-index: 50;
+}
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-soft);
+  transition: background 120ms;
+}
+.search-result-item:last-child { border-bottom: 0; }
+.search-result-item:hover { background: var(--surface-2); }
+.sri-name {
+  font-weight: 600;
+  color: var(--ink);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sri-code {
+  font-size: 12px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.sri-market {
+  font-size: 11px;
+  color: var(--ink-3);
+  background: var(--surface-2);
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+}
+.search-empty {
+  padding: 14px;
+  text-align: center;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+/* 국내/해외 토글 */
+.market-toggle {
+  display: inline-flex;
+  background: var(--surface-2);
+  border-radius: var(--r-pill);
+  padding: 4px;
+  gap: 2px;
+}
+.mt-btn {
+  border: 0;
+  background: transparent;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: var(--r-pill);
+  transition: background 160ms, color 160ms;
+}
+.mt-btn:hover { color: var(--ink-2); }
+.mt-btn.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Top 5 movers */
+.movers-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.movers-col {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.movers-head {
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  border-bottom: 1px solid var(--border-soft);
+}
+.movers-head--up   { color: var(--up);   background: var(--up-soft); }
+.movers-head--down { color: var(--down); background: var(--down-soft); }
+.movers-list {
+  padding: 4px 0;
+}
+.movers-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--ink-3);
+}
+.mover-row {
+  display: grid;
+  grid-template-columns: 28px 1fr auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--border-soft);
+  transition: background 120ms;
+}
+.mover-row:last-child { border-bottom: 0; }
+.mover-row:hover { background: var(--surface-2); }
+.mv-rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink-3);
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.mv-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.mv-label {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+.mv-code {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.mv-price {
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+}
+.mv-change {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  min-width: 70px;
+  text-align: right;
+}
+.mv-change.up   { color: var(--up); }
+.mv-change.down { color: var(--down); }
+
+/* 뉴스 */
+.news-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.news-empty {
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  text-align: center;
+}
+.news-item {
+  display: block;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+  text-decoration: none;
+  color: var(--ink);
+  transition: border-color 160ms, box-shadow 160ms, transform 120ms;
+}
+.news-item:hover {
+  border-color: var(--ink-5);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+.news-title {
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--ink);
+  margin-bottom: 6px;
+  letter-spacing: -0.01em;
+}
+.news-summary {
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.news-meta {
+  font-size: 12px;
+  color: var(--ink-3);
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.news-meta .news-source {
+  font-weight: 600;
+}
+.news-meta .news-dot { color: var(--ink-4); }
+
+/* tnum 글로벌 (다른 스타일에서 활용) */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* 반응형 */
+@media (max-width: 768px) {
+  .indices-grid { grid-template-columns: repeat(2, 1fr); }
+  .movers-grid { grid-template-columns: 1fr; }
+  .stock-head { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .idx-price { font-size: 18px; }
+}
+@media (max-width: 480px) {
+  .index-card { padding: 12px; min-height: 80px; }
+  .idx-price { font-size: 16px; }
+  .idx-label { font-size: 11px; }
+  .mover-row { grid-template-columns: 22px 1fr auto; padding: 10px 12px; }
+  .mover-row .mv-price { display: none; }
+  .news-item { padding: 12px; }
+  .news-title { font-size: 14px; }
+  .market-toggle { padding: 3px; }
+  .mt-btn { padding: 5px 10px; font-size: 12px; }
+}

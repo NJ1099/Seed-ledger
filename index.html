@@ -21,6 +21,7 @@
       <button class="tab active" data-tab="assets"><span class="tab-ico">📊</span>대시보드</button>
       <button class="tab" data-tab="spend"><span class="tab-ico">💳</span>소비</button>
       <button class="tab" data-tab="graph"><span class="tab-ico">📈</span>그래프</button>
+      <button class="tab" data-tab="stock"><span class="tab-ico">📰</span>주식</button>
     </nav>
 
     <div class="sidenav-bottom">
@@ -440,6 +441,71 @@
     <div class="graph-empty hidden" id="graph-empty">
       <p>스냅샷이 3개 미만입니다. <button class="linklike" id="graph-snap-now">지금 스냅샷 저장</button> 하거나, 며칠 동안 서버를 돌려 기록을 쌓아주세요.</p>
     </div>
+  </section>
+
+  <!-- =================== 주식 탭 =================== -->
+  <section class="panel hidden" id="panel-stock">
+    <header class="stock-head">
+      <h2 class="stock-title">주식 대시보드</h2>
+      <div class="stock-updated muted small" id="stock-updated-at">—</div>
+    </header>
+
+    <!-- 1) 경제지표 8개 (4x2 그리드) -->
+    <section class="stock-section">
+      <div class="section-title">주요 경제지표</div>
+      <div class="indices-grid" id="indices-grid">
+        <div class="index-card loading"><div class="idx-label">—</div><div class="idx-price tnum">—</div><div class="idx-change">—</div></div>
+        <div class="index-card loading"><div class="idx-label">—</div><div class="idx-price tnum">—</div><div class="idx-change">—</div></div>
+        <div class="index-card loading"><div class="idx-label">—</div><div class="idx-price tnum">—</div><div class="idx-change">—</div></div>
+        <div class="index-card loading"><div class="idx-label">—</div><div class="idx-price tnum">—</div><div class="idx-change">—</div></div>
+        <div class="index-card loading"><div class="idx-label">—</div><div class="idx-price tnum">—</div><div class="idx-change">—</div></div>
+        <div class="index-card loading"><div class="idx-label">—</div><div class="idx-price tnum">—</div><div class="idx-change">—</div></div>
+        <div class="index-card loading"><div class="idx-label">—</div><div class="idx-price tnum">—</div><div class="idx-change">—</div></div>
+        <div class="index-card loading"><div class="idx-label">—</div><div class="idx-price tnum">—</div><div class="idx-change">—</div></div>
+      </div>
+    </section>
+
+    <!-- 2) 종목 검색 -->
+    <section class="stock-section">
+      <div class="section-title">종목 검색</div>
+      <div class="stock-search">
+        <input id="stock-search-input" type="search" placeholder="종목명 또는 코드 (예: 삼성전자, 005930, AAPL)" autocomplete="off" />
+        <div class="stock-search-results" id="stock-search-results" hidden></div>
+      </div>
+    </section>
+
+    <!-- 3) Top 5 급상승 / 급하락 -->
+    <section class="stock-section">
+      <div class="section-title-row">
+        <div class="section-title">시장 Top 5</div>
+        <div class="market-toggle" id="market-toggle">
+          <button class="mt-btn active" data-market="kr">국내</button>
+          <button class="mt-btn" data-market="us">해외</button>
+        </div>
+      </div>
+      <div class="movers-grid">
+        <div class="movers-col">
+          <div class="movers-head movers-head--up">▲ 급상승 Top 5</div>
+          <div class="movers-list" id="movers-gainers">
+            <div class="movers-empty muted small">불러오는 중…</div>
+          </div>
+        </div>
+        <div class="movers-col">
+          <div class="movers-head movers-head--down">▼ 급하락 Top 5</div>
+          <div class="movers-list" id="movers-losers">
+            <div class="movers-empty muted small">불러오는 중…</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4) 경제 뉴스 -->
+    <section class="stock-section">
+      <div class="section-title">경제 뉴스</div>
+      <div class="news-list" id="news-list">
+        <div class="news-empty muted small">뉴스를 불러오는 중…</div>
+      </div>
+    </section>
   </section>
     </main>
   </div>
