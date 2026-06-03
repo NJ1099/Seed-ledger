@@ -2689,6 +2689,21 @@ main {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
+.sri-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  min-width: 100px;
+  text-align: right;
+}
+.sri-chg {
+  font-size: 11px;
+  font-weight: 700;
+  margin-left: 6px;
+}
+.sri-chg.up   { color: var(--up); }
+.sri-chg.down { color: var(--down); }
 .sri-market {
   font-size: 11px;
   color: var(--ink-3);

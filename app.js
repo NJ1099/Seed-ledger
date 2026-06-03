@@ -5694,9 +5694,12 @@ async function runStockSearch(q) {
            data-type="${esc(it.type || '')}">
         <div class="sri-name">${esc(it.name || '')}</div>
         <div class="sri-code">${esc(it.code || '')}</div>
+        <div class="sri-price tnum" data-price-code="${esc(it.code || '')}">—</div>
         <div class="sri-market">${esc(it.market || '')}</div>
       </div>`).join('');
     out.hidden = false;
+    // 결과 도착 즉시 가격 batch 조회 → 각 row 의 가격 영역 채움.
+    fillSearchPrices(r.results);
   } catch (e) {
     console.warn('[stock] search failed', e);
     out.innerHTML = '<div class="search-empty">검색 오류</div>';
@@ -5730,6 +5733,56 @@ async function showSearchDetail({ code, name, market, type }) {
     }
   } catch {}
   alert(`${name} (${code})\n시장: ${market}${priceLine}`);
+}
+
+async function fillSearchPrices(results) {
+  // 검색 결과 도착 후 가격을 한 번에 batch 조회해 dropdown 에 채움.
+  if (!Array.isArray(results) || !results.length) return;
+  const tickers = results
+    .filter(it => it.code && it.type)
+    .map(it => ({ type: it.type, ticker: it.code }));
+  if (!tickers.length) return;
+  try {
+    const r = await fetch('/api/quotes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ tickers }),
+    });
+    if (!r.ok) return;
+    const j = await r.json();
+    const quotes = j?.quotes || {};
+    const out = $('#stock-search-results');
+    if (!out) return;
+    for (const it of results) {
+      const q = quotes[it.code];
+      if (!q) continue;
+      const slot = out.querySelector(`[data-price-code="${cssEsc(it.code)}"]`);
+      if (!slot) continue;
+      let priceText = '—';
+      let cls = '';
+      if (q.priceKRW != null) {
+        priceText = Math.round(q.priceKRW).toLocaleString('ko-KR');
+      } else if (q.price != null) {
+        const cur = q.currency || (it.type === 'stock_us' ? '$' : '');
+        const sym = cur === 'USD' ? '$' : (cur ? cur + ' ' : '');
+        priceText = sym + q.price.toLocaleString('en-US', { maximumFractionDigits: 2 });
+      }
+      if (q.changePct != null) {
+        cls = q.changePct >= 0 ? 'up' : 'down';
+        const arrow = q.changePct >= 0 ? '▲' : '▼';
+        priceText += ` <span class="sri-chg ${cls}">${arrow} ${fmtPct(q.changePct)}</span>`;
+      }
+      slot.innerHTML = priceText;
+    }
+  } catch (e) {
+    console.warn('[stock] search prices fetch failed', e);
+  }
+}
+
+function cssEsc(s) {
+  // querySelector data-attribute 값 escape.
+  return String(s || '').replace(/["\\]/g, '\\$&');
 }
 
 async function loadNews() {
