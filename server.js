@@ -927,6 +927,9 @@ function searchTypeFromNationCode(nation) {
   return null;
 }
 
+// 한글 자동완성용 — 네이버가 단순 UA 를 가끔 거부하므로 진짜 브라우저 UA 로 호출.
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
+
 async function fetchStockSearch(q) {
   const results = [];
   const seen = new Set();
@@ -938,40 +941,61 @@ async function fetchStockSearch(q) {
     results.push(item);
   };
 
-  // 1차: stock.naver.com 통합검색 — 국내 + 해외 종목 모두 한 번에.
-  // 페이지 https://stock.naver.com/search/{q} 가 사용하는 백엔드.
-  const url1 = `https://api.stock.naver.com/search/total?keyword=${encodeURIComponent(q)}`;
-  const r1 = await httpsGet(url1, { headers: { 'Referer': 'https://stock.naver.com/' } });
-  if (r1.ok) {
+  // 1차: stock.naver.com 통합검색 (한글 + 영문 + 코드 모두 지원)
+  // stock.naver.com/search/{q} 페이지가 호출하는 백엔드. 파라미터 이름이 시기별로
+  // keyword / searchText 둘 다 쓰이므로 양쪽 모두 시도.
+  const stockSearchUrls = [
+    `https://api.stock.naver.com/search/total?keyword=${encodeURIComponent(q)}`,
+    `https://api.stock.naver.com/search/total?searchText=${encodeURIComponent(q)}`,
+    `https://api.stock.naver.com/search?keyword=${encodeURIComponent(q)}`,
+  ];
+  for (const url of stockSearchUrls) {
+    const r = await httpsGet(url, {
+      headers: { 'Referer': 'https://stock.naver.com/', 'User-Agent': BROWSER_UA },
+    });
+    if (!r.ok) {
+      logLine('warn', 'search.http.stock', { url, status: r.status, err: r.error || null });
+      continue;
+    }
     try {
-      const j = JSON.parse(r1.body);
-      // 응답 구조 후보들 — 시기별로 약간 다름. 둘 다 대응.
+      const j = JSON.parse(r.body);
       const groups = [];
       if (Array.isArray(j?.searchResult?.stock?.items)) groups.push(...j.searchResult.stock.items);
+      if (Array.isArray(j?.searchResult?.stocks)) groups.push(...j.searchResult.stocks);
       if (Array.isArray(j?.stock?.items)) groups.push(...j.stock.items);
       if (Array.isArray(j?.stocks)) groups.push(...j.stocks);
+      if (Array.isArray(j?.result?.stocks)) groups.push(...j.result.stocks);
+      if (Array.isArray(j?.result?.items)) groups.push(...j.result.items);
+      if (Array.isArray(j?.items)) groups.push(...j.items);
+      let added = 0;
       for (const it of groups) {
         if (!it) continue;
-        const code = it.itemCode || it.code || it.reutersCode || null;
-        const name = it.stockName || it.itemName || it.name || null;
+        const code = it.itemCode || it.code || it.reutersCode || it.symbol || null;
+        const name = it.stockName || it.itemName || it.name || it.nameEng || null;
         if (!code || !name) continue;
         const nation = it.nationCode || it.nation || '';
-        const exchange = it.stockExchangeType?.code || it.stockExchangeType || it.exchangeType || it.market || '';
+        const exchange = it.stockExchangeType?.code || it.stockExchangeType
+          || it.exchangeType || it.market || '';
         const type = searchTypeFromNationCode(nation)
           || (/^\d{6}$/.test(code) ? 'stock_kr' : 'stock_us');
         push({ code: String(code), name: String(name).trim(), market: String(exchange || nation || ''), type });
+        added++;
+      }
+      if (added > 0) {
+        logLine('info', 'search.ok.stock', { url, added });
+        break;
       }
     } catch (e) {
-      logLine('warn', 'search.parse.stock', { q, err: String(e) });
+      logLine('warn', 'search.parse.stock', { url, err: String(e) });
     }
-  } else {
-    logLine('warn', 'search.http.stock', { q, status: r1.status, err: r1.error || null });
   }
 
-  // 2차: m.stock.naver.com 검색 API (모바일)
+  // 2차: m.stock.naver.com 자동완성 (모바일)
   if (results.length < 5) {
     const url2 = `https://m.stock.naver.com/front-api/v1/search/autoComplete?query=${encodeURIComponent(q)}&target=stock,index,marketIndicator`;
-    const r2 = await httpsGet(url2, { headers: { 'Referer': 'https://m.stock.naver.com/' } });
+    const r2 = await httpsGet(url2, {
+      headers: { 'Referer': 'https://m.stock.naver.com/', 'User-Agent': BROWSER_UA },
+    });
     if (r2.ok) {
       try {
         const j = JSON.parse(r2.body);
@@ -991,13 +1015,42 @@ async function fetchStockSearch(q) {
       } catch (e) {
         logLine('warn', 'search.parse.m', { q, err: String(e) });
       }
+    } else {
+      logLine('warn', 'search.http.m', { q, status: r2.status, err: r2.error || null });
     }
   }
 
-  // 3차: 네이버 금융 자동완성 (구 API — 한국 종목만)
+  // 3차: polling.finance.naver.com 종목명 검색 (한국 종목만, 한글 검증된 endpoint)
   if (results.length < 5) {
-    const url3 = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(q)}&q_enc=utf-8&st=111&frm=stock&r_lt=111&r_format=json`;
-    const r3 = await httpsGet(url3, { headers: { 'Referer': 'https://finance.naver.com/' } });
+    const url3p = `https://polling.finance.naver.com/api/sise/etcStockNameSearch.nhn?searchText=${encodeURIComponent(q)}&suggestionLimit=10`;
+    const r3p = await httpsGet(url3p, {
+      headers: { 'Referer': 'https://finance.naver.com/', 'User-Agent': BROWSER_UA },
+    });
+    if (r3p.ok) {
+      try {
+        const j = JSON.parse(r3p.body);
+        const items = j?.result?.items || j?.items || [];
+        if (Array.isArray(items)) {
+          for (const it of items) {
+            const code = it.cd || it.code || it.itemCode || null;
+            const name = it.nm || it.name || it.stockName || null;
+            if (code && /^\d{6}$/.test(code) && name) {
+              push({ code, name: String(name).trim(), market: it.mt || 'KOSPI', type: 'stock_kr' });
+            }
+          }
+        }
+      } catch (e) {
+        logLine('warn', 'search.parse.polling', { q, err: String(e) });
+      }
+    }
+  }
+
+  // 4차: 네이버 금융 자동완성 (구 API — 한국 종목만, 브라우저 UA + r_enc 명시)
+  if (results.length < 5) {
+    const url3 = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(q)}&q_enc=UTF-8&st=111&frm=stock&r_lt=111&r_format=json&r_enc=UTF-8`;
+    const r3 = await httpsGet(url3, {
+      headers: { 'Referer': 'https://finance.naver.com/', 'User-Agent': BROWSER_UA },
+    });
     if (r3.ok) {
       try {
         const j = JSON.parse(r3.body);
@@ -1017,6 +1070,8 @@ async function fetchStockSearch(q) {
       } catch (e) {
         logLine('warn', 'search.parse.acfinance', { q, err: String(e) });
       }
+    } else {
+      logLine('warn', 'search.http.acfinance', { q, status: r3.status, err: r3.error || null });
     }
   }
 

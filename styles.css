@@ -2672,6 +2672,8 @@ main {
   cursor: pointer;
   border-bottom: 1px solid var(--border-soft);
   transition: background 120ms;
+  text-decoration: none;
+  color: inherit;
 }
 .search-result-item:last-child { border-bottom: 0; }
 .search-result-item:hover { background: var(--surface-2); }
@@ -2783,6 +2785,8 @@ main {
   cursor: pointer;
   border-bottom: 1px solid var(--border-soft);
   transition: background 120ms;
+  text-decoration: none;
+  color: inherit;
 }
 .mover-row:last-child { border-bottom: 0; }
 .mover-row:hover { background: var(--surface-2); }

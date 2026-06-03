@@ -5610,8 +5610,12 @@ function fillMoverList(el, items, dir, note) {
     const arrow = (it.changePct != null && it.changePct >= 0) ? '▲' : '▼';
     const pct = it.changePct != null ? fmtPct(it.changePct) : '—';
     const price = it.price != null ? Math.round(it.price).toLocaleString('ko-KR') : '—';
+    // mover-row 의 type 추정: 6자리 숫자 = 국내, 그 외 = 해외.
+    const type = /^\d{6}$/.test(it.code || '') ? 'stock_kr' : 'stock_us';
+    const href = safeHttpUrl(buildNaverStockUrl({ code: it.code, name: it.name, market: it.market, type }));
     return `
-      <div class="mover-row" data-code="${esc(it.code || '')}" data-name="${esc(it.name || '')}">
+      <a class="mover-row" data-code="${esc(it.code || '')}" data-name="${esc(it.name || '')}"
+         href="${esc(href)}" target="_blank" rel="noopener noreferrer">
         <div class="mv-rank">${idx + 1}</div>
         <div class="mv-name">
           <span class="mv-label">${esc(it.name || '—')}</span>
@@ -5619,8 +5623,31 @@ function fillMoverList(el, items, dir, note) {
         </div>
         <div class="mv-price tnum">${esc(price)}</div>
         <div class="mv-change ${cls} tnum">${arrow} ${esc(pct)}</div>
-      </div>`;
+      </a>`;
   }).join('');
+}
+
+// 검색 결과 / mover 클릭 시 이동할 네이버 증권 URL 생성.
+// 국내 6자리 코드: 종목 상세 페이지로 직접.
+// 해외 NASDAQ: .O 접미사. NYSE: .K. 알 수 없으면 검색 페이지로.
+function buildNaverStockUrl(item) {
+  if (!item) return 'https://stock.naver.com/';
+  const code = String(item.code || '').trim();
+  const name = String(item.name || '').trim();
+  const market = String(item.market || '').toUpperCase();
+  const type = item.type || (/^\d{6}$/.test(code) ? 'stock_kr' : 'stock_us');
+  if (type === 'stock_kr' && /^\d{6}$/.test(code)) {
+    return `https://stock.naver.com/domestic/stock/${code}/total`;
+  }
+  if (type === 'stock_us' && code) {
+    if (market === 'NASDAQ') return `https://stock.naver.com/worldstock/stock/${code}.O/total`;
+    if (market === 'NYSE')   return `https://stock.naver.com/worldstock/stock/${code}.K/total`;
+    if (market === 'AMEX')   return `https://stock.naver.com/worldstock/stock/${code}.A/total`;
+    // 거래소 모르면 NASDAQ 우선 시도 (대부분 .O 로 redirect 됨)
+    return `https://stock.naver.com/worldstock/stock/${code}.O/total`;
+  }
+  // 알 수 없는 경우 — 네이버 증권 통합검색으로.
+  return `https://stock.naver.com/search?query=${encodeURIComponent(name || code)}`;
 }
 
 function setupMarketToggle() {
@@ -5664,7 +5691,7 @@ function setupStockSearch() {
       out.hidden = true;
     }
   });
-  // 결과 클릭
+  // 결과 클릭 → 네이버 증권 종목 페이지 새 탭으로 이동.
   out.addEventListener('click', (ev) => {
     const item = ev.target.closest('.search-result-item');
     if (!item) return;
@@ -5672,7 +5699,10 @@ function setupStockSearch() {
     const name = item.getAttribute('data-name');
     const market = item.getAttribute('data-market');
     const type = item.getAttribute('data-type');
-    showSearchDetail({ code, name, market, type });
+    const url = safeHttpUrl(buildNaverStockUrl({ code, name, market, type }));
+    if (!url) return;
+    window.open(url, '_blank', 'noopener,noreferrer');
+    out.hidden = true;
   });
 }
 
@@ -5686,17 +5716,21 @@ async function runStockSearch(q) {
       out.hidden = false;
       return;
     }
-    out.innerHTML = r.results.map(it => `
-      <div class="search-result-item"
-           data-code="${esc(it.code || '')}"
-           data-name="${esc(it.name || '')}"
-           data-market="${esc(it.market || '')}"
-           data-type="${esc(it.type || '')}">
+    out.innerHTML = r.results.map(it => {
+      const href = safeHttpUrl(buildNaverStockUrl(it));
+      return `
+      <a class="search-result-item"
+         href="${esc(href)}" target="_blank" rel="noopener noreferrer"
+         data-code="${esc(it.code || '')}"
+         data-name="${esc(it.name || '')}"
+         data-market="${esc(it.market || '')}"
+         data-type="${esc(it.type || '')}">
         <div class="sri-name">${esc(it.name || '')}</div>
         <div class="sri-code">${esc(it.code || '')}</div>
         <div class="sri-price tnum" data-price-code="${esc(it.code || '')}">—</div>
         <div class="sri-market">${esc(it.market || '')}</div>
-      </div>`).join('');
+      </a>`;
+    }).join('');
     out.hidden = false;
     // 결과 도착 즉시 가격 batch 조회 → 각 row 의 가격 영역 채움.
     fillSearchPrices(r.results);
@@ -5705,34 +5739,6 @@ async function runStockSearch(q) {
     out.innerHTML = '<div class="search-empty">검색 오류</div>';
     out.hidden = false;
   }
-}
-
-async function showSearchDetail({ code, name, market, type }) {
-  // 검색 결과 선택 시 현재 가격을 가져와서 alert 으로 표시.
-  if (!code) return;
-  let priceLine = '';
-  try {
-    const body = { tickers: [{ type, ticker: code }] };
-    const r = await fetch('/api/quotes', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify(body),
-    });
-    if (r.ok) {
-      const j = await r.json();
-      const q = j?.quotes?.[code];
-      if (q) {
-        if (q.priceKRW != null) priceLine = `\n현재가: ${Math.round(q.priceKRW).toLocaleString('ko-KR')} 원`;
-        else if (q.price != null) {
-          const cur = q.currency || (type === 'stock_us' ? 'USD' : '');
-          priceLine = `\n현재가: ${q.price.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${cur}`;
-          if (q.changePct != null) priceLine += ` (${fmtPct(q.changePct)})`;
-        }
-      }
-    }
-  } catch {}
-  alert(`${name} (${code})\n시장: ${market}${priceLine}`);
 }
 
 async function fillSearchPrices(results) {
