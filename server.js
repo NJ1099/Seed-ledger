@@ -2564,8 +2564,9 @@ async function fetchNpsPortfolio({ uddi, page = 1, perPage = 100 } = {}) {
     return { ok: false, reason: 'DATA_GO_KR_SERVICE_KEY 미설정' };
   }
   const u = uddi || NPS_PORTFOLIO_DEFAULT_UDDI;
-  // serviceKey 가 이미 URL-encoded 인 경우가 많아 그대로 두기 (Encoding 키).
-  const url = `${NPS_PORTFOLIO_BASE}/${encodeURIComponent(u)}`
+  // odcloud.kr 는 `uddi:UUID` 의 콜론을 그대로 보존. encodeURIComponent 로 %3A 변환하면
+  // "등록되지 않은 서비스" 에러. serviceKey 도 Encoding 키 가정 — 그대로 붙임.
+  const url = `${NPS_PORTFOLIO_BASE}/${u}`
     + `?page=${page}&perPage=${perPage}&returnType=JSON&serviceKey=${dataGoKrKey()}`;
   const r = await httpsGet(url, {
     headers: { 'Accept': 'application/json' },
