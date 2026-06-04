@@ -29,6 +29,7 @@ const state = {
   stockMarket: 'kr',          // 주식 탭 시장 토글
   stockRefreshTimer: null,    // 주식 탭 5분 폴링 타이머
   stockSearchDebounce: null,  // 종목 검색 디바운스 핸들
+  pensionDays: 30,            // 국민연금 매수/매도 표 조회 기간 (일)
 };
 
 const API = {
@@ -5515,13 +5516,15 @@ function stockTimeAgo(iso) {
 }
 
 function renderStock() {
-  // 4개 API 병렬 호출
+  // 5개 API 병렬 호출
   loadIndices();
   loadMovers();
   loadNews();
+  loadPensionFlows();
+  setupPensionRange();
   const el = $('#stock-updated-at');
   if (el) el.textContent = `${nowKSTDisplay()} 갱신`;
-  // 5분 폴링
+  // 5분 폴링 (연기금은 24h TTL 이라 같이 호출해도 캐시 hit)
   stopStockRefresh();
   state.stockRefreshTimer = setInterval(() => {
     if (state.tab === 'stock') {
@@ -5822,21 +5825,174 @@ function fillNews(news) {
     el.innerHTML = '<div class="news-empty muted small">뉴스를 불러올 수 없습니다.</div>';
     return;
   }
+  // 제목 + 매체명 + 시간만. 요약은 표시하지 않는다.
   el.innerHTML = news.map(it => {
     const href = safeHttpUrl(it.url);
     if (!href) return '';
     const ago = stockTimeAgo(it.publishedAt);
-    const summary = it.summary ? `<div class="news-summary">${esc(it.summary)}</div>` : '';
     return `
-      <a class="news-item" href="${esc(href)}" target="_blank" rel="noopener noreferrer">
+      <a class="news-item news-item--compact" href="${esc(href)}" target="_blank" rel="noopener noreferrer">
         <div class="news-title">${esc(it.title)}</div>
-        ${summary}
         <div class="news-meta">
-          <span class="news-source">${esc(it.source || '')}</span>
-          ${ago ? `<span class="news-dot">·</span><span>${esc(ago)}</span>` : ''}
+          ${it.source ? `<span class="news-source">${esc(it.source)}</span>` : ''}
+          ${(it.source && ago) ? '<span class="news-dot">·</span>' : ''}
+          ${ago ? `<span>${esc(ago)}</span>` : ''}
         </div>
       </a>`;
   }).join('');
+}
+
+// ============ 국민연금 매수/매도 (DART 대량보유 공시 기반) ============
+
+function setupPensionRange() {
+  const wrap = $('#pension-range');
+  if (!wrap || wrap.dataset.wired === '1') return;
+  wrap.dataset.wired = '1';
+  wrap.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.pr-btn');
+    if (!btn) return;
+    const days = parseInt(btn.getAttribute('data-days'), 10);
+    if (!days || days === state.pensionDays) return;
+    state.pensionDays = days;
+    $$('.pr-btn', wrap).forEach(b => b.classList.toggle('active', b === btn));
+    const out = $('#pension-wrap');
+    if (out) out.innerHTML = '<div class="pension-empty muted small">불러오는 중…</div>';
+    loadPensionFlows();
+  });
+}
+
+async function loadPensionFlows() {
+  const out = $('#pension-wrap');
+  if (!out) return;
+  const days = state.pensionDays || 30;
+  try {
+    const r = await fetch(`/api/pension-flows?days=${days}`, { credentials: 'same-origin' });
+    if (r.status === 503) {
+      // DART_API_KEY 미설정
+      out.innerHTML = `
+        <div class="pension-help">
+          <strong>국민연금 매수/매도 표를 사용하려면 DART OpenAPI 키가 필요합니다.</strong><br><br>
+          1. <a href="https://opendart.fss.or.kr/uss/umt/cmm/EgovMberRegist.do" target="_blank" rel="noopener noreferrer">opendart.fss.or.kr</a> 회원가입 → 인증키 발급 (즉시, 무료)<br>
+          2. 발급받은 키를 <code>.env</code> 파일 (로컬) 또는 Render Environment 메뉴에 <code>DART_API_KEY=...</code> 로 등록<br>
+          3. 서버 재시작 후 새로고침
+        </div>`;
+      return;
+    }
+    if (!r.ok) {
+      out.innerHTML = `<div class="pension-empty muted small">데이터를 불러올 수 없습니다 (${r.status})</div>`;
+      return;
+    }
+    const j = await r.json();
+    if (!j.ok) {
+      out.innerHTML = `<div class="pension-empty muted small">${esc(j.error || '데이터 없음')}</div>`;
+      return;
+    }
+    fillPensionTable(j);
+  } catch (e) {
+    console.warn('[stock] pension fetch failed', e);
+    out.innerHTML = '<div class="pension-empty muted small">네트워크 오류</div>';
+  }
+}
+
+function pensionTypeBadge(type) {
+  const map = {
+    buy:     { label: '매수',  cls: 'pension-badge--buy' },
+    sell:    { label: '매도',  cls: 'pension-badge--sell' },
+    new:     { label: '신규',  cls: 'pension-badge--new' },
+    hold:    { label: '유지',  cls: 'pension-badge--hold' },
+    unknown: { label: '—',    cls: 'pension-badge--unknown' },
+  };
+  return map[type] || map.unknown;
+}
+
+function fmtPensionQty(n) {
+  if (n == null || !isFinite(n)) return '—';
+  const abs = Math.abs(n);
+  if (abs >= 1e8) return (n / 1e8).toFixed(2) + '억주';
+  if (abs >= 1e4) return (n / 1e4).toFixed(1) + '만주';
+  return Math.round(n).toLocaleString('ko-KR') + '주';
+}
+function fmtPensionRate(n) {
+  if (n == null || !isFinite(n)) return '—';
+  return (n >= 0 ? '+' : '') + n.toFixed(2) + '%';
+}
+
+function buildNaverStockUrlFromCode(stockCode, corpName) {
+  if (stockCode && /^\d{6}$/.test(stockCode)) {
+    return `https://stock.naver.com/domestic/stock/${stockCode}/total`;
+  }
+  return `https://stock.naver.com/search?query=${encodeURIComponent(corpName || stockCode || '')}`;
+}
+
+function fillPensionTable(payload) {
+  const out = $('#pension-wrap');
+  if (!out) return;
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  if (!rows.length) {
+    out.innerHTML = `
+      <div class="pension-empty muted small">
+        지난 ${esc(String(payload.daysBack || state.pensionDays))}일간 국민연금공단의 대량보유 공시가 없습니다.
+        ${payload.totalReports ? ` (전체 보고 ${esc(String(payload.totalReports))}건 중 0건 매칭)` : ''}
+      </div>`;
+    return;
+  }
+  // 요약 카운트
+  const counts = { buy: 0, sell: 0, new: 0, hold: 0, unknown: 0 };
+  for (const r of rows) counts[r.type] = (counts[r.type] || 0) + 1;
+  const summaryHtml = `
+    <div class="pension-summary">
+      <div class="pension-summary-cell">
+        <div class="ps-label">매수·신규</div>
+        <div class="ps-value up">${counts.buy + counts.new}건</div>
+      </div>
+      <div class="pension-summary-cell">
+        <div class="ps-label">매도</div>
+        <div class="ps-value down">${counts.sell}건</div>
+      </div>
+      <div class="pension-summary-cell">
+        <div class="ps-label">전체 공시</div>
+        <div class="ps-value">${rows.length}건</div>
+      </div>
+    </div>`;
+  const tableHtml = `
+    <table class="pension-table">
+      <thead>
+        <tr>
+          <th>접수일</th>
+          <th>종목</th>
+          <th>구분</th>
+          <th class="num">변동 수량</th>
+          <th class="num">변동 비율</th>
+          <th class="num hide-sm">보유 비율</th>
+          <th class="hide-sm">DART</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(r => {
+          const badge = pensionTypeBadge(r.type);
+          const stockHref = safeHttpUrl(buildNaverStockUrlFromCode(r.stockCode, r.corpName));
+          const dartHref = safeHttpUrl(r.dartUrl);
+          const qtyCls = (r.changeQty == null) ? '' : (r.changeQty >= 0 ? 'up' : 'down');
+          const rateCls = (r.changeRate == null) ? '' : (r.changeRate >= 0 ? 'up' : 'down');
+          return `
+          <tr>
+            <td class="muted">${esc(r.rceptDt || '—')}</td>
+            <td>
+              <a class="pension-corp" href="${esc(stockHref)}" target="_blank" rel="noopener noreferrer" style="text-decoration:none; color:inherit;">
+                <span class="pension-corp-name">${esc(r.corpName || '—')}</span>
+                <span class="pension-corp-code">${esc(r.stockCode || '')}</span>
+              </a>
+            </td>
+            <td><span class="pension-badge ${badge.cls}">${esc(badge.label)}</span></td>
+            <td class="num ${qtyCls}">${esc(fmtPensionQty(r.changeQty))}</td>
+            <td class="num ${rateCls}">${esc(fmtPensionRate(r.changeRate))}</td>
+            <td class="num hide-sm">${esc(r.holdingRate != null ? r.holdingRate.toFixed(2) + '%' : '—')}</td>
+            <td class="hide-sm">${dartHref ? `<a class="pension-dart-link" href="${esc(dartHref)}" target="_blank" rel="noopener noreferrer">공시 보기 →</a>` : '—'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  out.innerHTML = summaryHtml + tableHtml;
 }
 
 window.addEventListener('DOMContentLoaded', boot);

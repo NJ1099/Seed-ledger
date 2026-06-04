@@ -1553,6 +1553,194 @@ const MIME = {
   '.woff2':'font/woff2',
 };
 
+// ============================================================================
+// DART OpenAPI — 국민연금 매수/매도 표
+// ----------------------------------------------------------------------------
+// goinsider.kr 와 동일한 원리: 전자공시시스템의 "주식등의 대량보유상황보고서
+// (D001)" 를 검색해 제출자(flr_nm)가 국민연금공단인 것만 추려, 각 건마다
+// majorstock API 로 변동수량·변동비율을 보강한다. DART_API_KEY 가 없으면
+// 비활성 상태로 503 응답. 키는 process.env 에서만 읽고 로그·응답에 노출 X.
+// ----------------------------------------------------------------------------
+
+const PENSION_FLR_NAME = '국민연금공단';
+const STOCK_TAB_TTL_PENSION = 24 * 60 * 60 * 1000; // 24h
+
+function dartConfigured() {
+  return Boolean(process.env.DART_API_KEY && process.env.DART_API_KEY.length >= 30);
+}
+function dartKey() { return process.env.DART_API_KEY || ''; }
+
+function dartListUrl({ bgnDe, endDe, pageNo, pageCount = 100 }) {
+  const key = dartKey();
+  return `https://opendart.fss.or.kr/api/list.json?crtfc_key=${key}&bgn_de=${bgnDe}&end_de=${endDe}&pblntf_detail_ty=D001&page_count=${pageCount}&page_no=${pageNo}`;
+}
+function dartMajorStockUrl(corpCode) {
+  return `https://opendart.fss.or.kr/api/majorstock.json?crtfc_key=${dartKey()}&corp_code=${encodeURIComponent(corpCode)}`;
+}
+function dartReportUrl(rceptNo) {
+  return `https://dart.fss.or.kr/dsaf001/main.do?rcpNo=${encodeURIComponent(rceptNo)}`;
+}
+function ymdFromKST(daysAgo = 0) {
+  const d = new Date(Date.now() - daysAgo * 86400_000);
+  const k = d.toLocaleString('sv', { timeZone: 'Asia/Seoul' }).slice(0, 10);
+  return k.replace(/-/g, '');
+}
+function parseDartDate(s) {
+  if (!s || s.length !== 8) return '';
+  return `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
+}
+function parseDartSignedNumber(s) {
+  if (s == null) return null;
+  const t = String(s).replace(/,/g, '').trim();
+  if (!t || t === '-') return null;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+async function fetchDartList(daysBack) {
+  const bgnDe = ymdFromKST(daysBack);
+  const endDe = ymdFromKST(0);
+  const all = [];
+  // 최대 5페이지(500건) 까지만 조회 — 대량보유보고는 하루 평균 ~30건이라 충분.
+  for (let page = 1; page <= 5; page++) {
+    const r = await httpsGet(dartListUrl({ bgnDe, endDe, pageNo: page }), { timeoutMs: 8000 });
+    if (!r.ok) {
+      logLine('warn', 'dart.list.http', { page, status: r.status, err: r.error || null });
+      break;
+    }
+    try {
+      const j = JSON.parse(r.body);
+      if (j.status && j.status !== '000') {
+        // 013 = 조회된 데이터 없음, 020 = 일일 호출 한도 초과 등
+        logLine('warn', 'dart.list.status', { page, status: j.status, message: j.message || '' });
+        if (j.status === '013') break;
+        if (j.status === '020' || j.status === '021') break; // 한도 초과
+        break;
+      }
+      const list = Array.isArray(j.list) ? j.list : [];
+      all.push(...list);
+      if (list.length < 100) break; // 마지막 페이지
+    } catch (e) {
+      logLine('warn', 'dart.list.parse', { page, err: String(e) });
+      break;
+    }
+  }
+  return all;
+}
+
+async function fetchDartMajorStockByCorp(corpCode) {
+  const r = await httpsGet(dartMajorStockUrl(corpCode), { timeoutMs: 8000 });
+  if (!r.ok) {
+    logLine('warn', 'dart.major.http', { corpCode, status: r.status });
+    return [];
+  }
+  try {
+    const j = JSON.parse(r.body);
+    if (j.status && j.status !== '000') {
+      if (j.status !== '013') {
+        logLine('warn', 'dart.major.status', { corpCode, status: j.status });
+      }
+      return [];
+    }
+    return Array.isArray(j.list) ? j.list : [];
+  } catch (e) {
+    logLine('warn', 'dart.major.parse', { corpCode, err: String(e) });
+    return [];
+  }
+}
+
+function inferPensionEventType(reportNm, qtyDelta, rateDelta) {
+  // 보고 사유 + 변동량으로 매수/매도/신규 구분.
+  const nm = String(reportNm || '');
+  if (/신규/.test(nm)) return 'new';
+  if (qtyDelta != null) return qtyDelta > 0 ? 'buy' : qtyDelta < 0 ? 'sell' : 'hold';
+  if (rateDelta != null) return rateDelta > 0 ? 'buy' : rateDelta < 0 ? 'sell' : 'hold';
+  return 'unknown';
+}
+
+async function fetchPensionFlows(daysBack) {
+  if (!dartConfigured()) {
+    return { ok: false, reason: 'DART_API_KEY 미설정' };
+  }
+  const list = await fetchDartList(daysBack);
+  // 제출자 = 국민연금공단 인 것만 필터.
+  const pensionReports = list.filter(it => String(it.flr_nm || '').includes(PENSION_FLR_NAME));
+  if (!pensionReports.length) {
+    return { ok: true, rows: [], totalReports: list.length, daysBack };
+  }
+  // 같은 발행회사(corp_code) 의 majorstock 응답을 한 번씩만 받아 캐시(이번 호출 한정).
+  const corpCache = new Map();
+  const rows = [];
+  for (const r of pensionReports) {
+    const corpCode = r.corp_code;
+    if (!corpCode) continue;
+    if (!corpCache.has(corpCode)) {
+      corpCache.set(corpCode, await fetchDartMajorStockByCorp(corpCode));
+    }
+    const majorList = corpCache.get(corpCode);
+    // rcept_no 매칭으로 정확한 한 보고를 찾기.
+    const match = majorList.find(m => m.rcept_no === r.rcept_no)
+      || majorList.find(m => String(m.repror || '').includes(PENSION_FLR_NAME)
+          && m.rcept_dt === r.rcept_dt)
+      || null;
+    const qty = match ? parseDartSignedNumber(match.stkqy) : null;
+    const qtyDelta = match ? parseDartSignedNumber(match.stkqy_irds) : null;
+    const rate = match ? parseDartSignedNumber(match.stkrt) : null;
+    const rateDelta = match ? parseDartSignedNumber(match.stkrt_irds) : null;
+    const type = inferPensionEventType(r.report_nm, qtyDelta, rateDelta);
+    rows.push({
+      rceptNo: r.rcept_no,
+      rceptDt: parseDartDate(r.rcept_dt),
+      corpName: r.corp_name || '',
+      stockCode: r.stock_code || '',
+      reportNm: r.report_nm || '',
+      type,
+      holdingQty: qty,
+      changeQty: qtyDelta,
+      holdingRate: rate,
+      changeRate: rateDelta,
+      reportResn: match?.report_resn || '',
+      dartUrl: dartReportUrl(r.rcept_no),
+    });
+  }
+  // 최신 보고 우선.
+  rows.sort((a, b) => (b.rceptDt || '').localeCompare(a.rceptDt || ''));
+  return { ok: true, rows, totalReports: list.length, daysBack };
+}
+
+async function handlePensionFlows(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  if (!dartConfigured()) {
+    return reply(res, 503, {
+      ok: false,
+      error: 'DART_API_KEY 환경변수가 설정되지 않았습니다.',
+      hint: '.env 에 DART_API_KEY=... 추가 후 서버 재시작 (Render 는 Environment 메뉴).',
+    });
+  }
+  const url = new URL(req.url, 'http://x');
+  let daysBack = parseInt(url.searchParams.get('days') || '30', 10);
+  if (!Number.isFinite(daysBack) || daysBack < 1) daysBack = 30;
+  if (daysBack > 180) daysBack = 180;
+  const cacheKey = `__pension:${daysBack}`;
+  const { entry, stale } = getStockCacheEntry(cacheKey, STOCK_TAB_TTL_PENSION);
+  if (entry && !stale) {
+    return reply(res, 200, { ok: true, ...entry.payload, cached: true });
+  }
+  const result = await fetchPensionFlows(daysBack);
+  if (!result.ok) {
+    return reply(res, 200, { ok: false, error: result.reason || 'DART 호출 실패', rows: [] });
+  }
+  const payload = { rows: result.rows, totalReports: result.totalReports, daysBack, ts: nowKST() };
+  if (result.rows.length || result.totalReports > 0) {
+    writeStockCacheKey(cacheKey, payload);
+    logLine('info', 'pension.ok', { count: result.rows.length, totalReports: result.totalReports });
+  } else {
+    logLine('warn', 'pension.empty', { daysBack });
+    if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
+  }
+  reply(res, 200, { ok: true, ...payload });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
@@ -1573,6 +1761,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/stock-movers')  return await handleStockMovers(req, res);
     if (urlPath === '/api/stock-search')  return await handleStockSearch(req, res);
     if (urlPath === '/api/stock-news')    return await handleStockNews(req, res);
+    if (urlPath === '/api/pension-flows') return await handlePensionFlows(req, res);
 
     // 기기 간 동기화 (텔레그램 봇 기반)
     if (urlPath === '/api/sync/status')      return await handleSyncStatus(req, res);

@@ -2893,6 +2893,181 @@ main {
 /* tnum 글로벌 (다른 스타일에서 활용) */
 .tnum { font-variant-numeric: tabular-nums; }
 
+/* ---- 국민연금 매수·매도 표 ---- */
+.pension-range {
+  display: inline-flex;
+  background: var(--surface-2);
+  border-radius: var(--r-pill);
+  padding: 4px;
+  gap: 2px;
+}
+.pr-btn {
+  border: 0;
+  background: transparent;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ink-3);
+  cursor: pointer;
+  border-radius: var(--r-pill);
+  transition: background 160ms, color 160ms;
+}
+.pr-btn:hover { color: var(--ink-2); }
+.pr-btn.active {
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow-sm);
+}
+
+.pension-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.pension-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--ink-3);
+}
+.pension-help {
+  padding: 20px;
+  background: var(--surface-2);
+  border-radius: var(--r-md);
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
+.pension-help code {
+  background: var(--surface);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.pension-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border-bottom: 1px solid var(--border-soft);
+}
+.pension-summary-cell {
+  padding: 14px 16px;
+  text-align: center;
+  border-right: 1px solid var(--border-soft);
+}
+.pension-summary-cell:last-child { border-right: 0; }
+.ps-label {
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.02em;
+  margin-bottom: 4px;
+}
+.ps-value {
+  font-size: 18px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.ps-value.up   { color: var(--up); }
+.ps-value.down { color: var(--down); }
+
+.pension-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.pension-table thead th {
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.pension-table thead th.num { text-align: right; }
+.pension-table tbody td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-soft);
+  vertical-align: middle;
+}
+.pension-table tbody tr:last-child td { border-bottom: 0; }
+.pension-table tbody tr:hover { background: var(--surface-2); }
+.pension-table tbody td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink);
+}
+.pension-table tbody td.num.up   { color: var(--up); }
+.pension-table tbody td.num.down { color: var(--down); }
+.pension-table tbody td.muted { color: var(--ink-3); }
+
+.pension-corp {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.pension-corp-name {
+  font-weight: 600;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+.pension-corp-code {
+  font-size: 11px;
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.pension-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: var(--r-pill);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.pension-badge--buy   { background: var(--up-soft);   color: var(--up); }
+.pension-badge--sell  { background: var(--down-soft); color: var(--down); }
+.pension-badge--new   { background: var(--accent-soft); color: var(--accent-ink); }
+.pension-badge--hold  { background: var(--surface-2); color: var(--ink-3); }
+.pension-badge--unknown { background: var(--surface-2); color: var(--ink-3); }
+
+.pension-dart-link {
+  color: var(--accent);
+  font-size: 12px;
+  text-decoration: none;
+  font-weight: 600;
+}
+.pension-dart-link:hover { text-decoration: underline; }
+
+@media (max-width: 768px) {
+  .pension-summary { grid-template-columns: 1fr; }
+  .pension-summary-cell { border-right: 0; border-bottom: 1px solid var(--border-soft); }
+  .pension-summary-cell:last-child { border-bottom: 0; }
+  .pension-table th.hide-sm,
+  .pension-table td.hide-sm { display: none; }
+  .pension-corp-name { max-width: 140px; }
+  .pension-table tbody td,
+  .pension-table thead th { padding: 8px 10px; }
+}
+
+/* ---- 뉴스 콤팩트 (제목 + 매체 + 시간) ---- */
+.news-item--compact { padding: 12px 14px; }
+.news-item--compact .news-title {
+  margin-bottom: 4px;
+  font-size: 14px;
+}
+.news-item--compact .news-meta { margin-top: 4px; }
+
 /* 반응형 */
 @media (max-width: 768px) {
   .indices-grid { grid-template-columns: repeat(2, 1fr); }
