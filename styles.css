@@ -2958,6 +2958,18 @@ main {
   overflow: hidden;
   box-shadow: var(--shadow-sm);
 }
+.pension-source {
+  margin-bottom: 12px;
+  padding: 6px 10px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  display: inline-block;
+}
+.pension-source a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.pension-source a:hover { text-decoration: underline; }
 .pension-empty {
   padding: 24px;
   text-align: center;
@@ -3149,6 +3161,12 @@ main {
   color: var(--ink);
   font-variant-numeric: tabular-nums;
   margin-bottom: 4px;
+}
+.night-price-sub {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-3);
+  margin-left: 4px;
 }
 .night-change {
   font-size: 12.5px;

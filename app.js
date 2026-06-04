@@ -5592,15 +5592,15 @@ function fillIndicesGrid(indices) {
 async function loadNightFutures() {
   try {
     const r = await stockApiGet('/api/night-futures');
-    if (r && r.ok) fillNightFutures(r.symbols || {}, r.sources || {}, r.units || {}, r.diagnostics);
-    else fillNightFutures({}, {}, {}, null);
+    if (r && r.ok) fillNightFutures(r.symbols || {}, r.sources || {}, r.units || {}, r.usdKrwRate || null, r.diagnostics);
+    else fillNightFutures({}, {}, {}, null, null);
   } catch (e) {
     console.warn('[stock] night-futures fetch failed', e);
-    fillNightFutures({}, {}, {}, null);
+    fillNightFutures({}, {}, {}, null, null);
   }
 }
 
-function fillNightFutures(symbols, sources, units, diagnostics) {
+function fillNightFutures(symbols, sources, units, usdKrwRate, diagnostics) {
   for (const sym of ['SAMSUNG', 'SKHYNIX']) {
     const card = document.getElementById(`night-card-${sym}`);
     if (!card) continue;
@@ -5628,13 +5628,26 @@ function fillNightFutures(symbols, sources, units, diagnostics) {
       }
       continue;
     }
-    if (footEl) {
-      const unit = units[sym] || data.unit || '';
-      const uname = data.universeName || '';
-      footEl.textContent = `Hyperliquid ${uname}${unit ? ' · ' + unit : ''} (ADR 기준) →`;
-    }
+    const uname = data.universeName || '';
+    const fxNote = usdKrwRate
+      ? ` · 환율 ${formatKrwInt(usdKrwRate)}원`
+      : '';
+    if (footEl) footEl.textContent = `Hyperliquid ${uname} · ADR 환산${fxNote} →`;
     card.classList.remove('loading');
-    if (priceEl) priceEl.textContent = formatHlPrice(data.markPx);
+    if (priceEl) {
+      while (priceEl.firstChild) priceEl.removeChild(priceEl.firstChild);
+      // 메인: KRW 환산 가격, 서브: 원 USD 가격
+      if (usdKrwRate && Number.isFinite(usdKrwRate)) {
+        const krw = data.markPx * usdKrwRate;
+        priceEl.appendChild(document.createTextNode(formatKrwInt(krw) + '원'));
+        const sub = document.createElement('span');
+        sub.className = 'night-price-sub';
+        sub.textContent = ' · ' + formatHlPrice(data.markPx);
+        priceEl.appendChild(sub);
+      } else {
+        priceEl.textContent = formatHlPrice(data.markPx);
+      }
+    }
     if (changeEl) {
       changeEl.classList.remove('up', 'down');
       while (changeEl.firstChild) changeEl.removeChild(changeEl.firstChild);
@@ -5647,7 +5660,10 @@ function fillNightFutures(symbols, sources, units, diagnostics) {
         changeEl.appendChild(document.createTextNode(`${arrow} ${sign}${pct.toFixed(2)}% `));
         const sub = document.createElement('span');
         sub.className = 'muted';
-        sub.textContent = `(전일 ${formatHlPrice(data.prevDayPx)})`;
+        const prevTxt = usdKrwRate
+          ? formatKrwInt(data.prevDayPx * usdKrwRate) + '원'
+          : formatHlPrice(data.prevDayPx);
+        sub.textContent = `(전일 ${prevTxt})`;
         changeEl.appendChild(sub);
       } else {
         changeEl.textContent = '전일 대비 데이터 없음';
@@ -5662,6 +5678,11 @@ function formatHlPrice(n) {
   if (n >= 1000)  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 1 });
   if (n >= 1)     return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 });
   return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 4 });
+}
+
+function formatKrwInt(n) {
+  if (n == null || !isFinite(n)) return '—';
+  return Math.round(n).toLocaleString('ko-KR');
 }
 
 async function loadMovers() {
@@ -5948,24 +5969,14 @@ async function loadPensionFlows() {
   const days = state.pensionDays || 30;
   try {
     const r = await fetch(`/api/pension-flows?days=${days}`, { credentials: 'same-origin' });
-    if (r.status === 503) {
-      // DART_API_KEY 미설정
-      out.innerHTML = `
-        <div class="pension-help">
-          <strong>국민연금 매수/매도 표를 사용하려면 DART OpenAPI 키가 필요합니다.</strong><br><br>
-          1. <a href="https://opendart.fss.or.kr/uss/umt/cmm/EgovMberRegist.do" target="_blank" rel="noopener noreferrer">opendart.fss.or.kr</a> 회원가입 → 인증키 발급 (즉시, 무료)<br>
-          2. 발급받은 키를 <code>.env</code> 파일 (로컬) 또는 Render Environment 메뉴에 <code>DART_API_KEY=...</code> 로 등록<br>
-          3. 서버 재시작 후 새로고침
-        </div>`;
-      return;
-    }
     if (!r.ok) {
       out.innerHTML = `<div class="pension-empty muted small">데이터를 불러올 수 없습니다 (${r.status})</div>`;
       return;
     }
     const j = await r.json();
     if (!j.ok) {
-      out.innerHTML = `<div class="pension-empty muted small">${esc(j.error || '데이터 없음')}</div>`;
+      const hint = j.hint ? `<br><span class="muted">${esc(j.hint)}</span>` : '';
+      out.innerHTML = `<div class="pension-empty muted small">${esc(j.error || '데이터 없음')}${hint}</div>`;
       return;
     }
     fillPensionTable(j);
@@ -6016,6 +6027,13 @@ function fillPensionTable(payload) {
   const out = $('#pension-wrap');
   if (!out) return;
   const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  const source = payload.source || null;
+  const sourceLabel = source === 'dart'
+    ? 'DART 전자공시'
+    : source === 'goinsider'
+      ? 'goinsider.kr (DART 공시 가공)'
+      : '';
+  const sourceLink = source === 'goinsider' ? (payload.sourceUrl || 'https://goinsider.kr/entity/national-pension') : '';
   if (!rows.length) {
     const dm = payload.dartMeta || {};
     const status = dm.lastStatus;
@@ -6092,7 +6110,7 @@ function fillPensionTable(payload) {
             <td class="num ${qtyCls}">${esc(fmtPensionQty(r.changeQty))}</td>
             <td class="num ${rateCls}">${esc(fmtPensionRate(r.changeRate))}</td>
             <td class="num hide-sm">${esc(r.holdingRate != null ? r.holdingRate.toFixed(2) + '%' : '—')}</td>
-            <td class="hide-sm">${dartHref ? `<a class="pension-dart-link" href="${esc(dartHref)}" target="_blank" rel="noopener noreferrer">공시 보기 →</a>` : '—'}</td>
+            <td class="hide-sm">${dartHref ? `<a class="pension-dart-link" href="${esc(dartHref)}" target="_blank" rel="noopener noreferrer">공시 보기 →</a>` : '<span class="muted">—</span>'}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -6100,7 +6118,14 @@ function fillPensionTable(payload) {
   // 도넛: 종목별 holdingQty 비중 (상위 12개 + '기타').
   const holdings = Array.isArray(payload.holdings) ? payload.holdings : [];
   const donutHtml = holdings.length ? buildPensionDonutHtml(holdings) : '';
-  out.innerHTML = summaryHtml + donutHtml + tableHtml;
+  const sourceHtml = sourceLabel
+    ? `<div class="pension-source muted small">데이터 출처: ${
+        sourceLink
+          ? `<a href="${esc(sourceLink)}" target="_blank" rel="noopener noreferrer">${esc(sourceLabel)}</a>`
+          : esc(sourceLabel)
+      }</div>`
+    : '';
+  out.innerHTML = sourceHtml + summaryHtml + donutHtml + tableHtml;
   if (donutHtml) renderPensionDonut(holdings);
 }
 

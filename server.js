@@ -1886,43 +1886,214 @@ async function fetchPensionFlows(daysBack) {
   return { ok: true, rows, holdings, totalReports: list.length, daysBack, dartMeta };
 }
 
-async function handlePensionFlows(req, res) {
-  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
-  if (!dartConfigured()) {
-    return reply(res, 503, {
-      ok: false,
-      error: 'DART_API_KEY 환경변수가 설정되지 않았습니다.',
-      hint: '.env 에 DART_API_KEY=... 추가 후 서버 재시작 (Render 는 Environment 메뉴).',
+// ----------------------------------------------------------------------------
+// 폴백 소스: goinsider.kr/entity/national-pension
+// DART 가 비활성/인증대기/IP차단/빈 응답인 경우 자동으로 사용.
+// 페이지가 SSR HTML 이라 별도 API 키 불필요. 표는 8 컬럼 <tr> 구조:
+//   [순번 | 종목명+코드+시장 | 보유금액 | 비중 | 변동 | 지분율 | 보고유형 | 보고일]
+// ----------------------------------------------------------------------------
+
+const GOINSIDER_URL = 'https://goinsider.kr/entity/national-pension/?tab=timeline&timeline_limit=200';
+
+function stripHtmlTags(s) {
+  return String(s || '').replace(/<[^>]+>/g, '').replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
+}
+
+// "▲ +1.3M주" / "▼ -59.9M" / "1,234,567주" 등의 변동 텍스트를 부호 + 수량으로 분리.
+function parseGoinsiderDelta(text) {
+  const t = String(text || '').trim();
+  if (!t) return { sign: 0, qty: null, raw: '' };
+  const up = /▲|\+/.test(t);
+  const down = /▼|\-/.test(t);
+  // 숫자 + 단위 (K/M/B/만/억/조). 한국식 우선.
+  const m = t.replace(/[▲▼\s주]/g, '').match(/^([+\-]?[\d,.]+)([KMB만억조]?)/i);
+  if (!m) return { sign: up ? 1 : down ? -1 : 0, qty: null, raw: t };
+  let n = parseFloat(m[1].replace(/,/g, ''));
+  if (!Number.isFinite(n)) return { sign: up ? 1 : down ? -1 : 0, qty: null, raw: t };
+  const unit = m[2] || '';
+  const mult = ({
+    'K': 1e3, 'M': 1e6, 'B': 1e9,
+    '만': 1e4, '억': 1e8, '조': 1e12,
+  })[unit] || 1;
+  n = Math.abs(n) * mult;
+  const sign = up ? 1 : down ? -1 : (m[1].startsWith('-') ? -1 : 1);
+  return { sign, qty: sign * n, raw: t };
+}
+
+function parseGoinsiderPercent(text) {
+  const m = String(text || '').replace(/,/g, '').match(/[+\-]?\d+(?:\.\d+)?/);
+  return m ? parseFloat(m[0]) : null;
+}
+
+// "삼성전자 005930 KOSPI" → { corpName, stockCode, market }.
+// goinsider 의 <a> 텍스트는 공백 분리. 6자리 숫자가 종목코드, 마지막 토큰이 시장.
+function parseGoinsiderName(text) {
+  const t = String(text || '').trim();
+  const codeM = t.match(/\b(\d{6})\b/);
+  const stockCode = codeM ? codeM[1] : '';
+  let market = '';
+  const marketM = t.match(/\b(KOSPI|KOSDAQ|KONEX)\b/i);
+  if (marketM) market = marketM[1].toUpperCase();
+  const corpName = t
+    .replace(stockCode, '')
+    .replace(/\b(KOSPI|KOSDAQ|KONEX)\b/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return { corpName, stockCode, market };
+}
+
+async function fetchGoinsiderPension(daysBack) {
+  const r = await httpsGetBuffer(GOINSIDER_URL, {
+    headers: { 'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml' },
+    timeoutMs: 10_000,
+  });
+  if (!r.ok) {
+    logLine('warn', 'goinsider.http', { status: r.status, err: r.error || null });
+    return { ok: false, reason: `goinsider HTTP ${r.status}`, rows: [] };
+  }
+  const html = r.body;
+
+  // <tr> 들 중 6자리 종목코드가 들어있는 것만 후보로 잡는다.
+  const rows = [];
+  const trRe = /<tr\b[^>]*>([\s\S]*?)<\/tr>/g;
+  let m;
+  while ((m = trRe.exec(html)) !== null) {
+    const inner = m[1];
+    if (!/\b\d{6}\b/.test(inner)) continue;
+    const tdRe = /<td\b[^>]*>([\s\S]*?)<\/td>/g;
+    const cells = [];
+    let mm;
+    while ((mm = tdRe.exec(inner)) !== null) cells.push(stripHtmlTags(mm[1]));
+    if (cells.length < 7) continue;
+    // 표가 [순번, 종목명, 보유금액, 비중, 변동, 지분율, 보고유형, 보고일] 8칸 기준.
+    // 다만 페이지 마크업이 살짝 바뀔 수 있어 마지막 칸을 날짜로 가정.
+    const lastCell = cells[cells.length - 1] || '';
+    const dateM = lastCell.match(/(\d{4})[-./](\d{2})[-./](\d{2})/);
+    const rceptDt = dateM ? `${dateM[1]}-${dateM[2]}-${dateM[3]}` : '';
+    if (!rceptDt) continue;
+    const reportNm = cells[cells.length - 2] || '';
+    const holdingPctRaw = cells[cells.length - 3];
+    const changeRaw = cells[cells.length - 4];
+    const nameCell = cells.find(c => /\b\d{6}\b/.test(c)) || cells[1] || '';
+    const { corpName, stockCode, market } = parseGoinsiderName(nameCell);
+    if (!corpName || !stockCode) continue;
+    const { sign, qty } = parseGoinsiderDelta(changeRaw);
+    const holdingRate = parseGoinsiderPercent(holdingPctRaw);
+    const type = /신규/.test(reportNm) ? 'new'
+      : sign > 0 ? 'buy'
+      : sign < 0 ? 'sell'
+      : 'hold';
+    rows.push({
+      rceptNo: '',
+      rceptDt,
+      corpName,
+      stockCode,
+      market,
+      reportNm,
+      type,
+      holdingQty: null,
+      changeQty: qty,
+      holdingRate,
+      changeRate: null,
+      reportResn: '',
+      dartUrl: '', // goinsider 행에는 개별 rcept_no 가 없어서 미연결.
     });
   }
+  // 날짜 필터.
+  const cutoff = new Date(Date.now() - daysBack * 86400_000).toISOString().slice(0, 10);
+  const filtered = rows.filter(r => (r.rceptDt || '') >= cutoff);
+  filtered.sort((a, b) => (b.rceptDt || '').localeCompare(a.rceptDt || ''));
+  // holdings: 종목별 최신 지분율로 도넛 채우기.
+  const byCorp = new Map();
+  for (const r of filtered) {
+    if (!r.corpName || r.holdingRate == null) continue;
+    const prev = byCorp.get(r.corpName);
+    if (!prev || (r.rceptDt || '').localeCompare(prev.rceptDt || '') > 0) {
+      byCorp.set(r.corpName, {
+        corpName: r.corpName,
+        stockCode: r.stockCode,
+        holdingQty: null,
+        holdingRate: r.holdingRate,
+        rceptDt: r.rceptDt,
+      });
+    }
+  }
+  const holdings = Array.from(byCorp.values()).sort((a, b) => (b.holdingRate || 0) - (a.holdingRate || 0));
+  return { ok: true, rows: filtered, holdings, totalReports: filtered.length };
+}
+
+async function handlePensionFlows(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
   const url = new URL(req.url, 'http://x');
   let daysBack = parseInt(url.searchParams.get('days') || '30', 10);
   if (!Number.isFinite(daysBack) || daysBack < 1) daysBack = 30;
   if (daysBack > 180) daysBack = 180;
-  const cacheKey = `__pension:${daysBack}`;
+  const sourceParam = url.searchParams.get('source') || 'auto'; // 'dart' | 'goinsider' | 'auto'
+
+  const cacheKey = `__pension:${daysBack}:${sourceParam}`;
   const { entry, stale } = getStockCacheEntry(cacheKey, STOCK_TAB_TTL_PENSION);
   if (entry && !stale) {
     return reply(res, 200, { ok: true, ...entry.payload, cached: true });
   }
-  const result = await fetchPensionFlows(daysBack);
-  if (!result.ok) {
-    return reply(res, 200, { ok: false, error: result.reason || 'DART 호출 실패', rows: [] });
+
+  let payload = null;
+  let usedSource = null;
+
+  // 1) DART 시도 — 키 있고 source≠goinsider 일 때.
+  if (sourceParam !== 'goinsider' && dartConfigured()) {
+    const dartResult = await fetchPensionFlows(daysBack);
+    if (dartResult.ok && (dartResult.rows.length || dartResult.totalReports > 0)) {
+      usedSource = 'dart';
+      payload = {
+        rows: dartResult.rows,
+        holdings: dartResult.holdings || [],
+        totalReports: dartResult.totalReports,
+        daysBack,
+        source: 'dart',
+        dartMeta: dartResult.dartMeta || null,
+        ts: nowKST(),
+      };
+    } else {
+      logLine('info', 'pension.dart-fallback', {
+        reason: dartResult.reason || 'empty',
+        dartStatus: dartResult.dartMeta?.lastStatus || null,
+      });
+    }
   }
-  const payload = {
-    rows: result.rows,
-    holdings: result.holdings || [],
-    totalReports: result.totalReports,
-    daysBack,
-    dartMeta: result.dartMeta || null,
-    ts: nowKST(),
-  };
-  if (result.rows.length || result.totalReports > 0) {
-    writeStockCacheKey(cacheKey, payload);
-    logLine('info', 'pension.ok', { count: result.rows.length, totalReports: result.totalReports });
-  } else {
-    logLine('warn', 'pension.empty', { daysBack });
+
+  // 2) DART 실패/빈 결과/키 없음 → goinsider 폴백.
+  if (!payload && sourceParam !== 'dart') {
+    const giResult = await fetchGoinsiderPension(daysBack);
+    if (giResult.ok && giResult.rows.length) {
+      usedSource = 'goinsider';
+      payload = {
+        rows: giResult.rows,
+        holdings: giResult.holdings || [],
+        totalReports: giResult.totalReports,
+        daysBack,
+        source: 'goinsider',
+        sourceUrl: 'https://goinsider.kr/entity/national-pension',
+        ts: nowKST(),
+      };
+    } else {
+      logLine('warn', 'pension.goinsider.empty', { reason: giResult.reason || 'no-rows' });
+    }
+  }
+
+  if (!payload) {
     if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
+    return reply(res, 200, {
+      ok: false,
+      error: 'DART 와 goinsider 양쪽에서 데이터를 가져오지 못했습니다.',
+      hint: 'DART_API_KEY 등록 또는 잠시 후 재시도.',
+      rows: [], holdings: [], source: null, daysBack,
+    });
   }
+
+  writeStockCacheKey(cacheKey, payload);
+  logLine('info', 'pension.ok', { source: usedSource, count: payload.rows.length });
   reply(res, 200, { ok: true, ...payload });
 }
 
@@ -1938,6 +2109,35 @@ async function handlePensionFlows(req, res) {
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz/info';
 const HYPERLIQUID_TTL = 30_000;
 const HYPERLIQUID_BUILDER = 'xyz';
+const USDKRW_FX_TTL = 60_000;
+
+// USDKRW 환율 — autoPoll 또는 /api/quotes 가 캐시에 채워둔 값을 우선.
+// 60초 이내면 그대로 쓰고, 오래됐으면 KRW=X 만 즉시 fetch.
+async function getUsdKrwRate() {
+  const cache = readJSON(QUOTE_CACHE_FILE, { updatedAt: '', quotes: {} });
+  const entry = cache.quotes['USDKRW'];
+  const fresh = entry && entry.ts && (Date.now() - new Date(entry.ts).getTime() < USDKRW_FX_TTL);
+  if (fresh && Number.isFinite(Number(entry.rate))) return Number(entry.rate);
+  try {
+    const yh = await fetchYahoo(['KRW=X']);
+    const v = yh['KRW=X'];
+    if (v && Number.isFinite(Number(v.price))) {
+      cache.quotes['USDKRW'] = {
+        rate: v.price,
+        previousClose: v.previousClose,
+        changePct: v.previousClose ? ((v.price - v.previousClose) / v.previousClose) * 100 : null,
+        ts: v.ts,
+        source: 'yahoo',
+      };
+      cache.updatedAt = nowKST();
+      writeJSON(QUOTE_CACHE_FILE, cache);
+      return Number(v.price);
+    }
+  } catch (e) {
+    logLine('warn', 'fx.usdkrw.fail', { err: String(e && e.message || e) });
+  }
+  return entry && Number.isFinite(Number(entry.rate)) ? Number(entry.rate) : null;
+}
 // URL 슬러그(사용자 페이지) ≠ universe asset 이름 (Hyperliquid 내부).
 // 라운드 12-tri 확정: SAMSUNG → SMSN (Samsung ADR 티커), SKHYNIX → SKHX.
 // app.hyperliquid.xyz 가 URL 에는 친숙한 별칭을 쓰지만 실제 perp 이름은 ADR 티커.
@@ -2008,7 +2208,11 @@ async function handleNightFutures(req, res) {
   if (entry && !stale) {
     return reply(res, 200, { ok: true, ...entry.payload, cached: true });
   }
-  const result = await fetchHyperliquidPerp();
+  // Hyperliquid 가격 + USDKRW 환율 병렬 호출. 환율은 KRW 메인 표시용.
+  const [result, usdKrwRate] = await Promise.all([
+    fetchHyperliquidPerp(),
+    getUsdKrwRate(),
+  ]);
   const symbols = result.symbols || {};
   const sources = {};
   const labels = {};
@@ -2020,6 +2224,7 @@ async function handleNightFutures(req, res) {
   }
   const payload = {
     symbols, sources, labels, units,
+    usdKrwRate,
     diagnostics: result.diagnostics || null,
     ts: nowKST(),
   };
