@@ -5977,7 +5977,10 @@ async function loadKrxPensionTrading() {
     }
     const j = await r.json();
     if (!j.ok) {
-      out.innerHTML = `<div class="pension-empty muted small">${esc(j.error || 'KRX 응답 없음')}</div>`;
+      out.innerHTML = `<div class="pension-empty muted small">
+        ${esc(j.error || 'KRX 응답 없음')}
+        <br><span class="muted">KRX 정보데이터시스템 (data.krx.co.kr) 이 일시적으로 응답하지 않거나 endpoint 가 변경됐을 수 있습니다.</span>
+      </div>`;
       return;
     }
     fillKrxPensionTrading(j);
@@ -6122,8 +6125,30 @@ async function loadPensionFlows() {
     }
     const j = await r.json();
     if (!j.ok) {
-      const hint = j.hint ? `<br><span class="muted">${esc(j.hint)}</span>` : '';
-      out.innerHTML = `<div class="pension-empty muted small">${esc(j.error || '데이터 없음')}${hint}</div>`;
+      const trace = j.sourceTrace || {};
+      const dartLine = trace.dart
+        ? `• <strong>DART</strong>: ${trace.dart.tried === false
+            ? esc(trace.dart.reason || '미시도')
+            : trace.dart.ok
+              ? `정상 (rows ${trace.dart.rows}, totalReports ${trace.dart.totalReports})`
+              : `status ${esc(String(trace.dart.status || '-'))} · ${esc(trace.dart.message || '응답 이상')}`
+          }`
+        : '';
+      const giLine = trace.goinsider
+        ? `• <strong>goinsider</strong>: ${trace.goinsider.ok
+            ? `rows ${trace.goinsider.rows}`
+            : `${esc(trace.goinsider.reason || '응답 이상')}${
+                trace.goinsider.debug
+                  ? ` (HTML ${trace.goinsider.debug.bodyLength}B, &lt;tr&gt; ${trace.goinsider.debug.trCount}개, 6자리 코드 ${trace.goinsider.debug.code6Count}개${trace.goinsider.debug.hasCloudflare ? ', Cloudflare 차단' : ''})`
+                  : ''
+              }`
+          }`
+        : '';
+      const traceHtml = [dartLine, giLine].filter(Boolean).join('<br>');
+      out.innerHTML = `<div class="pension-empty muted small">
+        ${esc(j.error || '데이터 없음')}
+        ${traceHtml ? `<div class="pension-trace">${traceHtml}</div>` : ''}
+      </div>`;
       return;
     }
     fillPensionTable(j);

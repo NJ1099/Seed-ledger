@@ -1985,14 +1985,28 @@ function parseGoinsiderName(text) {
 
 async function fetchGoinsiderPension(daysBack) {
   const r = await httpsGetBuffer(GOINSIDER_URL, {
-    headers: { 'User-Agent': BROWSER_UA, 'Accept': 'text/html,application/xhtml+xml' },
+    headers: {
+      'User-Agent': BROWSER_UA,
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+    },
     timeoutMs: 10_000,
   });
   if (!r.ok) {
     logLine('warn', 'goinsider.http', { status: r.status, err: r.error || null });
-    return { ok: false, reason: `goinsider HTTP ${r.status}`, rows: [] };
+    return { ok: false, reason: `goinsider HTTP ${r.status}`, rows: [], debug: { httpStatus: r.status, err: r.error || null } };
   }
   const html = r.body;
+
+  // 진단 — 응답 구조 추적용. Cloudflare challenge 가 떴는지 등.
+  const debug = {
+    bodyLength: html.length,
+    trCount: (html.match(/<tr\b/g) || []).length,
+    tableCount: (html.match(/<table\b/g) || []).length,
+    code6Count: (html.match(/\b\d{6}\b/g) || []).length,
+    hasCloudflare: /cloudflare|Just a moment|cf-browser-verification/i.test(html),
+    snippet: html.slice(0, 300).replace(/\s+/g, ' '),
+  };
 
   // <tr> 들 중 6자리 종목코드가 들어있는 것만 후보로 잡는다.
   const rows = [];
@@ -2060,7 +2074,9 @@ async function fetchGoinsiderPension(daysBack) {
     }
   }
   const holdings = Array.from(byCorp.values()).sort((a, b) => (b.holdingRate || 0) - (a.holdingRate || 0));
-  return { ok: true, rows: filtered, holdings, totalReports: filtered.length };
+  debug.matchedRows = rows.length;
+  debug.filteredRows = filtered.length;
+  return { ok: true, rows: filtered, holdings, totalReports: filtered.length, debug };
 }
 
 async function handlePensionFlows(req, res) {
@@ -2079,10 +2095,20 @@ async function handlePensionFlows(req, res) {
 
   let payload = null;
   let usedSource = null;
+  // 진단 — 두 소스 모두 실패했을 때 사용자에게 정확히 어디서 실패했는지 보여주기 위함.
+  const sourceTrace = { dart: null, goinsider: null };
 
   // 1) DART 시도 — 키 있고 source≠goinsider 일 때.
   if (sourceParam !== 'goinsider' && dartConfigured()) {
     const dartResult = await fetchPensionFlows(daysBack);
+    sourceTrace.dart = {
+      tried: true,
+      ok: !!dartResult.ok,
+      rows: dartResult.rows?.length || 0,
+      totalReports: dartResult.totalReports || 0,
+      status: dartResult.dartMeta?.lastStatus || null,
+      message: dartResult.dartMeta?.lastMessage || dartResult.reason || '',
+    };
     if (dartResult.ok && (dartResult.rows.length || dartResult.totalReports > 0)) {
       usedSource = 'dart';
       payload = {
@@ -2100,11 +2126,20 @@ async function handlePensionFlows(req, res) {
         dartStatus: dartResult.dartMeta?.lastStatus || null,
       });
     }
+  } else if (!dartConfigured()) {
+    sourceTrace.dart = { tried: false, reason: 'DART_API_KEY 미설정' };
   }
 
   // 2) DART 실패/빈 결과/키 없음 → goinsider 폴백.
   if (!payload && sourceParam !== 'dart') {
     const giResult = await fetchGoinsiderPension(daysBack);
+    sourceTrace.goinsider = {
+      tried: true,
+      ok: !!giResult.ok,
+      rows: giResult.rows?.length || 0,
+      reason: giResult.reason || (giResult.rows?.length ? 'ok' : 'no-rows-after-filter'),
+      debug: giResult.debug || null,
+    };
     if (giResult.ok && giResult.rows.length) {
       usedSource = 'goinsider';
       payload = {
@@ -2117,16 +2152,20 @@ async function handlePensionFlows(req, res) {
         ts: nowKST(),
       };
     } else {
-      logLine('warn', 'pension.goinsider.empty', { reason: giResult.reason || 'no-rows' });
+      logLine('warn', 'pension.goinsider.empty', {
+        reason: giResult.reason || 'no-rows',
+        debug: giResult.debug || null,
+      });
     }
   }
 
   if (!payload) {
     if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
+    // 양쪽 다 실패 — 진단 정보를 사용자에게 보여주기 위해 sourceTrace 포함.
     return reply(res, 200, {
       ok: false,
-      error: 'DART 와 goinsider 양쪽에서 데이터를 가져오지 못했습니다.',
-      hint: 'DART_API_KEY 등록 또는 잠시 후 재시도.',
+      error: '국민연금 데이터를 가져오지 못했습니다.',
+      sourceTrace,
       rows: [], holdings: [], source: null, daysBack,
     });
   }
@@ -2304,9 +2343,9 @@ function parseKrxNumber(s) {
   return Number.isFinite(n) ? n : null;
 }
 
-// 시장 전체 일별 투자자별 거래실적 (순매수 거래대금) → 연기금 컬럼만 추출.
-// market: 'STK' (KOSPI) / 'KSQ' (KOSDAQ) / 'ALL' (둘 다).
-async function fetchKrxPensionTrading(daysBack, market = 'ALL') {
+// pykrx core.py 의 투자자별_거래실적_전체시장_일별추이_상세.fetch 가 보내는 파라미터.
+// 우리가 임의로 추가한 share/money/csvxls_isNo 가 KRX 400 의 원인이라 제거.
+async function fetchKrxPensionTradingSingle(daysBack, market) {
   const endDt = new Date();
   const strtDt = new Date(Date.now() - daysBack * 86400_000);
   const form = {
@@ -2322,27 +2361,24 @@ async function fetchKrxPensionTrading(daysBack, market = 'ALL') {
     trdVolVal: '2',  // 거래대금
     askBid: '3',     // 순매수
     detailView: '1',
-    share: '1',
-    money: '1',
-    csvxls_isNo: 'false',
   };
   const r = await httpsPostForm(KRX_API, form, {
     headers: {
-      'Referer': 'http://data.krx.co.kr/',
+      'Referer': 'https://data.krx.co.kr/',
       'User-Agent': BROWSER_UA,
       'X-Requested-With': 'XMLHttpRequest',
+      'Origin': 'https://data.krx.co.kr',
     },
     timeoutMs: 12_000,
   });
   if (!r.ok) {
-    logLine('warn', 'krx.http', { market, status: r.status, err: r.error || null });
-    return { ok: false, reason: `KRX HTTP ${r.status}`, rows: [] };
+    const snippet = (r.body || '').slice(0, 200);
+    logLine('warn', 'krx.http', { market, status: r.status, snippet, err: r.error || null });
+    return { ok: false, status: r.status, reason: `KRX HTTP ${r.status}`, rows: [] };
   }
   try {
     const j = JSON.parse(r.body);
     const output = Array.isArray(j.output) ? j.output : [];
-    // 일별 행 — TRD_DD 가 거래일, TRDVAL7 이 연기금 순매수 거래대금.
-    // pykrx 가 검증한 응답 컬럼명. KRX 가 갱신해 키가 바뀌면 폴백 키도 시도.
     const rows = output.map(rec => {
       const dateStr = rec.TRD_DD || rec.trdDd || '';
       const dateNorm = dateStr.includes('/') ? dateStr.replace(/\//g, '-')
@@ -2352,13 +2388,35 @@ async function fetchKrxPensionTrading(daysBack, market = 'ALL') {
       const netBuy = parseKrxNumber(rec.TRDVAL7 ?? rec.trdval7 ?? rec.PENSION ?? null);
       return { date: dateNorm, netBuyValue: netBuy };
     }).filter(r => r.date && r.netBuyValue != null);
-    // 최신순.
     rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
     return { ok: true, rows };
   } catch (e) {
     logLine('warn', 'krx.parse', { market, err: String(e) });
     return { ok: false, reason: 'KRX 응답 파싱 실패', rows: [] };
   }
+}
+
+// market: 'STK' (KOSPI) / 'KSQ' (KOSDAQ) / 'ALL' (둘 다 합산).
+async function fetchKrxPensionTrading(daysBack, market = 'ALL') {
+  if (market !== 'ALL') return fetchKrxPensionTradingSingle(daysBack, market);
+  // ALL = STK + KSQ. KRX 가 'ALL' 을 안 받으면 따로 호출해서 합산.
+  const direct = await fetchKrxPensionTradingSingle(daysBack, 'ALL');
+  if (direct.ok && direct.rows.length) return direct;
+  const [kospi, kosdaq] = await Promise.all([
+    fetchKrxPensionTradingSingle(daysBack, 'STK'),
+    fetchKrxPensionTradingSingle(daysBack, 'KSQ'),
+  ]);
+  if (!kospi.ok && !kosdaq.ok) {
+    return { ok: false, reason: kospi.reason || kosdaq.reason || 'KRX 호출 실패', rows: [] };
+  }
+  // 같은 날짜끼리 합산.
+  const byDate = new Map();
+  for (const row of (kospi.rows || [])) byDate.set(row.date, (byDate.get(row.date) || 0) + (row.netBuyValue || 0));
+  for (const row of (kosdaq.rows || [])) byDate.set(row.date, (byDate.get(row.date) || 0) + (row.netBuyValue || 0));
+  const rows = Array.from(byDate.entries())
+    .map(([date, netBuyValue]) => ({ date, netBuyValue }))
+    .sort((a, b) => b.date.localeCompare(a.date));
+  return { ok: true, rows };
 }
 
 async function handleKrxPensionTrading(req, res) {

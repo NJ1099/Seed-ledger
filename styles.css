@@ -2984,6 +2984,16 @@ main {
   text-decoration: none;
 }
 .pension-source a:hover { text-decoration: underline; }
+.pension-trace {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--surface-2);
+  border-radius: var(--r-sm);
+  text-align: left;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  line-height: 1.6;
+}
 .pension-empty {
   padding: 24px;
   text-align: center;
