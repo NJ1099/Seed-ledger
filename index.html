@@ -541,10 +541,25 @@
       </div>
     </section>
 
-    <!-- 4) 국민연금 매수·매도 (DART 대량보유 공시 기반) -->
+    <!-- 4a) 연기금 일별 순매수 거래대금 (KRX 정보데이터시스템) -->
     <section class="stock-section">
       <div class="section-title-row">
-        <div class="section-title">국민연금 매수·매도 <span class="muted small">— DART 대량보유 공시 기반</span></div>
+        <div class="section-title">연기금 일별 순매수 거래대금 <span class="muted small">— KRX 시장 전체 (KOSPI+KOSDAQ)</span></div>
+        <div class="pension-range" id="krx-pension-range">
+          <button class="pr-btn" data-days="7">7일</button>
+          <button class="pr-btn active" data-days="30">30일</button>
+          <button class="pr-btn" data-days="90">90일</button>
+        </div>
+      </div>
+      <div class="krx-pension-wrap" id="krx-pension-wrap">
+        <div class="pension-empty muted small">불러오는 중…</div>
+      </div>
+    </section>
+
+    <!-- 4b) 국민연금 매수·매도 (DART 대량보유 공시 기반) -->
+    <section class="stock-section">
+      <div class="section-title-row">
+        <div class="section-title">국민연금 5% 이상 보유 변동 <span class="muted small">— DART 대량보유 공시 (분기성)</span></div>
         <div class="pension-range" id="pension-range">
           <button class="pr-btn" data-days="7">7일</button>
           <button class="pr-btn active" data-days="30">30일</button>

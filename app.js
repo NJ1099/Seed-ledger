@@ -5516,12 +5516,14 @@ function stockTimeAgo(iso) {
 }
 
 function renderStock() {
-  // 6개 API 병렬 호출
+  // API 병렬 호출
   loadIndices();
   loadNightFutures();
   loadMovers();
   loadNews();
+  loadKrxPensionTrading();
   loadPensionFlows();
+  setupKrxPensionRange();
   setupPensionRange();
   const el = $('#stock-updated-at');
   if (el) el.textContent = `${nowKSTDisplay()} 갱신`;
@@ -5942,6 +5944,151 @@ function fillNews(news) {
         </div>
       </a>`;
   }).join('');
+}
+
+// ============ 연기금 일별 순매수 거래대금 (KRX 정보데이터시스템) ============
+
+function setupKrxPensionRange() {
+  const wrap = $('#krx-pension-range');
+  if (!wrap || wrap.dataset.wired === '1') return;
+  wrap.dataset.wired = '1';
+  wrap.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.pr-btn');
+    if (!btn) return;
+    const days = parseInt(btn.getAttribute('data-days'), 10);
+    if (!days || days === state.krxPensionDays) return;
+    state.krxPensionDays = days;
+    $$('.pr-btn', wrap).forEach(b => b.classList.toggle('active', b === btn));
+    const out = $('#krx-pension-wrap');
+    if (out) out.innerHTML = '<div class="pension-empty muted small">불러오는 중…</div>';
+    loadKrxPensionTrading();
+  });
+}
+
+async function loadKrxPensionTrading() {
+  const out = $('#krx-pension-wrap');
+  if (!out) return;
+  const days = state.krxPensionDays || 30;
+  try {
+    const r = await fetch(`/api/krx-pension-trading?days=${days}&market=ALL`, { credentials: 'same-origin' });
+    if (!r.ok) {
+      out.innerHTML = `<div class="pension-empty muted small">KRX 데이터를 불러올 수 없습니다 (${r.status})</div>`;
+      return;
+    }
+    const j = await r.json();
+    if (!j.ok) {
+      out.innerHTML = `<div class="pension-empty muted small">${esc(j.error || 'KRX 응답 없음')}</div>`;
+      return;
+    }
+    fillKrxPensionTrading(j);
+  } catch (e) {
+    console.warn('[stock] krx-pension fetch failed', e);
+    out.innerHTML = '<div class="pension-empty muted small">네트워크 오류</div>';
+  }
+}
+
+function fmtKrwTrillion(n) {
+  // 원 단위 입력 → 자동 단위 (조/억).
+  if (n == null || !isFinite(n)) return '—';
+  const sign = n < 0 ? '-' : (n > 0 ? '+' : '');
+  const abs = Math.abs(n);
+  if (abs >= 1e12) return `${sign}${(abs / 1e12).toFixed(2)}조원`;
+  if (abs >= 1e8)  return `${sign}${(abs / 1e8).toFixed(1)}억원`;
+  return `${sign}${Math.round(abs).toLocaleString('ko-KR')}원`;
+}
+
+function fillKrxPensionTrading(payload) {
+  const out = $('#krx-pension-wrap');
+  if (!out) return;
+  const rows = Array.isArray(payload.rows) ? payload.rows : [];
+  if (!rows.length) {
+    out.innerHTML = '<div class="pension-empty muted small">최근 거래일 데이터 없음</div>';
+    return;
+  }
+  const s = payload.summary || { buyDays: 0, sellDays: 0, netSum: 0 };
+  const netSumCls = s.netSum > 0 ? 'up' : s.netSum < 0 ? 'down' : '';
+  const summaryHtml = `
+    <div class="pension-summary krx-pension-summary">
+      <div class="pension-summary-cell">
+        <div class="ps-label">매수 우세 일수</div>
+        <div class="ps-value up">${s.buyDays}일</div>
+      </div>
+      <div class="pension-summary-cell">
+        <div class="ps-label">매도 우세 일수</div>
+        <div class="ps-value down">${s.sellDays}일</div>
+      </div>
+      <div class="pension-summary-cell">
+        <div class="ps-label">누적 순매수</div>
+        <div class="ps-value ${netSumCls}">${esc(fmtKrwTrillion(s.netSum))}</div>
+      </div>
+    </div>`;
+  // 차트용 그래프 (Chart.js 막대) + 최근 5일 텍스트 요약.
+  const sourceHtml = `<div class="pension-source muted small">데이터 출처: <a href="${esc(payload.sourceUrl || '')}" target="_blank" rel="noopener noreferrer">KRX 정보데이터시스템</a></div>`;
+  const chartHtml = `
+    <div class="krx-pension-chart-wrap">
+      <canvas id="krx-pension-chart" height="180"></canvas>
+    </div>`;
+  // 최근 5일 표.
+  const recent = rows.slice(0, 5);
+  const tableHtml = `
+    <table class="pension-table krx-pension-table">
+      <thead><tr><th>거래일</th><th class="num">순매수 거래대금</th><th>방향</th></tr></thead>
+      <tbody>
+        ${recent.map(r => {
+          const cls = r.netBuyValue > 0 ? 'up' : r.netBuyValue < 0 ? 'down' : '';
+          const dir = r.netBuyValue > 0 ? '매수 우세' : r.netBuyValue < 0 ? '매도 우세' : '관망';
+          return `<tr>
+            <td class="muted">${esc(r.date)}</td>
+            <td class="num ${cls}">${esc(fmtKrwTrillion(r.netBuyValue))}</td>
+            <td class="${cls}">${esc(dir)}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>`;
+  out.innerHTML = sourceHtml + summaryHtml + chartHtml + tableHtml;
+  renderKrxPensionChart(rows);
+}
+
+function renderKrxPensionChart(rows) {
+  const canvas = document.getElementById('krx-pension-chart');
+  if (!canvas || typeof Chart === 'undefined') return;
+  // 차트는 오래된 → 최근 순.
+  const sorted = [...rows].sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const labels = sorted.map(r => r.date.slice(5)); // MM-DD
+  const values = sorted.map(r => r.netBuyValue / 1e8); // 억원 단위
+  const colors = values.map(v => v >= 0 ? '#F04452' : '#3182F6');
+  if (state.charts && state.charts.krxPension) {
+    try { state.charts.krxPension.destroy(); } catch {}
+  }
+  state.charts = state.charts || {};
+  state.charts.krxPension = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderWidth: 0,
+        borderRadius: 3,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => `${(ctx.parsed.y >= 0 ? '+' : '')}${ctx.parsed.y.toFixed(1)}억원`,
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false }, ticks: { font: { size: 10 } } },
+        y: { grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 }, callback: (v) => v + '억' } },
+      },
+    },
+  });
 }
 
 // ============ 국민연금 매수/매도 (DART 대량보유 공시 기반) ============

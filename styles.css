@@ -2965,6 +2965,20 @@ main {
   border-radius: var(--r-sm);
   display: inline-block;
 }
+.krx-pension-wrap { display: block; }
+.krx-pension-summary { margin-bottom: 16px; }
+.krx-pension-chart-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 12px;
+  margin-bottom: 16px;
+  height: 220px;
+}
+.krx-pension-table {
+  width: 100%;
+  font-size: 13px;
+}
 .pension-source a {
   color: var(--accent);
   text-decoration: none;

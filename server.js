@@ -254,6 +254,45 @@ function httpsGet(url, { timeoutMs = 6000, headers = {} } = {}) {
 }
 
 // POST + JSON body — hyperliquid /info 같은 RPC 스타일 엔드포인트용.
+// application/x-www-form-urlencoded POST. KRX 정보데이터시스템 endpoint 가 form-urlencoded 만 받음.
+function httpsPostForm(url, formObj, { timeoutMs = 10_000, headers = {} } = {}) {
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(url);
+      const payload = Buffer.from(
+        Object.entries(formObj).map(([k, v]) =>
+          encodeURIComponent(k) + '=' + encodeURIComponent(v == null ? '' : String(v))
+        ).join('&'),
+        'utf8'
+      );
+      const opts = {
+        method: 'POST',
+        hostname: u.hostname,
+        path: u.pathname + u.search,
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+          'Content-Length': payload.length,
+          'User-Agent': 'Mozilla/5.0 (seed-ledger/1.0)',
+          'Accept': 'application/json, text/plain, */*',
+          ...headers,
+        },
+        timeout: timeoutMs,
+      };
+      const req = https.request(opts, (r) => {
+        let data = '';
+        r.on('data', (c) => { data += c.toString('utf8'); });
+        r.on('end', () => resolve({ ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: data }));
+      });
+      req.on('error', (e) => resolve({ ok: false, status: 0, body: '', error: String(e) }));
+      req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
+      req.write(payload);
+      req.end();
+    } catch (e) {
+      resolve({ ok: false, status: 0, body: '', error: String(e) });
+    }
+  });
+}
+
 function httpsPostJson(url, body, { timeoutMs = 8000, headers = {} } = {}) {
   return new Promise((resolve) => {
     try {
@@ -2238,6 +2277,136 @@ async function handleNightFutures(req, res) {
   reply(res, 200, { ok: true, ...payload });
 }
 
+// ============================================================================
+// KRX 정보데이터시스템 — 연기금 일별 매매 (시장 전체)
+// ----------------------------------------------------------------------------
+// pykrx 의 투자자별_거래실적_전체시장_일별추이_상세 패턴.
+//   POST https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd
+//   bld = dbms/MDC/STAT/standard/MDCSTAT02203
+//   detailView=1 → 응답에 TRDVAL7 (연기금) 컬럼 노출.
+// 인증 불필요. 비공식 endpoint 라 KRX 가 변경 가능 — 실패 로그 모니터링 필요.
+// ----------------------------------------------------------------------------
+
+const KRX_API = 'https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd';
+const KRX_PENSION_TTL = 60 * 60 * 1000; // 1h
+
+function ymdNoDash(d) {
+  // KST 기준 YYYYMMDD.
+  const k = d.toLocaleString('sv', { timeZone: 'Asia/Seoul' }).slice(0, 10);
+  return k.replace(/-/g, '');
+}
+
+function parseKrxNumber(s) {
+  if (s == null) return null;
+  const t = String(s).replace(/,/g, '').trim();
+  if (!t || t === '-') return 0;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : null;
+}
+
+// 시장 전체 일별 투자자별 거래실적 (순매수 거래대금) → 연기금 컬럼만 추출.
+// market: 'STK' (KOSPI) / 'KSQ' (KOSDAQ) / 'ALL' (둘 다).
+async function fetchKrxPensionTrading(daysBack, market = 'ALL') {
+  const endDt = new Date();
+  const strtDt = new Date(Date.now() - daysBack * 86400_000);
+  const form = {
+    bld: 'dbms/MDC/STAT/standard/MDCSTAT02203',
+    locale: 'ko_KR',
+    strtDd: ymdNoDash(strtDt),
+    endDd: ymdNoDash(endDt),
+    mktId: market,
+    etf: 'EF',
+    etn: 'EN',
+    elw: 'ES',
+    inqTpCd: '2',
+    trdVolVal: '2',  // 거래대금
+    askBid: '3',     // 순매수
+    detailView: '1',
+    share: '1',
+    money: '1',
+    csvxls_isNo: 'false',
+  };
+  const r = await httpsPostForm(KRX_API, form, {
+    headers: {
+      'Referer': 'http://data.krx.co.kr/',
+      'User-Agent': BROWSER_UA,
+      'X-Requested-With': 'XMLHttpRequest',
+    },
+    timeoutMs: 12_000,
+  });
+  if (!r.ok) {
+    logLine('warn', 'krx.http', { market, status: r.status, err: r.error || null });
+    return { ok: false, reason: `KRX HTTP ${r.status}`, rows: [] };
+  }
+  try {
+    const j = JSON.parse(r.body);
+    const output = Array.isArray(j.output) ? j.output : [];
+    // 일별 행 — TRD_DD 가 거래일, TRDVAL7 이 연기금 순매수 거래대금.
+    // pykrx 가 검증한 응답 컬럼명. KRX 가 갱신해 키가 바뀌면 폴백 키도 시도.
+    const rows = output.map(rec => {
+      const dateStr = rec.TRD_DD || rec.trdDd || '';
+      const dateNorm = dateStr.includes('/') ? dateStr.replace(/\//g, '-')
+        : dateStr.includes('-') ? dateStr
+          : dateStr.length === 8 ? `${dateStr.slice(0,4)}-${dateStr.slice(4,6)}-${dateStr.slice(6,8)}`
+          : dateStr;
+      const netBuy = parseKrxNumber(rec.TRDVAL7 ?? rec.trdval7 ?? rec.PENSION ?? null);
+      return { date: dateNorm, netBuyValue: netBuy };
+    }).filter(r => r.date && r.netBuyValue != null);
+    // 최신순.
+    rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+    return { ok: true, rows };
+  } catch (e) {
+    logLine('warn', 'krx.parse', { market, err: String(e) });
+    return { ok: false, reason: 'KRX 응답 파싱 실패', rows: [] };
+  }
+}
+
+async function handleKrxPensionTrading(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  const url = new URL(req.url, 'http://x');
+  let daysBack = parseInt(url.searchParams.get('days') || '30', 10);
+  if (!Number.isFinite(daysBack) || daysBack < 1) daysBack = 30;
+  if (daysBack > 180) daysBack = 180;
+  const market = (url.searchParams.get('market') || 'ALL').toUpperCase();
+  const validMarket = ['STK', 'KSQ', 'ALL'].includes(market) ? market : 'ALL';
+
+  const cacheKey = `__krx-pension:${daysBack}:${validMarket}`;
+  const { entry, stale } = getStockCacheEntry(cacheKey, KRX_PENSION_TTL);
+  if (entry && !stale) {
+    return reply(res, 200, { ok: true, ...entry.payload, cached: true });
+  }
+  const result = await fetchKrxPensionTrading(daysBack, validMarket);
+  if (!result.ok || !result.rows.length) {
+    if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
+    return reply(res, 200, {
+      ok: false,
+      error: result.reason || 'KRX 응답 없음',
+      rows: [],
+      daysBack,
+      market: validMarket,
+    });
+  }
+  // 통계 — 매수 우세 일수 / 매도 우세 일수 / 누적 순매수.
+  let buyDays = 0, sellDays = 0, netSum = 0;
+  for (const r of result.rows) {
+    if (r.netBuyValue > 0) buyDays++;
+    else if (r.netBuyValue < 0) sellDays++;
+    netSum += r.netBuyValue;
+  }
+  const payload = {
+    rows: result.rows,
+    daysBack,
+    market: validMarket,
+    summary: { buyDays, sellDays, netSum },
+    source: 'krx',
+    sourceUrl: 'https://data.krx.co.kr/contents/MDC/MDI/mdiLoader/index.cmd?menuId=MDC0201020201',
+    ts: nowKST(),
+  };
+  writeStockCacheKey(cacheKey, payload);
+  logLine('info', 'krx.ok', { market: validMarket, days: daysBack, rowsCount: result.rows.length });
+  reply(res, 200, { ok: true, ...payload });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
@@ -2259,6 +2428,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/stock-search')  return await handleStockSearch(req, res);
     if (urlPath === '/api/stock-news')    return await handleStockNews(req, res);
     if (urlPath === '/api/pension-flows') return await handlePensionFlows(req, res);
+    if (urlPath === '/api/krx-pension-trading') return await handleKrxPensionTrading(req, res);
     if (urlPath === '/api/night-futures') return await handleNightFutures(req, res);
 
     // 기기 간 동기화 (텔레그램 봇 기반)
