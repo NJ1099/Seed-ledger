@@ -2327,7 +2327,60 @@ async function handleNightFutures(req, res) {
 // ----------------------------------------------------------------------------
 
 const KRX_API = 'https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd';
+const KRX_LOADER_URL = 'https://data.krx.co.kr/contents/MDC/MDI/outerLoader/index.cmd';
+const KRX_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
 const KRX_PENSION_TTL = 60 * 60 * 1000; // 1h
+const KRX_SESSION_TTL = 10 * 60 * 1000; // 10분
+
+// 세션 쿠키 캐시. pykrx 의 build_krx_session 패턴 — 먼저 outerLoader 페이지 GET 으로
+// JSESSIONID 받아두고 POST 요청에 Cookie 헤더로 동봉해야 KRX 가 400 안 줌.
+let krxSessionCache = null; // { cookie: 'JSESSIONID=...', expiresAt: ms }
+
+function fetchKrxSessionCookieOnce() {
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(KRX_LOADER_URL);
+      const opts = {
+        method: 'GET',
+        hostname: u.hostname,
+        path: u.pathname,
+        headers: {
+          'User-Agent': KRX_UA,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        },
+        timeout: 8000,
+      };
+      const req = https.request(opts, (r) => {
+        const setCookie = r.headers['set-cookie'] || [];
+        let cookieStr = '';
+        for (const c of setCookie) {
+          const m = String(c).match(/JSESSIONID=([^;]+)/i);
+          if (m) { cookieStr = `JSESSIONID=${m[1]}`; break; }
+        }
+        r.on('data', () => {}); // body 버림
+        r.on('end', () => resolve({ ok: !!cookieStr, cookie: cookieStr, status: r.statusCode || 0 }));
+      });
+      req.on('error', (e) => resolve({ ok: false, cookie: '', status: 0, error: String(e) }));
+      req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
+      req.end();
+    } catch (e) {
+      resolve({ ok: false, cookie: '', status: 0, error: String(e) });
+    }
+  });
+}
+
+async function getKrxSession() {
+  if (krxSessionCache && krxSessionCache.expiresAt > Date.now()) return krxSessionCache.cookie;
+  const r = await fetchKrxSessionCookieOnce();
+  if (r.ok && r.cookie) {
+    krxSessionCache = { cookie: r.cookie, expiresAt: Date.now() + KRX_SESSION_TTL };
+    logLine('info', 'krx.session.ok', { cookieLen: r.cookie.length });
+    return r.cookie;
+  }
+  logLine('warn', 'krx.session.fail', { status: r.status, err: r.error || null });
+  return '';
+}
 
 function ymdNoDash(d) {
   // KST 기준 YYYYMMDD.
@@ -2362,18 +2415,40 @@ async function fetchKrxPensionTradingSingle(daysBack, market) {
     askBid: '3',     // 순매수
     detailView: '1',
   };
-  // pykrx 가 보내는 정확한 Referer — KRX 가 일반 도메인 Referer 는 거절.
-  // outerLoader/index.cmd 경로를 명시해야 200 응답.
+  // pykrx 가 보내는 정확한 Referer + JSESSIONID Cookie. 쿠키 없으면 400.
+  const cookie = await getKrxSession();
   const r = await httpsPostForm(KRX_API, form, {
     headers: {
-      'Referer': 'https://data.krx.co.kr/contents/MDC/MDI/outerLoader/index.cmd',
-      'User-Agent': 'Mozilla/5.0',
+      'Referer': KRX_LOADER_URL,
+      'User-Agent': KRX_UA,
       'X-Requested-With': 'XMLHttpRequest',
       'Origin': 'https://data.krx.co.kr',
       'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+      ...(cookie ? { 'Cookie': cookie } : {}),
     },
     timeoutMs: 12_000,
   });
+  // 400 이면 세션 만료 가능성 — 캐시 무효화 후 한 번 더 시도.
+  if (r.status === 400 && cookie) {
+    krxSessionCache = null;
+    const cookie2 = await getKrxSession();
+    if (cookie2 && cookie2 !== cookie) {
+      const r2 = await httpsPostForm(KRX_API, form, {
+        headers: {
+          'Referer': KRX_LOADER_URL,
+          'User-Agent': KRX_UA,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Origin': 'https://data.krx.co.kr',
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Cookie': cookie2,
+        },
+        timeoutMs: 12_000,
+      });
+      Object.assign(r, r2);
+    }
+  }
   if (!r.ok) {
     const snippet = (r.body || '').slice(0, 200);
     logLine('warn', 'krx.http', { market, status: r.status, snippet, err: r.error || null });
