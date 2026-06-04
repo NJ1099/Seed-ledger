@@ -253,6 +253,40 @@ function httpsGet(url, { timeoutMs = 6000, headers = {} } = {}) {
   });
 }
 
+// POST + JSON body — hyperliquid /info 같은 RPC 스타일 엔드포인트용.
+function httpsPostJson(url, body, { timeoutMs = 8000, headers = {} } = {}) {
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(url);
+      const payload = Buffer.from(JSON.stringify(body), 'utf8');
+      const opts = {
+        method: 'POST',
+        hostname: u.hostname,
+        path: u.pathname + u.search,
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': payload.length,
+          'User-Agent': 'Mozilla/5.0 (seed-ledger/1.0)',
+          'Accept': 'application/json',
+          ...headers,
+        },
+        timeout: timeoutMs,
+      };
+      const req = https.request(opts, (r) => {
+        let data = '';
+        r.on('data', (c) => { data += c.toString('utf8'); });
+        r.on('end', () => resolve({ ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: data }));
+      });
+      req.on('error', (e) => resolve({ ok: false, status: 0, body: '', error: String(e) }));
+      req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
+      req.write(payload);
+      req.end();
+    } catch (e) {
+      resolve({ ok: false, status: 0, body: '', error: String(e) });
+    }
+  });
+}
+
 // 원본 바이트로 받아 charset 자동 디코딩 (네이버 finance.naver.com 같은 EUC-KR 페이지용).
 // Node 18+ 의 TextDecoder 가 'euc-kr' 라벨을 지원 (ICU full data 빌드).
 // 디코딩 실패 시 utf-8 폴백.
@@ -1275,6 +1309,39 @@ async function fetchStockSearch(q) {
     }
   }
 
+  // 4-bis차: finance.naver.com 검색 페이지 HTML 스크래핑 (EUC-KR).
+  // 사용자 요청: 다른 채널이 종목 못 찾을 때 finance.naver.com 의 통합 검색 결과로 폴백.
+  // 결과 페이지 구조: <a href="/item/main.naver?code=NNNNNN">종목명</a>
+  if (results.filter(r => r.type === 'stock_kr').length < 3) {
+    const url4b = `https://finance.naver.com/search/searchList.naver?query=${encodeURIComponent(q)}`;
+    const r4b = await httpsGetBuffer(url4b, {
+      headers: { 'Referer': 'https://finance.naver.com/', 'User-Agent': BROWSER_UA },
+      timeoutMs: 8000,
+    });
+    if (r4b.ok) {
+      try {
+        const html = r4b.body;
+        // 두 패턴 모두 시도: 일반 검색 결과 + 상단 추천 종목.
+        const re = /<a\s+href="\/item\/main\.naver\?code=(\d{6})"[^>]*>([^<]+)<\/a>/g;
+        let mm;
+        let added = 0;
+        while ((mm = re.exec(html)) && added < 10) {
+          const code = mm[1];
+          const name = stripTags(mm[2]).trim();
+          if (!name) continue;
+          // KOSPI/KOSDAQ 구분 정보는 페이지에 없을 수 있어서 기본 KOSPI.
+          push({ code, name, market: 'KOSPI', type: 'stock_kr' });
+          added++;
+        }
+        if (added) logLine('info', 'search.ok.finance', { q, added });
+      } catch (e) {
+        logLine('warn', 'search.parse.finance', { q, err: String(e) });
+      }
+    } else {
+      logLine('warn', 'search.http.finance', { q, status: r4b.status, err: r4b.error || null });
+    }
+  }
+
   // 4차: Yahoo Finance search (해외 보강)
   if (results.length < 8) {
     const url4 = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0`;
@@ -1364,8 +1431,8 @@ async function fetchNaverOpenApiNews(query, limit) {
   const csec = process.env.NAVER_CLIENT_SECRET;
   if (!cid || !csec) return null; // 키 없으면 폴백으로 진입
   const display = Math.max(1, Math.min(50, limit));
-  // sort=date 최신순. query 가 비면 '주식' 으로 디폴트.
-  const q = (query && query.trim()) || '주식 시황';
+  // sort=date 최신순. query 가 비면 '코스피' 로 디폴트 (한국 경제뉴스 거의 모두에 매칭).
+  const q = (query && query.trim()) || '코스피';
   const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(q)}&display=${display}&sort=date`;
   const r = await httpsGet(url, {
     headers: {
@@ -1435,13 +1502,73 @@ function extractSourceFromUrl(u) {
   } catch { return ''; }
 }
 
+// Google News RSS — 최종 폴백. 키 불필요, Render IP 차단 사례 없음.
+// 응답: RSS 2.0 XML. <description> 안에 원문 매체 링크가 <a href="..."> 로 들어가 있음.
+async function fetchGoogleNewsRss(query, limit) {
+  const q = (query && query.trim()) || '코스피 OR 코스닥 OR 주식시황';
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=ko&gl=KR&ceid=KR:ko`;
+  const r = await httpsGet(url, {
+    headers: { 'Referer': 'https://news.google.com/', 'User-Agent': BROWSER_UA, 'Accept': 'application/rss+xml, application/xml, */*' },
+    timeoutMs: 8000,
+  });
+  if (!r.ok) {
+    logLine('warn', 'news.gnews.http', { status: r.status, err: r.error || null });
+    return [];
+  }
+  try {
+    const xml = r.body;
+    const out = [];
+    const itemRe = /<item>([\s\S]*?)<\/item>/g;
+    let m;
+    while ((m = itemRe.exec(xml)) && out.length < limit) {
+      const inner = m[1];
+      const titleMatch = inner.match(/<title>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/);
+      const linkMatch = inner.match(/<link>([\s\S]*?)<\/link>/);
+      const pubMatch = inner.match(/<pubDate>([^<]+)<\/pubDate>/);
+      const srcMatch = inner.match(/<source[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/source>/);
+      const descMatch = inner.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/);
+      const title = stripTags(titleMatch ? titleMatch[1] : '');
+      const link = (linkMatch ? linkMatch[1] : '').trim();
+      let originalUrl = '';
+      if (descMatch) {
+        const hrefMatch = descMatch[1].match(/<a\s+href="([^"]+)"/i);
+        if (hrefMatch) originalUrl = hrefMatch[1].trim();
+      }
+      let publishedAt = '';
+      if (pubMatch) {
+        try { publishedAt = new Date(pubMatch[1].trim()).toISOString(); } catch {}
+      }
+      const finalUrl = safeNewsUrl(originalUrl) || safeNewsUrl(link);
+      if (!title || !finalUrl) continue;
+      out.push({
+        title,
+        summary: '',
+        source: srcMatch ? stripTags(srcMatch[1]) : (extractSourceFromUrl(finalUrl) || 'Google News'),
+        url: finalUrl,
+        publishedAt,
+        image: null,
+      });
+    }
+    if (out.length) {
+      logLine('info', 'news.gnews.ok', { count: out.length, query: q });
+    }
+    return out;
+  } catch (e) {
+    logLine('warn', 'news.gnews.parse', { err: String(e) });
+    return [];
+  }
+}
+
 async function fetchStockNews(limit, query) {
-  // 0차: 네이버 OpenAPI (키 있을 때 최우선)
+  // 네이버 검색 API 전용 — 사용자 명시 선호 (라운드 12-bis).
+  // 키 있을 때는 OpenAPI 결과만 사용한다 (빈 응답이어도 다른 매체로 폴백하지 않음).
+  // 다른 매체가 섞여 들어오는 걸 막기 위함.
   if (process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET) {
     const out = await fetchNaverOpenApiNews(query, limit);
-    if (out && out.length) return out;
+    return Array.isArray(out) ? out : [];
   }
 
+  // 키 미설정 시에만 폴백 체인 활성화.
   // 1차: api.stock.naver.com — stock.naver.com/news 페이지가 사용하는 정식 API.
   const candidates = [
     `https://api.stock.naver.com/news/main?pageSize=${limit}&page=1`,
@@ -1514,6 +1641,12 @@ async function fetchStockNews(limit, query) {
       logLine('warn', 'news.parse.html', { err: String(e) });
     }
   }
+
+  // 4차 (최종): Google News RSS — 키 불필요, 매우 안정적인 폴백.
+  // 1-3차가 모두 빈 응답이거나 차단되는 환경(Render 등)에서도 동작.
+  const gout = await fetchGoogleNewsRss(query, limit);
+  if (gout && gout.length) return gout;
+
   return [];
 }
 
@@ -1705,7 +1838,30 @@ async function fetchPensionFlows(daysBack) {
   }
   // 최신 보고 우선.
   rows.sort((a, b) => (b.rceptDt || '').localeCompare(a.rceptDt || ''));
-  return { ok: true, rows, totalReports: list.length, daysBack };
+
+  // 종목별 최신 보유 정보 → 도넛 차트용 holdings 배열.
+  // 같은 corpName 의 여러 보고가 있으면 가장 최근 rceptDt 의 값을 채택.
+  // holdingQty / holdingRate 가 둘 다 없는 종목은 제외.
+  const byCorp = new Map();
+  for (const r of rows) {
+    if (!r.corpName) continue;
+    const key = r.corpName;
+    const prev = byCorp.get(key);
+    const isNewer = !prev || (r.rceptDt || '').localeCompare(prev.rceptDt || '') > 0;
+    if (isNewer && (r.holdingQty != null || r.holdingRate != null)) {
+      byCorp.set(key, {
+        corpName: r.corpName,
+        stockCode: r.stockCode,
+        holdingQty: r.holdingQty,
+        holdingRate: r.holdingRate,
+        rceptDt: r.rceptDt,
+      });
+    }
+  }
+  const holdings = Array.from(byCorp.values())
+    .sort((a, b) => (b.holdingRate || 0) - (a.holdingRate || 0));
+
+  return { ok: true, rows, holdings, totalReports: list.length, daysBack };
 }
 
 async function handlePensionFlows(req, res) {
@@ -1730,12 +1886,107 @@ async function handlePensionFlows(req, res) {
   if (!result.ok) {
     return reply(res, 200, { ok: false, error: result.reason || 'DART 호출 실패', rows: [] });
   }
-  const payload = { rows: result.rows, totalReports: result.totalReports, daysBack, ts: nowKST() };
+  const payload = {
+    rows: result.rows,
+    holdings: result.holdings || [],
+    totalReports: result.totalReports,
+    daysBack,
+    ts: nowKST(),
+  };
   if (result.rows.length || result.totalReports > 0) {
     writeStockCacheKey(cacheKey, payload);
     logLine('info', 'pension.ok', { count: result.rows.length, totalReports: result.totalReports });
   } else {
     logLine('warn', 'pension.empty', { daysBack });
+    if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
+  }
+  reply(res, 200, { ok: true, ...payload });
+}
+
+// ============================================================================
+// Hyperliquid — 삼성·SK하이닉스 야간선물 (HIP-3 RWA perp)
+// ----------------------------------------------------------------------------
+// app.hyperliquid.xyz/trade/xyz:SAMSUNG, :SKHYNIX 의 mark price 를 받아온다.
+// HIP-3 빌더 DEX 형식: { type:'metaAndAssetCtxs', dex:'xyz' }.
+// 메인 DEX 에도 있을 수 있어 둘 다 시도. universe[i].name 매칭 후 ctxs[i] 가격.
+// 키 불필요. TTL 30초.
+// ----------------------------------------------------------------------------
+
+const HYPERLIQUID_API = 'https://api.hyperliquid.xyz/info';
+const HYPERLIQUID_TTL = 30_000;
+const HYPERLIQUID_SYMBOLS = ['SAMSUNG', 'SKHYNIX'];
+const HYPERLIQUID_BUILDER = 'xyz';
+
+async function fetchHyperliquidPerp() {
+  // 1) HIP-3 'xyz' builder DEX (URL 패턴이 xyz:SAMSUNG 이므로 우선 시도)
+  // 2) 메인 DEX (혹시 등록되어 있으면)
+  const attempts = [
+    { type: 'metaAndAssetCtxs', dex: HYPERLIQUID_BUILDER },
+    { type: 'metaAndAssetCtxs' },
+  ];
+  const aggregated = {};
+  for (const body of attempts) {
+    const r = await httpsPostJson(HYPERLIQUID_API, body, {
+      headers: { 'Referer': 'https://app.hyperliquid.xyz/' },
+      timeoutMs: 8000,
+    });
+    if (!r.ok) {
+      logLine('warn', 'hl.http', { dex: body.dex || 'main', status: r.status, err: r.error || null });
+      continue;
+    }
+    try {
+      const j = JSON.parse(r.body);
+      if (!Array.isArray(j) || j.length < 2) continue;
+      const universe = Array.isArray(j[0]?.universe) ? j[0].universe : [];
+      const ctxs = Array.isArray(j[1]) ? j[1] : [];
+      for (const sym of HYPERLIQUID_SYMBOLS) {
+        if (aggregated[sym]) continue; // 첫 번째 매치 우선
+        const idx = universe.findIndex(u => String(u.name || '').toUpperCase() === sym);
+        if (idx < 0 || !ctxs[idx]) continue;
+        const c = ctxs[idx];
+        const markPx = Number(c.markPx);
+        const prevDayPx = Number(c.prevDayPx);
+        aggregated[sym] = {
+          markPx: Number.isFinite(markPx) ? markPx : null,
+          oraclePx: c.oraclePx != null ? Number(c.oraclePx) : null,
+          prevDayPx: Number.isFinite(prevDayPx) ? prevDayPx : null,
+          midPx: c.midPx != null ? Number(c.midPx) : null,
+          funding: c.funding != null ? Number(c.funding) : null,
+          openInterest: c.openInterest != null ? Number(c.openInterest) : null,
+          dayNtlVlm: c.dayNtlVlm != null ? Number(c.dayNtlVlm) : null,
+          dex: body.dex || 'main',
+        };
+      }
+    } catch (e) {
+      logLine('warn', 'hl.parse', { dex: body.dex || 'main', err: String(e) });
+    }
+    if (Object.keys(aggregated).length === HYPERLIQUID_SYMBOLS.length) break;
+  }
+  return aggregated;
+}
+
+async function handleNightFutures(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  const cacheKey = '__hl_night';
+  const { entry, stale } = getStockCacheEntry(cacheKey, HYPERLIQUID_TTL);
+  if (entry && !stale) {
+    return reply(res, 200, { ok: true, ...entry.payload, cached: true });
+  }
+  const symbols = await fetchHyperliquidPerp();
+  const payload = {
+    symbols,
+    sources: {
+      SAMSUNG: `https://app.hyperliquid.xyz/trade/${HYPERLIQUID_BUILDER}:SAMSUNG`,
+      SKHYNIX: `https://app.hyperliquid.xyz/trade/${HYPERLIQUID_BUILDER}:SKHYNIX`,
+    },
+    labels: { SAMSUNG: '삼성전자', SKHYNIX: 'SK하이닉스' },
+    ts: nowKST(),
+  };
+  if (Object.keys(symbols || {}).length) {
+    writeStockCacheKey(cacheKey, payload);
+    logLine('info', 'hl.ok', { found: Object.keys(symbols) });
+  } else {
+    logLine('warn', 'hl.empty', {});
     if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
   }
   reply(res, 200, { ok: true, ...payload });
@@ -1762,6 +2013,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/stock-search')  return await handleStockSearch(req, res);
     if (urlPath === '/api/stock-news')    return await handleStockNews(req, res);
     if (urlPath === '/api/pension-flows') return await handlePensionFlows(req, res);
+    if (urlPath === '/api/night-futures') return await handleNightFutures(req, res);
 
     // 기기 간 동기화 (텔레그램 봇 기반)
     if (urlPath === '/api/sync/status')      return await handleSyncStatus(req, res);

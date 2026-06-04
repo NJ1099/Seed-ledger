@@ -5516,19 +5516,21 @@ function stockTimeAgo(iso) {
 }
 
 function renderStock() {
-  // 5개 API 병렬 호출
+  // 6개 API 병렬 호출
   loadIndices();
+  loadNightFutures();
   loadMovers();
   loadNews();
   loadPensionFlows();
   setupPensionRange();
   const el = $('#stock-updated-at');
   if (el) el.textContent = `${nowKSTDisplay()} 갱신`;
-  // 5분 폴링 (연기금은 24h TTL 이라 같이 호출해도 캐시 hit)
+  // 5분 폴링 (연기금은 24h TTL, hyperliquid 는 30s TTL — 같이 호출해도 캐시가 흡수)
   stopStockRefresh();
   state.stockRefreshTimer = setInterval(() => {
     if (state.tab === 'stock') {
       loadIndices();
+      loadNightFutures();
       loadMovers();
       loadNews();
       const el2 = $('#stock-updated-at');
@@ -5585,6 +5587,65 @@ function fillIndicesGrid(indices) {
   grid.innerHTML = html;
 }
 
+// ============ 야간선물 (Hyperliquid HIP-3 RWA perp) ============
+
+async function loadNightFutures() {
+  try {
+    const r = await stockApiGet('/api/night-futures');
+    if (r && r.ok) fillNightFutures(r.symbols || {}, r.sources || {});
+    else fillNightFutures({}, {});
+  } catch (e) {
+    console.warn('[stock] night-futures fetch failed', e);
+    fillNightFutures({}, {});
+  }
+}
+
+function fillNightFutures(symbols, sources) {
+  for (const sym of ['SAMSUNG', 'SKHYNIX']) {
+    const card = document.getElementById(`night-card-${sym}`);
+    if (!card) continue;
+    const data = symbols[sym];
+    const priceEl = card.querySelector('.night-price');
+    const changeEl = card.querySelector('.night-change');
+    const src = sources[sym];
+    if (src) card.setAttribute('href', src);
+    if (!data || data.markPx == null) {
+      card.classList.add('loading');
+      if (priceEl) priceEl.textContent = '—';
+      if (changeEl) { changeEl.textContent = '데이터 없음'; changeEl.classList.remove('up', 'down'); }
+      continue;
+    }
+    card.classList.remove('loading');
+    if (priceEl) priceEl.textContent = formatHlPrice(data.markPx);
+    if (changeEl) {
+      changeEl.classList.remove('up', 'down');
+      while (changeEl.firstChild) changeEl.removeChild(changeEl.firstChild);
+      if (data.prevDayPx != null && data.prevDayPx > 0) {
+        const pct = ((data.markPx - data.prevDayPx) / data.prevDayPx) * 100;
+        const dir = pct >= 0 ? 'up' : 'down';
+        const arrow = pct >= 0 ? '▲' : '▼';
+        const sign = pct >= 0 ? '+' : '';
+        changeEl.classList.add(dir);
+        changeEl.appendChild(document.createTextNode(`${arrow} ${sign}${pct.toFixed(2)}% `));
+        const sub = document.createElement('span');
+        sub.className = 'muted';
+        sub.textContent = `(전일 ${formatHlPrice(data.prevDayPx)})`;
+        changeEl.appendChild(sub);
+      } else {
+        changeEl.textContent = '전일 대비 데이터 없음';
+      }
+    }
+  }
+}
+
+function formatHlPrice(n) {
+  if (n == null || !isFinite(n)) return '—';
+  if (n >= 10000) return Math.round(n).toLocaleString('ko-KR');
+  if (n >= 100)   return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  if (n >= 1)     return n.toLocaleString('en-US', { maximumFractionDigits: 3 });
+  return n.toLocaleString('en-US', { maximumFractionDigits: 5 });
+}
+
 async function loadMovers() {
   const market = state.stockMarket || 'kr';
   try {
@@ -5631,16 +5692,18 @@ function fillMoverList(el, items, dir, note) {
 }
 
 // 검색 결과 / mover 클릭 시 이동할 네이버 증권 URL 생성.
-// 국내 6자리 코드: 종목 상세 페이지로 직접.
-// 해외 NASDAQ: .O 접미사. NYSE: .K. 알 수 없으면 검색 페이지로.
+// 국내 종목: finance.naver.com/item/main.naver — 우선주·ETF 포함 거의 모든 종목 등록
+//          (stock.naver.com 의 도메스틱 페이지는 일부 종목에서 "없는 종목" 표시).
+// 해외 NASDAQ: .O / NYSE: .K / AMEX: .A 접미사 (stock.naver.com).
+// 알 수 없으면 finance.naver.com 통합 검색으로.
 function buildNaverStockUrl(item) {
-  if (!item) return 'https://stock.naver.com/';
+  if (!item) return 'https://finance.naver.com/';
   const code = String(item.code || '').trim();
   const name = String(item.name || '').trim();
   const market = String(item.market || '').toUpperCase();
   const type = item.type || (/^\d{6}$/.test(code) ? 'stock_kr' : 'stock_us');
   if (type === 'stock_kr' && /^\d{6}$/.test(code)) {
-    return `https://stock.naver.com/domestic/stock/${code}/total`;
+    return `https://finance.naver.com/item/main.naver?code=${code}`;
   }
   if (type === 'stock_us' && code) {
     if (market === 'NASDAQ') return `https://stock.naver.com/worldstock/stock/${code}.O/total`;
@@ -5649,8 +5712,8 @@ function buildNaverStockUrl(item) {
     // 거래소 모르면 NASDAQ 우선 시도 (대부분 .O 로 redirect 됨)
     return `https://stock.naver.com/worldstock/stock/${code}.O/total`;
   }
-  // 알 수 없는 경우 — 네이버 증권 통합검색으로.
-  return `https://stock.naver.com/search?query=${encodeURIComponent(name || code)}`;
+  // 알 수 없는 경우 — finance.naver.com 통합검색으로.
+  return `https://finance.naver.com/search/searchList.naver?query=${encodeURIComponent(name || code)}`;
 }
 
 function setupMarketToggle() {
@@ -5924,6 +5987,13 @@ function buildNaverStockUrlFromCode(stockCode, corpName) {
   return `https://stock.naver.com/search?query=${encodeURIComponent(corpName || stockCode || '')}`;
 }
 
+// 도넛 차트용 색상 — Liquid Ledger 톤(파스텔 한국 빨/파/그린/옐로) + 보조 색.
+const PENSION_DONUT_COLORS = [
+  '#3182F6', '#F04452', '#5BE0B8', '#FFC93C', '#9B7CE5',
+  '#F08E5B', '#5BB7F0', '#E07CB5', '#7CE0A0', '#E0CB7C',
+  '#A0A0A0', '#506B85', '#8FA8C8', '#C8728F', '#6FB89E',
+];
+
 function fillPensionTable(payload) {
   const out = $('#pension-wrap');
   if (!out) return;
@@ -5992,7 +6062,137 @@ function fillPensionTable(payload) {
         }).join('')}
       </tbody>
     </table>`;
-  out.innerHTML = summaryHtml + tableHtml;
+  // 도넛: 종목별 holdingQty 비중 (상위 12개 + '기타').
+  const holdings = Array.isArray(payload.holdings) ? payload.holdings : [];
+  const donutHtml = holdings.length ? buildPensionDonutHtml(holdings) : '';
+  out.innerHTML = summaryHtml + donutHtml + tableHtml;
+  if (donutHtml) renderPensionDonut(holdings);
+}
+
+function buildPensionDonutHtml(holdings) {
+  const total = holdings.length;
+  return `
+    <div class="pension-holdings">
+      <div class="pension-holdings-title">국민연금 보유 종목 (5% 이상)</div>
+      <div class="pension-holdings-sub">최근 공시 기준 종목별 보유 주식수 비중 · 총 ${esc(String(total))}개 종목</div>
+      <div class="pension-holdings-body">
+        <div class="pension-doughnut-wrap">
+          <canvas id="pension-donut-canvas"></canvas>
+          <div class="pension-doughnut-center">
+            <div class="pdc-lab">종목수</div>
+            <div class="pdc-val">${esc(String(total))}</div>
+            <div class="pdc-sub">5% 이상 보유</div>
+          </div>
+        </div>
+        <div class="pension-legend" id="pension-donut-legend"></div>
+      </div>
+    </div>`;
+}
+
+function renderPensionDonut(holdings) {
+  const canvas = document.getElementById('pension-donut-canvas');
+  const legend = document.getElementById('pension-donut-legend');
+  if (!canvas || typeof Chart === 'undefined') return;
+
+  // holdingQty 가 없는 항목은 holdingRate × 임의값으로 대체 (시각화용)
+  const withQty = holdings.map(h => ({
+    ...h,
+    weight: (h.holdingQty != null && h.holdingQty > 0)
+      ? h.holdingQty
+      : (h.holdingRate != null ? h.holdingRate * 1e6 : 0),
+  })).filter(h => h.weight > 0);
+
+  if (!withQty.length) return;
+
+  // 상위 12개 + 그 외 '기타' 합산
+  const TOP_N = 12;
+  let labels, values, codes, rates;
+  if (withQty.length > TOP_N) {
+    const top = withQty.slice(0, TOP_N);
+    const rest = withQty.slice(TOP_N);
+    const restSum = rest.reduce((s, h) => s + h.weight, 0);
+    labels = top.map(h => h.corpName).concat(['기타']);
+    values = top.map(h => h.weight).concat([restSum]);
+    codes  = top.map(h => h.stockCode || '').concat(['']);
+    rates  = top.map(h => h.holdingRate).concat([null]);
+  } else {
+    labels = withQty.map(h => h.corpName);
+    values = withQty.map(h => h.weight);
+    codes  = withQty.map(h => h.stockCode || '');
+    rates  = withQty.map(h => h.holdingRate);
+  }
+  const colors = labels.map((_, i) => PENSION_DONUT_COLORS[i % PENSION_DONUT_COLORS.length]);
+  const totalW = values.reduce((s, v) => s + v, 0);
+
+  // 기존 차트 파괴 (탭 재진입/기간 변경 시 누수 방지)
+  if (state.charts && state.charts.pensionDonut) {
+    try { state.charts.pensionDonut.destroy(); } catch {}
+  }
+  state.charts = state.charts || {};
+
+  state.charts.pensionDonut = new Chart(canvas.getContext('2d'), {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data: values,
+        backgroundColor: colors,
+        borderColor: '#fff',
+        borderWidth: 2,
+        hoverOffset: 6,
+      }],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (ctx) => {
+              const v = ctx.parsed;
+              const pct = totalW > 0 ? (v / totalW) * 100 : 0;
+              const rate = rates[ctx.dataIndex];
+              const rateStr = rate != null ? ` · 지분율 ${rate.toFixed(2)}%` : '';
+              return `${ctx.label}: ${pct.toFixed(1)}%${rateStr}`;
+            },
+          },
+        },
+      },
+    },
+  });
+
+  // 범례 — DOM 노드로 안전하게 구성 (XSS 방지)
+  if (legend) {
+    while (legend.firstChild) legend.removeChild(legend.firstChild);
+    labels.forEach((label, i) => {
+      const code = codes[i];
+      const rate = rates[i];
+      const pct = totalW > 0 ? (values[i] / totalW) * 100 : 0;
+      const row = document.createElement('a');
+      row.className = 'pension-legend-row';
+      const href = safeHttpUrl(buildNaverStockUrlFromCode(code, label));
+      if (href && label !== '기타') {
+        row.href = href;
+        row.target = '_blank';
+        row.rel = 'noopener noreferrer';
+      }
+      const sw = document.createElement('span');
+      sw.className = 'pl-swatch';
+      sw.style.background = colors[i];
+      const nm = document.createElement('span');
+      nm.className = 'pl-name';
+      nm.textContent = label;
+      const rt = document.createElement('span');
+      rt.className = 'pl-rate';
+      rt.textContent = rate != null ? `${rate.toFixed(2)}% · ${pct.toFixed(1)}%` : `${pct.toFixed(1)}%`;
+      row.appendChild(sw);
+      row.appendChild(nm);
+      row.appendChild(rt);
+      legend.appendChild(row);
+    });
+  }
 }
 
 window.addEventListener('DOMContentLoaded', boot);
