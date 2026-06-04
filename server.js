@@ -2468,19 +2468,16 @@ async function handleKrxPensionTrading(req, res) {
   reply(res, 200, { ok: true, ...payload });
 }
 
-// 환경변수 등록 상태 확인 — 값은 노출하지 않고 boolean + 길이만.
+// 사용자가 새 환경변수 등록 후 활성 여부를 확인할 수 있도록 boolean 만 노출.
+// 민감 키(NAVER_CLIENT_SECRET / ANTHROPIC_API_KEY / TELEGRAM_BOT_TOKEN) 는 응답에서 제외.
+// 길이 노출도 형식 추측 단서가 되므로 제거. 이 endpoint 는 셋업 확인 후 제거 가능.
 async function handleConfigStatus(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
-  const len = (k) => ((process.env[k] || '').trim().length) || 0;
   reply(res, 200, {
     ok: true,
     keys: {
-      NAVER_CLIENT_ID:        { set: !!(process.env.NAVER_CLIENT_ID || '').trim(),     length: len('NAVER_CLIENT_ID') },
-      NAVER_CLIENT_SECRET:    { set: !!(process.env.NAVER_CLIENT_SECRET || '').trim(), length: len('NAVER_CLIENT_SECRET') },
-      DART_API_KEY:           { set: dartConfigured(),                                 length: len('DART_API_KEY') },
-      DATA_GO_KR_SERVICE_KEY: { set: !!(process.env.DATA_GO_KR_SERVICE_KEY || '').trim(), length: len('DATA_GO_KR_SERVICE_KEY') },
-      ANTHROPIC_API_KEY:      { set: !!(process.env.ANTHROPIC_API_KEY || '').trim(),   length: len('ANTHROPIC_API_KEY') },
-      TELEGRAM_BOT_TOKEN:     { set: !!(process.env.TELEGRAM_BOT_TOKEN || '').trim(),  length: len('TELEGRAM_BOT_TOKEN') },
+      DART_API_KEY:           dartConfigured(),
+      DATA_GO_KR_SERVICE_KEY: !!(process.env.DATA_GO_KR_SERVICE_KEY || '').trim(),
     },
     ts: nowKST(),
   });
