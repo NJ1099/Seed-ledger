@@ -5592,15 +5592,15 @@ function fillIndicesGrid(indices) {
 async function loadNightFutures() {
   try {
     const r = await stockApiGet('/api/night-futures');
-    if (r && r.ok) fillNightFutures(r.symbols || {}, r.sources || {}, r.diagnostics);
-    else fillNightFutures({}, {}, null);
+    if (r && r.ok) fillNightFutures(r.symbols || {}, r.sources || {}, r.units || {}, r.diagnostics);
+    else fillNightFutures({}, {}, {}, null);
   } catch (e) {
     console.warn('[stock] night-futures fetch failed', e);
-    fillNightFutures({}, {}, null);
+    fillNightFutures({}, {}, {}, null);
   }
 }
 
-function fillNightFutures(symbols, sources, diagnostics) {
+function fillNightFutures(symbols, sources, units, diagnostics) {
   for (const sym of ['SAMSUNG', 'SKHYNIX']) {
     const card = document.getElementById(`night-card-${sym}`);
     if (!card) continue;
@@ -5614,17 +5614,25 @@ function fillNightFutures(symbols, sources, diagnostics) {
       card.classList.add('loading');
       if (priceEl) priceEl.textContent = '—';
       if (changeEl) { changeEl.textContent = '데이터 없음'; changeEl.classList.remove('up', 'down'); }
-      // 진단정보를 풋노트에 표시 (개발자가 원인 추적할 수 있도록)
       if (footEl && diagnostics) {
-        const dexs = (diagnostics.builderDexs || []).join(', ');
-        const tried = (diagnostics.triedDexs || []).join('→');
-        footEl.textContent = dexs
-          ? `Hyperliquid 빌더 DEX [${dexs}] 에서 미발견 (시도: ${tried})`
-          : 'Hyperliquid 응답 비어있음 — 잠시 후 새로고침';
+        const errs = Array.isArray(diagnostics.errors) ? diagnostics.errors : [];
+        const notFound = errs.find(e => e && e.key === sym && e.err === 'not-found-in-universe');
+        const httpErr  = errs.find(e => e && e.status);
+        if (notFound) {
+          footEl.textContent = `Hyperliquid universe 에서 ${notFound.universeName} 미발견 — 자산명 변경 가능성`;
+        } else if (httpErr) {
+          footEl.textContent = `Hyperliquid 응답 실패 (HTTP ${httpErr.status}) — 잠시 후 새로고침`;
+        } else {
+          footEl.textContent = 'Hyperliquid 응답 없음 — 잠시 후 새로고침';
+        }
       }
       continue;
     }
-    if (footEl) footEl.textContent = `Hyperliquid 야간선물 (${data.dex || 'main'}${data.universeName ? ' · ' + data.universeName : ''}) →`;
+    if (footEl) {
+      const unit = units[sym] || data.unit || '';
+      const uname = data.universeName || '';
+      footEl.textContent = `Hyperliquid ${uname}${unit ? ' · ' + unit : ''} (ADR 기준) →`;
+    }
     card.classList.remove('loading');
     if (priceEl) priceEl.textContent = formatHlPrice(data.markPx);
     if (changeEl) {
@@ -5650,10 +5658,10 @@ function fillNightFutures(symbols, sources, diagnostics) {
 
 function formatHlPrice(n) {
   if (n == null || !isFinite(n)) return '—';
-  if (n >= 10000) return Math.round(n).toLocaleString('ko-KR');
-  if (n >= 100)   return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
-  if (n >= 1)     return n.toLocaleString('en-US', { maximumFractionDigits: 3 });
-  return n.toLocaleString('en-US', { maximumFractionDigits: 5 });
+  // Hyperliquid xyz: 자산은 USD ADR 가격 — '$' prefix + 소수점 2자리.
+  if (n >= 1000)  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  if (n >= 1)     return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return '$' + n.toLocaleString('en-US', { maximumFractionDigits: 4 });
 }
 
 async function loadMovers() {

@@ -1937,108 +1937,66 @@ async function handlePensionFlows(req, res) {
 
 const HYPERLIQUID_API = 'https://api.hyperliquid.xyz/info';
 const HYPERLIQUID_TTL = 30_000;
-const HYPERLIQUID_SYMBOLS = ['SAMSUNG', 'SKHYNIX'];
 const HYPERLIQUID_BUILDER = 'xyz';
+// URL 슬러그(사용자 페이지) ≠ universe asset 이름 (Hyperliquid 내부).
+// 라운드 12-tri 확정: SAMSUNG → SMSN (Samsung ADR 티커), SKHYNIX → SKHX.
+// app.hyperliquid.xyz 가 URL 에는 친숙한 별칭을 쓰지만 실제 perp 이름은 ADR 티커.
+const HYPERLIQUID_ASSETS = [
+  { key: 'SAMSUNG', universeName: 'xyz:SMSN', urlSlug: 'xyz:SAMSUNG', label: '삼성전자',  unit: 'USD' },
+  { key: 'SKHYNIX', universeName: 'xyz:SKHX', urlSlug: 'xyz:SKHYNIX', label: 'SK하이닉스', unit: 'USD' },
+];
 
-// HIP-3 builder DEX 목록 조회. 응답: [null, { name, fullName, deployer, ... }, ...]
-// 첫 원소는 default(main) DEX placeholder. null/빈 객체 필터링.
-async function fetchHyperliquidPerpDexs() {
-  const r = await httpsPostJson(HYPERLIQUID_API, { type: 'perpDexs' }, {
+async function fetchHyperliquidPerp() {
+  const aggregated = {};
+  const diagnostics = { triedDexs: [], errors: [] };
+
+  // 1) HIP-3 'xyz' builder DEX 의 metaAndAssetCtxs — 라운드 12-tri 의 검증된 정답.
+  const body = { type: 'metaAndAssetCtxs', dex: HYPERLIQUID_BUILDER };
+  diagnostics.triedDexs.push(HYPERLIQUID_BUILDER);
+  const r = await httpsPostJson(HYPERLIQUID_API, body, {
     headers: { 'Referer': 'https://app.hyperliquid.xyz/' },
     timeoutMs: 8000,
   });
   if (!r.ok) {
-    logLine('warn', 'hl.perpDexs.http', { status: r.status, err: r.error || null });
-    return [];
+    logLine('warn', 'hl.http', { dex: HYPERLIQUID_BUILDER, status: r.status, err: r.error || null });
+    diagnostics.errors.push({ dex: HYPERLIQUID_BUILDER, status: r.status });
+    return { symbols: aggregated, diagnostics };
   }
   try {
     const j = JSON.parse(r.body);
-    if (!Array.isArray(j)) return [];
-    return j
-      .filter(it => it && typeof it === 'object' && it.name)
-      .map(it => String(it.name));
-  } catch (e) {
-    logLine('warn', 'hl.perpDexs.parse', { err: String(e) });
-    return [];
-  }
-}
-
-// HIP-3 빌더 DEX 의 universe[i].name 은 "{dex}:{symbol}" 형태 (예: "xyz:SAMSUNG").
-// 매칭은 대소문자 무시 + 정확 일치 또는 ":{symbol}" 접미사 매칭.
-function matchPerpSymbol(universeName, symbol) {
-  const n = String(universeName || '').toUpperCase();
-  const s = String(symbol || '').toUpperCase();
-  if (!n || !s) return false;
-  return n === s || n.endsWith(':' + s) || n.endsWith('-' + s);
-}
-
-async function fetchHyperliquidPerp() {
-  const aggregated = {};
-  const diagnostics = { triedDexs: [], errors: [], universeSamples: [] };
-
-  // 1) perpDexs 로 모든 빌더 DEX 이름 가져오기
-  const builderDexs = await fetchHyperliquidPerpDexs();
-  diagnostics.builderDexs = builderDexs;
-
-  // 시도 순서: 알려진 'xyz' 우선 → 발견된 다른 builder DEX → 메인 DEX
-  const tryList = [];
-  const builderSet = new Set(builderDexs.map(s => s.toLowerCase()));
-  if (builderSet.has(HYPERLIQUID_BUILDER)) tryList.push({ dex: HYPERLIQUID_BUILDER });
-  for (const d of builderDexs) {
-    if (d.toLowerCase() !== HYPERLIQUID_BUILDER) tryList.push({ dex: d });
-  }
-  // perpDexs 가 빈 경우 (API 변경) 'xyz' 와 메인 둘 다 시도
-  if (!builderDexs.length) tryList.push({ dex: HYPERLIQUID_BUILDER });
-  tryList.push({}); // 메인 DEX (dex 파라미터 없음)
-
-  for (const opt of tryList) {
-    const body = { type: 'metaAndAssetCtxs', ...(opt.dex ? { dex: opt.dex } : {}) };
-    const dexLabel = opt.dex || 'main';
-    diagnostics.triedDexs.push(dexLabel);
-    const r = await httpsPostJson(HYPERLIQUID_API, body, {
-      headers: { 'Referer': 'https://app.hyperliquid.xyz/' },
-      timeoutMs: 8000,
-    });
-    if (!r.ok) {
-      logLine('warn', 'hl.http', { dex: dexLabel, status: r.status, err: r.error || null });
-      diagnostics.errors.push({ dex: dexLabel, status: r.status });
-      continue;
+    if (!Array.isArray(j) || j.length < 2) {
+      diagnostics.errors.push({ dex: HYPERLIQUID_BUILDER, err: 'unexpected response shape' });
+      return { symbols: aggregated, diagnostics };
     }
-    try {
-      const j = JSON.parse(r.body);
-      if (!Array.isArray(j) || j.length < 2) continue;
-      const universe = Array.isArray(j[0]?.universe) ? j[0].universe : [];
-      const ctxs = Array.isArray(j[1]) ? j[1] : [];
-      // 진단용 — 처음 5개 universe.name 샘플
-      diagnostics.universeSamples.push({
-        dex: dexLabel,
-        size: universe.length,
-        firstNames: universe.slice(0, 5).map(u => u?.name).filter(Boolean),
-      });
-      for (const sym of HYPERLIQUID_SYMBOLS) {
-        if (aggregated[sym]) continue;
-        const idx = universe.findIndex(u => matchPerpSymbol(u?.name, sym));
-        if (idx < 0 || !ctxs[idx]) continue;
-        const c = ctxs[idx];
-        const markPx = Number(c.markPx);
-        const prevDayPx = Number(c.prevDayPx);
-        aggregated[sym] = {
-          markPx: Number.isFinite(markPx) ? markPx : null,
-          oraclePx: c.oraclePx != null ? Number(c.oraclePx) : null,
-          prevDayPx: Number.isFinite(prevDayPx) ? prevDayPx : null,
-          midPx: c.midPx != null ? Number(c.midPx) : null,
-          funding: c.funding != null ? Number(c.funding) : null,
-          openInterest: c.openInterest != null ? Number(c.openInterest) : null,
-          dayNtlVlm: c.dayNtlVlm != null ? Number(c.dayNtlVlm) : null,
-          universeName: String(universe[idx].name || ''),
-          dex: dexLabel,
-        };
+    const universe = Array.isArray(j[0]?.universe) ? j[0].universe : [];
+    const ctxs = Array.isArray(j[1]) ? j[1] : [];
+    diagnostics.universeSize = universe.length;
+    for (const asset of HYPERLIQUID_ASSETS) {
+      // exact match on universeName (예: 'xyz:SMSN').
+      const idx = universe.findIndex(u => String(u?.name || '') === asset.universeName);
+      if (idx < 0 || !ctxs[idx]) {
+        diagnostics.errors.push({ key: asset.key, universeName: asset.universeName, err: 'not-found-in-universe' });
+        continue;
       }
-    } catch (e) {
-      logLine('warn', 'hl.parse', { dex: dexLabel, err: String(e) });
-      diagnostics.errors.push({ dex: dexLabel, parseErr: String(e) });
+      const c = ctxs[idx];
+      const markPx = Number(c.markPx);
+      const prevDayPx = Number(c.prevDayPx);
+      aggregated[asset.key] = {
+        markPx: Number.isFinite(markPx) ? markPx : null,
+        oraclePx: c.oraclePx != null ? Number(c.oraclePx) : null,
+        prevDayPx: Number.isFinite(prevDayPx) ? prevDayPx : null,
+        midPx: c.midPx != null ? Number(c.midPx) : null,
+        funding: c.funding != null ? Number(c.funding) : null,
+        openInterest: c.openInterest != null ? Number(c.openInterest) : null,
+        dayNtlVlm: c.dayNtlVlm != null ? Number(c.dayNtlVlm) : null,
+        universeName: asset.universeName,
+        unit: asset.unit,
+        dex: HYPERLIQUID_BUILDER,
+      };
     }
-    if (Object.keys(aggregated).length === HYPERLIQUID_SYMBOLS.length) break;
+  } catch (e) {
+    logLine('warn', 'hl.parse', { dex: HYPERLIQUID_BUILDER, err: String(e) });
+    diagnostics.errors.push({ dex: HYPERLIQUID_BUILDER, parseErr: String(e) });
   }
   return { symbols: aggregated, diagnostics };
 }
@@ -2052,13 +2010,16 @@ async function handleNightFutures(req, res) {
   }
   const result = await fetchHyperliquidPerp();
   const symbols = result.symbols || {};
+  const sources = {};
+  const labels = {};
+  const units = {};
+  for (const a of HYPERLIQUID_ASSETS) {
+    sources[a.key] = `https://app.hyperliquid.xyz/trade/${a.urlSlug}`;
+    labels[a.key] = a.label;
+    units[a.key] = a.unit;
+  }
   const payload = {
-    symbols,
-    sources: {
-      SAMSUNG: `https://app.hyperliquid.xyz/trade/${HYPERLIQUID_BUILDER}:SAMSUNG`,
-      SKHYNIX: `https://app.hyperliquid.xyz/trade/${HYPERLIQUID_BUILDER}:SKHYNIX`,
-    },
-    labels: { SAMSUNG: '삼성전자', SKHYNIX: 'SK하이닉스' },
+    symbols, sources, labels, units,
     diagnostics: result.diagnostics || null,
     ts: nowKST(),
   };
