@@ -5521,6 +5521,7 @@ function renderStock() {
   loadNightFutures();
   loadMovers();
   loadNews();
+  loadNpsPortfolio();
   loadKrxPensionTrading();
   loadPensionFlows();
   setupKrxPensionRange();
@@ -5944,6 +5945,64 @@ function fillNews(news) {
         </div>
       </a>`;
   }).join('');
+}
+
+// ============ 국민연금 기금 포트폴리오 (data.go.kr) ============
+
+async function loadNpsPortfolio() {
+  const out = $('#nps-wrap');
+  if (!out) return;
+  try {
+    const r = await fetch('/api/nps-portfolio?perPage=100', { credentials: 'same-origin' });
+    if (!r.ok) {
+      out.innerHTML = `<div class="pension-empty muted small">data.go.kr 응답 실패 (${r.status})</div>`;
+      return;
+    }
+    const j = await r.json();
+    if (!j.ok) {
+      const hint = j.hint ? `<br><span class="muted">${esc(j.hint)}</span>` : '';
+      const snippet = j.snippet ? `<br><code class="nps-snippet">${esc(j.snippet)}</code>` : '';
+      out.innerHTML = `<div class="pension-empty muted small">${esc(j.error || 'data.go.kr 응답 없음')}${hint}${snippet}</div>`;
+      return;
+    }
+    fillNpsPortfolio(j);
+  } catch (e) {
+    console.warn('[stock] nps fetch failed', e);
+    out.innerHTML = '<div class="pension-empty muted small">네트워크 오류</div>';
+  }
+}
+
+function fillNpsPortfolio(payload) {
+  const out = $('#nps-wrap');
+  if (!out) return;
+  const rows = Array.isArray(payload.data) ? payload.data : [];
+  if (!rows.length) {
+    out.innerHTML = '<div class="pension-empty muted small">데이터 없음</div>';
+    return;
+  }
+  // 컬럼 — 첫 행의 키 순서 보존.
+  const cols = Object.keys(rows[0]);
+  const sourceHtml = `<div class="pension-source muted small">데이터 출처: <a href="${esc(payload.sourceUrl || 'https://www.data.go.kr/data/15106894/fileData.do')}" target="_blank" rel="noopener noreferrer">data.go.kr · 국민연금공단_기금 포트폴리오 현황</a> · 전체 ${esc(String(payload.totalCount ?? rows.length))}건</div>`;
+  const tableHtml = `
+    <div class="nps-table-wrap">
+      <table class="pension-table nps-table">
+        <thead><tr>${cols.map(c => `<th>${esc(c)}</th>`).join('')}</tr></thead>
+        <tbody>
+          ${rows.slice(0, 50).map(r => `<tr>${
+            cols.map(c => {
+              const v = r[c];
+              const isNum = typeof v === 'number';
+              const formatted = v == null ? '—'
+                : isNum ? v.toLocaleString('ko-KR')
+                : String(v);
+              return `<td class="${isNum ? 'num' : ''}">${esc(formatted)}</td>`;
+            }).join('')
+          }</tr>`).join('')}
+        </tbody>
+      </table>
+      ${rows.length > 50 ? `<div class="muted small" style="padding:8px 4px;">상위 50건 표시 · 전체 ${esc(String(rows.length))}건</div>` : ''}
+    </div>`;
+  out.innerHTML = sourceHtml + tableHtml;
 }
 
 // ============ 연기금 일별 순매수 거래대금 (KRX 정보데이터시스템) ============

@@ -2564,35 +2564,56 @@ async function fetchNpsPortfolio({ uddi, page = 1, perPage = 100 } = {}) {
     return { ok: false, reason: 'DATA_GO_KR_SERVICE_KEY 미설정' };
   }
   const u = uddi || NPS_PORTFOLIO_DEFAULT_UDDI;
-  // odcloud.kr 는 `uddi:UUID` 의 콜론을 그대로 보존. encodeURIComponent 로 %3A 변환하면
-  // "등록되지 않은 서비스" 에러. serviceKey 도 Encoding 키 가정 — 그대로 붙임.
-  const url = `${NPS_PORTFOLIO_BASE}/${u}`
-    + `?page=${page}&perPage=${perPage}&returnType=JSON&serviceKey=${dataGoKrKey()}`;
-  const r = await httpsGet(url, {
-    headers: { 'Accept': 'application/json' },
-    timeoutMs: 12_000,
-  });
-  if (!r.ok) {
+  const rawKey = dataGoKrKey();
+  // 사용자가 data.go.kr 에서 등록한 키가 Encoding(%2B/%2F 이미 포함) 또는 Decoding(+,/ 그대로) 형태일 수 있어
+  // 둘 다 시도. raw 그대로 안되면 encodeURIComponent, 그 다음 decodeURIComponent.
+  const keyVariants = [];
+  keyVariants.push(rawKey);
+  try { const enc = encodeURIComponent(rawKey); if (enc !== rawKey) keyVariants.push(enc); } catch {}
+  try { const dec = decodeURIComponent(rawKey); if (dec !== rawKey && !keyVariants.includes(dec)) keyVariants.push(dec); } catch {}
+
+  const trace = [];
+  for (const k of keyVariants) {
+    const url = `${NPS_PORTFOLIO_BASE}/${u}`
+      + `?page=${page}&perPage=${perPage}&returnType=JSON&serviceKey=${k}`;
+    const r = await httpsGet(url, {
+      headers: { 'Accept': 'application/json' },
+      timeoutMs: 12_000,
+    });
+    trace.push({ keyForm: k === rawKey ? 'raw' : (k === encodeURIComponent(rawKey) ? 'encoded' : 'decoded'), status: r.status });
+    if (r.ok) {
+      try {
+        const j = JSON.parse(r.body);
+        const data = Array.isArray(j.data) ? j.data : [];
+        return {
+          ok: true,
+          data,
+          currentCount: j.currentCount ?? data.length,
+          matchCount: j.matchCount ?? null,
+          totalCount: j.totalCount ?? null,
+          page: j.page ?? page,
+          perPage: j.perPage ?? perPage,
+        };
+      } catch (e) {
+        logLine('warn', 'nps.parse', { err: String(e) });
+        return { ok: false, reason: 'data.go.kr 응답 파싱 실패' };
+      }
+    }
+    // 400 + code -3 (등록되지 않은 서비스) 면 다음 인코딩 시도. 그 외 즉시 중단.
+    let bodyCode = null;
+    try { bodyCode = JSON.parse(r.body || '{}')?.code; } catch {}
+    if (r.status === 400 && bodyCode === -3) continue;
     const snippet = (r.body || '').slice(0, 200);
     logLine('warn', 'nps.http', { status: r.status, snippet, err: r.error || null });
-    return { ok: false, reason: `data.go.kr HTTP ${r.status}`, status: r.status, snippet };
+    return { ok: false, reason: `data.go.kr HTTP ${r.status}`, status: r.status, snippet, trace };
   }
-  try {
-    const j = JSON.parse(r.body);
-    const data = Array.isArray(j.data) ? j.data : [];
-    return {
-      ok: true,
-      data,
-      currentCount: j.currentCount ?? data.length,
-      matchCount: j.matchCount ?? null,
-      totalCount: j.totalCount ?? null,
-      page: j.page ?? page,
-      perPage: j.perPage ?? perPage,
-    };
-  } catch (e) {
-    logLine('warn', 'nps.parse', { err: String(e) });
-    return { ok: false, reason: 'data.go.kr 응답 파싱 실패' };
-  }
+  return {
+    ok: false,
+    reason: 'data.go.kr 응답: 등록되지 않은 서비스 입니다. (모든 키 인코딩 시도 실패)',
+    status: 400,
+    snippet: '{"code":-3,"msg":"등록되지 않은 서비스 입니다."}',
+    trace,
+  };
 }
 
 async function handleNpsPortfolio(req, res) {
