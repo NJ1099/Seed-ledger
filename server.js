@@ -32,6 +32,36 @@ try {
 }
 
 const root = __dirname;
+
+// .env 파일 직접 파싱 — zero-deps 정책상 dotenv 패키지 안 씀.
+// 기존 process.env 값을 덮어쓰지 않으므로 Render 환경변수가 항상 우선.
+function loadDotEnv() {
+  const envFile = path.join(root, '.env');
+  if (!fs.existsSync(envFile)) return;
+  try {
+    const raw = fs.readFileSync(envFile, 'utf8').replace(/^﻿/, '');
+    let count = 0;
+    for (const rawLine of raw.split(/\r?\n/)) {
+      const line = rawLine.trim();
+      if (!line || line.startsWith('#')) continue;
+      const m = line.match(/^([A-Z_][A-Z0-9_]*)\s*=\s*(.*)$/);
+      if (!m) continue;
+      const [, k, vRaw] = m;
+      if (process.env[k] != null && process.env[k] !== '') continue; // 기존 env 우선
+      let v = vRaw.trim();
+      if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) {
+        v = v.slice(1, -1);
+      }
+      process.env[k] = v;
+      count++;
+    }
+    if (count) console.log(`[dotenv] .env 에서 ${count}개 환경변수 로드`);
+  } catch (e) {
+    console.warn('[dotenv] .env 파싱 실패:', e.message);
+  }
+}
+loadDotEnv();
+
 const portArg = process.argv.find(a => /^\d+$/.test(a));
 const port = parseInt(process.env.PORT || portArg || '4274', 10);
 
@@ -39,6 +69,7 @@ const DATA_DIR = path.join(root, 'data');
 const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
 const QUOTE_CACHE_FILE = path.join(DATA_DIR, 'quote-cache.json');
 const POPULAR_TICKERS_FILE = path.join(DATA_DIR, 'popular-tickers.json');
+const STOCK_MASTER_FILE = path.join(DATA_DIR, 'stock-master.json');
 const LOG_DIR = path.join(DATA_DIR, 'logs');
 const SERVER_LOG = path.join(LOG_DIR, 'server.log');
 
@@ -918,6 +949,171 @@ async function handleStockMovers(req, res) {
   reply(res, 200, { ok: true, ...payload });
 }
 
+// ============ 종목 마스터 ============
+// Render 같은 데이터센터 IP 가 매 요청마다 네이버 검색에 차단당해도
+// 부팅 시 1회 시도는 종종 성공한다. 그걸로 시총 상위 종목 마스터를 만들어
+// 메모리에 보관하고, 검색 시 한글 부분일치로 즉시 응답한다.
+const STOCK_MASTER = { stocks: [], updatedAt: null, loaded: false };
+
+const STOCK_MASTER_SEED = [
+  // 시드 데이터 — 부팅 시 fetch 실패해도 최소한의 한글 검색을 보장.
+  // 한국 대표주 (시총 + 거래량 상위)
+  { code: '005930', name: '삼성전자',     market: 'KOSPI',  type: 'stock_kr' },
+  { code: '000660', name: 'SK하이닉스',    market: 'KOSPI',  type: 'stock_kr' },
+  { code: '373220', name: 'LG에너지솔루션', market: 'KOSPI',  type: 'stock_kr' },
+  { code: '207940', name: '삼성바이오로직스', market: 'KOSPI', type: 'stock_kr' },
+  { code: '005380', name: '현대차',        market: 'KOSPI',  type: 'stock_kr' },
+  { code: '005935', name: '삼성전자우',     market: 'KOSPI',  type: 'stock_kr' },
+  { code: '000270', name: '기아',          market: 'KOSPI',  type: 'stock_kr' },
+  { code: '068270', name: '셀트리온',       market: 'KOSPI',  type: 'stock_kr' },
+  { code: '105560', name: 'KB금융',        market: 'KOSPI',  type: 'stock_kr' },
+  { code: '055550', name: '신한지주',       market: 'KOSPI',  type: 'stock_kr' },
+  { code: '012450', name: '한화에어로스페이스', market: 'KOSPI', type: 'stock_kr' },
+  { code: '329180', name: 'HD현대중공업',   market: 'KOSPI',  type: 'stock_kr' },
+  { code: '035420', name: 'NAVER',         market: 'KOSPI',  type: 'stock_kr' },
+  { code: '035720', name: '카카오',         market: 'KOSPI',  type: 'stock_kr' },
+  { code: '003550', name: 'LG',           market: 'KOSPI',  type: 'stock_kr' },
+  { code: '051910', name: 'LG화학',        market: 'KOSPI',  type: 'stock_kr' },
+  { code: '006400', name: '삼성SDI',       market: 'KOSPI',  type: 'stock_kr' },
+  { code: '028260', name: '삼성물산',       market: 'KOSPI',  type: 'stock_kr' },
+  { code: '066570', name: 'LG전자',        market: 'KOSPI',  type: 'stock_kr' },
+  { code: '015760', name: '한국전력',       market: 'KOSPI',  type: 'stock_kr' },
+  { code: '034730', name: 'SK',           market: 'KOSPI',  type: 'stock_kr' },
+  { code: '017670', name: 'SK텔레콤',      market: 'KOSPI',  type: 'stock_kr' },
+  { code: '030200', name: 'KT',           market: 'KOSPI',  type: 'stock_kr' },
+  { code: '003670', name: '포스코퓨처엠',    market: 'KOSPI',  type: 'stock_kr' },
+  { code: '009540', name: 'HD한국조선해양',  market: 'KOSPI',  type: 'stock_kr' },
+  { code: '011200', name: 'HMM',          market: 'KOSPI',  type: 'stock_kr' },
+  { code: '009830', name: '한화솔루션',     market: 'KOSPI',  type: 'stock_kr' },
+  { code: '011170', name: '롯데케미칼',     market: 'KOSPI',  type: 'stock_kr' },
+  { code: '096770', name: 'SK이노베이션',   market: 'KOSPI',  type: 'stock_kr' },
+  { code: '316140', name: '우리금융지주',    market: 'KOSPI',  type: 'stock_kr' },
+  // KOSDAQ 인기주
+  { code: '247540', name: '에코프로비엠',    market: 'KOSDAQ', type: 'stock_kr' },
+  { code: '086520', name: '에코프로',       market: 'KOSDAQ', type: 'stock_kr' },
+  { code: '091990', name: '셀트리온헬스케어', market: 'KOSDAQ', type: 'stock_kr' },
+  { code: '196170', name: '알테오젠',       market: 'KOSDAQ', type: 'stock_kr' },
+  { code: '028300', name: 'HLB',           market: 'KOSDAQ', type: 'stock_kr' },
+  { code: '263750', name: '펄어비스',       market: 'KOSDAQ', type: 'stock_kr' },
+  { code: '293490', name: '카카오게임즈',    market: 'KOSDAQ', type: 'stock_kr' },
+  { code: '041510', name: 'SM',           market: 'KOSDAQ', type: 'stock_kr' },
+  { code: '035900', name: 'JYP Ent.',     market: 'KOSDAQ', type: 'stock_kr' },
+  { code: '215000', name: '골프존',         market: 'KOSDAQ', type: 'stock_kr' },
+  // 미국 인기주
+  { code: 'AAPL',  name: 'Apple',          market: 'NASDAQ', type: 'stock_us' },
+  { code: 'MSFT',  name: 'Microsoft',      market: 'NASDAQ', type: 'stock_us' },
+  { code: 'NVDA',  name: 'NVIDIA',         market: 'NASDAQ', type: 'stock_us' },
+  { code: 'GOOGL', name: 'Alphabet (Google)', market: 'NASDAQ', type: 'stock_us' },
+  { code: 'AMZN',  name: 'Amazon',         market: 'NASDAQ', type: 'stock_us' },
+  { code: 'META',  name: 'Meta Platforms', market: 'NASDAQ', type: 'stock_us' },
+  { code: 'TSLA',  name: 'Tesla',          market: 'NASDAQ', type: 'stock_us' },
+  { code: 'BRK.B', name: 'Berkshire Hathaway', market: 'NYSE', type: 'stock_us' },
+  { code: 'JPM',   name: 'JPMorgan Chase', market: 'NYSE',   type: 'stock_us' },
+  { code: 'V',     name: 'Visa',           market: 'NYSE',   type: 'stock_us' },
+  { code: 'JNJ',   name: 'Johnson & Johnson', market: 'NYSE', type: 'stock_us' },
+  { code: 'WMT',   name: 'Walmart',        market: 'NYSE',   type: 'stock_us' },
+  { code: 'XOM',   name: 'Exxon Mobil',    market: 'NYSE',   type: 'stock_us' },
+  { code: 'BAC',   name: 'Bank of America', market: 'NYSE',  type: 'stock_us' },
+  { code: 'KO',    name: 'Coca-Cola',      market: 'NYSE',   type: 'stock_us' },
+  { code: 'NFLX',  name: 'Netflix',        market: 'NASDAQ', type: 'stock_us' },
+  { code: 'AMD',   name: 'AMD',            market: 'NASDAQ', type: 'stock_us' },
+  { code: 'INTC',  name: 'Intel',          market: 'NASDAQ', type: 'stock_us' },
+  { code: 'PYPL',  name: 'PayPal',         market: 'NASDAQ', type: 'stock_us' },
+  { code: 'DIS',   name: 'Disney',         market: 'NYSE',   type: 'stock_us' },
+  { code: 'BABA',  name: 'Alibaba',        market: 'NYSE',   type: 'stock_us' },
+  { code: 'TSM',   name: 'TSMC (Taiwan Semi)', market: 'NYSE', type: 'stock_us' },
+];
+
+async function fetchExchangeMaster(exchange) {
+  // stock.naver.com 의 시총 정렬 API 로 거래소별 상위 종목을 수집한다.
+  const url = `https://api.stock.naver.com/stock/exchange/${exchange}/marketValue?page=1&pageSize=500`;
+  const r = await httpsGet(url, {
+    headers: { 'Referer': 'https://stock.naver.com/', 'User-Agent': BROWSER_UA },
+  });
+  if (!r.ok) {
+    logLine('warn', 'master.http', { exchange, status: r.status });
+    return [];
+  }
+  try {
+    const j = JSON.parse(r.body);
+    const items = j?.stocks || j?.items || j?.result?.stocks || j?.list || [];
+    if (!Array.isArray(items)) return [];
+    const out = [];
+    for (const it of items) {
+      const code = it.itemCode || it.code || it.reutersCode || it.symbolCode || null;
+      const name = it.stockName || it.itemName || it.name || null;
+      if (!code || !name) continue;
+      out.push({
+        code: String(code),
+        name: String(name).trim(),
+        market: exchange,
+        type: /^\d{6}$/.test(code) ? 'stock_kr' : 'stock_us',
+      });
+    }
+    return out;
+  } catch (e) {
+    logLine('warn', 'master.parse', { exchange, err: String(e) });
+    return [];
+  }
+}
+
+async function buildStockMaster() {
+  // 부팅 시 + 매일 1회 호출. 실패해도 시드 데이터로 검색은 계속 동작.
+  const cached = readJSON(STOCK_MASTER_FILE, null);
+  if (cached && Array.isArray(cached.stocks) && cached.stocks.length > 100) {
+    STOCK_MASTER.stocks = cached.stocks;
+    STOCK_MASTER.updatedAt = cached.updatedAt;
+    STOCK_MASTER.loaded = true;
+    logLine('info', 'master.cached', { count: cached.stocks.length });
+  } else {
+    STOCK_MASTER.stocks = [...STOCK_MASTER_SEED];
+    STOCK_MASTER.loaded = true;
+    logLine('info', 'master.seed', { count: STOCK_MASTER_SEED.length });
+  }
+  // 그 다음 backgrond fetch 로 최신화 시도. 실패해도 무방.
+  const exchanges = ['KOSPI', 'KOSDAQ', 'NASDAQ', 'NYSE'];
+  const results = await Promise.all(exchanges.map(fetchExchangeMaster));
+  const fetched = results.flat();
+  if (fetched.length > 100) {
+    // 시드 + fetched 병합 (dedupe by type+code)
+    const seen = new Set();
+    const merged = [];
+    for (const s of [...fetched, ...STOCK_MASTER_SEED]) {
+      const key = `${s.type}:${s.code}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      merged.push(s);
+    }
+    STOCK_MASTER.stocks = merged;
+    STOCK_MASTER.updatedAt = nowKST();
+    STOCK_MASTER.loaded = true;
+    try { writeJSON(STOCK_MASTER_FILE, { stocks: merged, updatedAt: STOCK_MASTER.updatedAt }); } catch {}
+    logLine('info', 'master.refresh.ok', { count: merged.length, fetched: fetched.length });
+  } else {
+    logLine('warn', 'master.refresh.fail', { fetched: fetched.length });
+  }
+}
+
+function searchInMaster(q) {
+  // 한글 + 영문 + 코드 부분일치. 정확한 prefix 매치를 우선 정렬.
+  if (!STOCK_MASTER.loaded) return [];
+  const lowered = q.toLowerCase().trim();
+  if (!lowered) return [];
+  const out = [];
+  for (const s of STOCK_MASTER.stocks) {
+    const nameLow = s.name.toLowerCase();
+    const codeLow = s.code.toLowerCase();
+    let score = -1;
+    if (nameLow === lowered || codeLow === lowered) score = 0;
+    else if (nameLow.startsWith(lowered) || codeLow.startsWith(lowered)) score = 1;
+    else if (nameLow.includes(lowered) || codeLow.includes(lowered)) score = 2;
+    if (score >= 0) out.push({ ...s, _score: score });
+    if (out.length >= 50) break;
+  }
+  out.sort((a, b) => a._score - b._score);
+  return out.slice(0, 10).map(({ _score, ...rest }) => rest);
+}
+
 function searchTypeFromNationCode(nation) {
   // stock.naver.com API: nation code (KOR / USA / 빈문자) + stockExchangeType (KOSPI/KOSDAQ/NASDAQ/NYSE...)
   if (!nation) return null;
@@ -940,6 +1136,10 @@ async function fetchStockSearch(q) {
     seen.add(key);
     results.push(item);
   };
+
+  // 0차: 메모리 종목 마스터 부분일치 검색 — 한글 + 영문 즉시 매치.
+  // 부팅 시 1회 fetch 한 데이터 또는 시드. Render IP 차단 영향 없음.
+  for (const it of searchInMaster(q)) push(it);
 
   // 1차: stock.naver.com 통합검색 (한글 + 영문 + 코드 모두 지원)
   // stock.naver.com/search/{q} 페이지가 호출하는 백엔드. 파라미터 이름이 시기별로
@@ -1156,7 +1356,92 @@ function normalizeNewsItem(it) {
   };
 }
 
-async function fetchStockNews(limit) {
+// 네이버 OpenAPI 뉴스 검색 — NAVER_CLIENT_ID/SECRET 가 있을 때만 동작.
+// 일일 25,000 요청 무료. query 기반 검색이라 종목/키워드별 뉴스 제공 가능.
+// 응답 포맷: { items: [{ title, link, originallink, description, pubDate }] }
+async function fetchNaverOpenApiNews(query, limit) {
+  const cid = process.env.NAVER_CLIENT_ID;
+  const csec = process.env.NAVER_CLIENT_SECRET;
+  if (!cid || !csec) return null; // 키 없으면 폴백으로 진입
+  const display = Math.max(1, Math.min(50, limit));
+  // sort=date 최신순. query 가 비면 '주식' 으로 디폴트.
+  const q = (query && query.trim()) || '주식 시황';
+  const url = `https://openapi.naver.com/v1/search/news.json?query=${encodeURIComponent(q)}&display=${display}&sort=date`;
+  const r = await httpsGet(url, {
+    headers: {
+      'X-Naver-Client-Id': cid,
+      'X-Naver-Client-Secret': csec,
+      'Referer': 'https://developers.naver.com/',
+    },
+    timeoutMs: 8000,
+  });
+  if (!r.ok) {
+    logLine('warn', 'news.openapi.http', { status: r.status, err: r.error || null });
+    return [];
+  }
+  try {
+    const j = JSON.parse(r.body);
+    const items = Array.isArray(j?.items) ? j.items : [];
+    const out = items.slice(0, limit).map(it => {
+      const title = stripTags(it.title || '');
+      // 원문 URL 우선. originallink 가 비면 link (네이버 캐시) 사용.
+      const url = safeNewsUrl(it.originallink || it.link || '');
+      if (!title || !url) return null;
+      // pubDate 예: "Wed, 04 Jun 2026 09:30:00 +0900"
+      let publishedAt = it.pubDate || '';
+      try { if (publishedAt) publishedAt = new Date(publishedAt).toISOString(); } catch {}
+      return {
+        title,
+        summary: stripTags(it.description || '').slice(0, 200),
+        source: extractSourceFromUrl(it.originallink || it.link || ''),
+        url,
+        publishedAt,
+        image: null,
+      };
+    }).filter(Boolean);
+    if (out.length) {
+      logLine('info', 'news.openapi.ok', { count: out.length, query: q });
+      return out;
+    }
+  } catch (e) {
+    logLine('warn', 'news.openapi.parse', { err: String(e) });
+  }
+  return [];
+}
+
+function safeNewsUrl(u) {
+  if (typeof u !== 'string') return '';
+  const s = u.trim();
+  return /^https?:\/\//i.test(s) ? s : '';
+}
+function extractSourceFromUrl(u) {
+  try {
+    const host = new URL(u).hostname;
+    // www. 제거 + 한국 주요 매체 매핑
+    const h = host.replace(/^www\./, '').toLowerCase();
+    const map = {
+      'hankyung.com': '한국경제', 'mk.co.kr': '매일경제', 'mt.co.kr': '머니투데이',
+      'sedaily.com': '서울경제', 'edaily.co.kr': '이데일리', 'chosun.com': '조선일보',
+      'donga.com': '동아일보', 'joongang.co.kr': '중앙일보', 'yna.co.kr': '연합뉴스',
+      'news1.kr': '뉴스1', 'newsis.com': '뉴시스', 'fnnews.com': '파이낸셜뉴스',
+      'biz.heraldcorp.com': '헤럴드경제', 'heraldcorp.com': '헤럴드경제',
+      'asiae.co.kr': '아시아경제', 'thebell.co.kr': '더벨',
+    };
+    if (map[h]) return map[h];
+    // {sub}.{main}.co.kr 의 경우 main.co.kr 로 다시 시도
+    const trimmed = h.replace(/^[^.]+\./, '');
+    if (map[trimmed]) return map[trimmed];
+    return h;
+  } catch { return ''; }
+}
+
+async function fetchStockNews(limit, query) {
+  // 0차: 네이버 OpenAPI (키 있을 때 최우선)
+  if (process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET) {
+    const out = await fetchNaverOpenApiNews(query, limit);
+    if (out && out.length) return out;
+  }
+
   // 1차: api.stock.naver.com — stock.naver.com/news 페이지가 사용하는 정식 API.
   const candidates = [
     `https://api.stock.naver.com/news/main?pageSize=${limit}&page=1`,
@@ -1238,18 +1523,19 @@ async function handleStockNews(req, res) {
   let limit = parseInt(url.searchParams.get('limit') || '10', 10);
   if (!Number.isFinite(limit) || limit < 1) limit = 10;
   if (limit > 30) limit = 30;
-  const cacheKey = '__news';
+  const query = (url.searchParams.get('q') || '').trim().slice(0, 80);
+  const cacheKey = query ? `__news:${query.toLowerCase()}` : '__news';
   const { entry, stale } = getStockCacheEntry(cacheKey, STOCK_TAB_TTL.news);
   if (entry && !stale) {
     return reply(res, 200, { ok: true, ...entry.payload, cached: true });
   }
-  const news = await fetchStockNews(limit);
-  const payload = { news, ts: nowKST() };
+  const news = await fetchStockNews(limit, query);
+  const payload = { news, query, ts: nowKST() };
   if (news.length) {
     writeStockCacheKey(cacheKey, payload);
-    logLine('info', 'news.ok', { count: news.length });
+    logLine('info', 'news.ok', { count: news.length, query });
   } else {
-    logLine('warn', 'news.fail', {});
+    logLine('warn', 'news.fail', { query });
     if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
   }
   reply(res, 200, { ok: true, ...payload });
@@ -1563,6 +1849,10 @@ async function refreshEvents() {
 
 setTimeout(refreshEvents, 10_000);
 setInterval(refreshEvents, EVENTS_REFRESH_MS);
+
+// 종목 마스터 — 부팅 직후 + 매일 1회 갱신.
+setTimeout(buildStockMaster, 3_000);
+setInterval(buildStockMaster, 24 * 60 * 60 * 1000);
 
 // ============================================================================
 // 기기 간 동기화 (Telegram 봇을 클라우드 저장소로)
