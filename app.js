@@ -5592,29 +5592,39 @@ function fillIndicesGrid(indices) {
 async function loadNightFutures() {
   try {
     const r = await stockApiGet('/api/night-futures');
-    if (r && r.ok) fillNightFutures(r.symbols || {}, r.sources || {});
-    else fillNightFutures({}, {});
+    if (r && r.ok) fillNightFutures(r.symbols || {}, r.sources || {}, r.diagnostics);
+    else fillNightFutures({}, {}, null);
   } catch (e) {
     console.warn('[stock] night-futures fetch failed', e);
-    fillNightFutures({}, {});
+    fillNightFutures({}, {}, null);
   }
 }
 
-function fillNightFutures(symbols, sources) {
+function fillNightFutures(symbols, sources, diagnostics) {
   for (const sym of ['SAMSUNG', 'SKHYNIX']) {
     const card = document.getElementById(`night-card-${sym}`);
     if (!card) continue;
     const data = symbols[sym];
     const priceEl = card.querySelector('.night-price');
     const changeEl = card.querySelector('.night-change');
+    const footEl = card.querySelector('.night-foot');
     const src = sources[sym];
     if (src) card.setAttribute('href', src);
     if (!data || data.markPx == null) {
       card.classList.add('loading');
       if (priceEl) priceEl.textContent = '—';
       if (changeEl) { changeEl.textContent = '데이터 없음'; changeEl.classList.remove('up', 'down'); }
+      // 진단정보를 풋노트에 표시 (개발자가 원인 추적할 수 있도록)
+      if (footEl && diagnostics) {
+        const dexs = (diagnostics.builderDexs || []).join(', ');
+        const tried = (diagnostics.triedDexs || []).join('→');
+        footEl.textContent = dexs
+          ? `Hyperliquid 빌더 DEX [${dexs}] 에서 미발견 (시도: ${tried})`
+          : 'Hyperliquid 응답 비어있음 — 잠시 후 새로고침';
+      }
       continue;
     }
+    if (footEl) footEl.textContent = `Hyperliquid 야간선물 (${data.dex || 'main'}${data.universeName ? ' · ' + data.universeName : ''}) →`;
     card.classList.remove('loading');
     if (priceEl) priceEl.textContent = formatHlPrice(data.markPx);
     if (changeEl) {
@@ -5999,11 +6009,28 @@ function fillPensionTable(payload) {
   if (!out) return;
   const rows = Array.isArray(payload.rows) ? payload.rows : [];
   if (!rows.length) {
-    out.innerHTML = `
-      <div class="pension-empty muted small">
-        지난 ${esc(String(payload.daysBack || state.pensionDays))}일간 국민연금공단의 대량보유 공시가 없습니다.
-        ${payload.totalReports ? ` (전체 보고 ${esc(String(payload.totalReports))}건 중 0건 매칭)` : ''}
-      </div>`;
+    const dm = payload.dartMeta || {};
+    const status = dm.lastStatus;
+    const days = esc(String(payload.daysBack || state.pensionDays));
+    let body = '';
+    if (status === '010' || status === '011') {
+      body = `
+        <strong>DART 인증키가 인증되지 않았습니다.</strong> (status ${esc(status)})<br>
+        ${esc(dm.lastMessage || '')}
+        <br><br>발급 직후라면 DART 측 인증 처리에 1-2시간 걸릴 수 있습니다.
+        Render 환경변수 <code>DART_API_KEY</code> 가 정확히 입력됐는지, 서비스 재배포 되었는지 확인해주세요.`;
+    } else if (status === '020' || status === '021') {
+      body = `<strong>DART 호출 한도 초과</strong> (${esc(status)}) — ${esc(dm.lastMessage || '')}<br>일일 1만 호출 제한. 자정(KST) 이후 재시도.`;
+    } else if (status === '012') {
+      body = `<strong>DART 가 이 IP 의 접근을 차단</strong> (012). Render 데이터센터 IP 가 일부 차단되었을 수 있습니다.`;
+    } else if (status === '013') {
+      body = `지난 ${days}일간 DART 공시는 ${esc(String(payload.totalReports || 0))}건이지만, 그 중 국민연금공단 보고는 0건입니다. 기간을 늘려보세요 (90일 권장).`;
+    } else if (status === '000' || !status) {
+      body = `지난 ${days}일간 국민연금공단의 대량보유 공시가 없습니다.${payload.totalReports ? ` (전체 ${esc(String(payload.totalReports))}건 중 0건 매칭)` : ''}`;
+    } else {
+      body = `<strong>DART status ${esc(status)}:</strong> ${esc(dm.lastMessage || '응답 이상')}`;
+    }
+    out.innerHTML = `<div class="pension-empty muted small">${body}</div>`;
     return;
   }
   // 요약 카운트

@@ -1699,9 +1699,28 @@ const PENSION_FLR_NAME = '국민연금공단';
 const STOCK_TAB_TTL_PENSION = 24 * 60 * 60 * 1000; // 24h
 
 function dartConfigured() {
-  return Boolean(process.env.DART_API_KEY && process.env.DART_API_KEY.length >= 30);
+  // DART 인증키는 40자 영숫자. 너무 엄격한 길이 검증으로 정상 키가 false 처리되는 걸 방지.
+  const k = (process.env.DART_API_KEY || '').trim();
+  return Boolean(k && k.length >= 20);
 }
-function dartKey() { return process.env.DART_API_KEY || ''; }
+function dartKey() { return (process.env.DART_API_KEY || '').trim(); }
+
+// DART status 코드 → 한국어 사유 (응답 메시지 보강용)
+const DART_STATUS_MSG = {
+  '000': '정상',
+  '010': '등록되지 않은 인증키 (발급 직후라면 1-2시간 대기 후 재시도)',
+  '011': '사용할 수 없는 인증키',
+  '012': '접근할 수 없는 IP',
+  '013': '조회된 데이터가 없음 (최근 기간 내 국민연금 대량보유 보고 0건)',
+  '020': '요청 제한 초과 (일일 1만 호출)',
+  '021': '조회 가능한 회사 개수 초과',
+  '100': '부적절한 파라미터',
+  '101': '부적절한 접근',
+  '800': 'DART 점검 시간',
+};
+function dartStatusMessage(code) {
+  return DART_STATUS_MSG[String(code || '')] || `알 수 없는 코드 (${code})`;
+}
 
 function dartListUrl({ bgnDe, endDe, pageNo, pageCount = 100 }) {
   const key = dartKey();
@@ -1734,31 +1753,34 @@ async function fetchDartList(daysBack) {
   const bgnDe = ymdFromKST(daysBack);
   const endDe = ymdFromKST(0);
   const all = [];
+  const meta = { lastStatus: null, lastMessage: '', httpStatus: null, dateRange: { bgnDe, endDe } };
   // 최대 5페이지(500건) 까지만 조회 — 대량보유보고는 하루 평균 ~30건이라 충분.
   for (let page = 1; page <= 5; page++) {
     const r = await httpsGet(dartListUrl({ bgnDe, endDe, pageNo: page }), { timeoutMs: 8000 });
+    meta.httpStatus = r.status;
     if (!r.ok) {
       logLine('warn', 'dart.list.http', { page, status: r.status, err: r.error || null });
+      meta.lastMessage = `HTTP ${r.status}`;
       break;
     }
     try {
       const j = JSON.parse(r.body);
+      meta.lastStatus = j.status || '000';
+      meta.lastMessage = j.message || dartStatusMessage(meta.lastStatus);
       if (j.status && j.status !== '000') {
-        // 013 = 조회된 데이터 없음, 020 = 일일 호출 한도 초과 등
         logLine('warn', 'dart.list.status', { page, status: j.status, message: j.message || '' });
-        if (j.status === '013') break;
-        if (j.status === '020' || j.status === '021') break; // 한도 초과
-        break;
+        break; // 013 / 020 / 021 / 010 등 모두 중단
       }
       const list = Array.isArray(j.list) ? j.list : [];
       all.push(...list);
       if (list.length < 100) break; // 마지막 페이지
     } catch (e) {
       logLine('warn', 'dart.list.parse', { page, err: String(e) });
+      meta.lastMessage = '응답 파싱 실패';
       break;
     }
   }
-  return all;
+  return { list: all, meta };
 }
 
 async function fetchDartMajorStockByCorp(corpCode) {
@@ -1795,11 +1817,11 @@ async function fetchPensionFlows(daysBack) {
   if (!dartConfigured()) {
     return { ok: false, reason: 'DART_API_KEY 미설정' };
   }
-  const list = await fetchDartList(daysBack);
+  const { list, meta: dartMeta } = await fetchDartList(daysBack);
   // 제출자 = 국민연금공단 인 것만 필터.
   const pensionReports = list.filter(it => String(it.flr_nm || '').includes(PENSION_FLR_NAME));
   if (!pensionReports.length) {
-    return { ok: true, rows: [], totalReports: list.length, daysBack };
+    return { ok: true, rows: [], totalReports: list.length, daysBack, dartMeta };
   }
   // 같은 발행회사(corp_code) 의 majorstock 응답을 한 번씩만 받아 캐시(이번 호출 한정).
   const corpCache = new Map();
@@ -1861,7 +1883,7 @@ async function fetchPensionFlows(daysBack) {
   const holdings = Array.from(byCorp.values())
     .sort((a, b) => (b.holdingRate || 0) - (a.holdingRate || 0));
 
-  return { ok: true, rows, holdings, totalReports: list.length, daysBack };
+  return { ok: true, rows, holdings, totalReports: list.length, daysBack, dartMeta };
 }
 
 async function handlePensionFlows(req, res) {
@@ -1891,6 +1913,7 @@ async function handlePensionFlows(req, res) {
     holdings: result.holdings || [],
     totalReports: result.totalReports,
     daysBack,
+    dartMeta: result.dartMeta || null,
     ts: nowKST(),
   };
   if (result.rows.length || result.totalReports > 0) {
@@ -1917,21 +1940,68 @@ const HYPERLIQUID_TTL = 30_000;
 const HYPERLIQUID_SYMBOLS = ['SAMSUNG', 'SKHYNIX'];
 const HYPERLIQUID_BUILDER = 'xyz';
 
+// HIP-3 builder DEX 목록 조회. 응답: [null, { name, fullName, deployer, ... }, ...]
+// 첫 원소는 default(main) DEX placeholder. null/빈 객체 필터링.
+async function fetchHyperliquidPerpDexs() {
+  const r = await httpsPostJson(HYPERLIQUID_API, { type: 'perpDexs' }, {
+    headers: { 'Referer': 'https://app.hyperliquid.xyz/' },
+    timeoutMs: 8000,
+  });
+  if (!r.ok) {
+    logLine('warn', 'hl.perpDexs.http', { status: r.status, err: r.error || null });
+    return [];
+  }
+  try {
+    const j = JSON.parse(r.body);
+    if (!Array.isArray(j)) return [];
+    return j
+      .filter(it => it && typeof it === 'object' && it.name)
+      .map(it => String(it.name));
+  } catch (e) {
+    logLine('warn', 'hl.perpDexs.parse', { err: String(e) });
+    return [];
+  }
+}
+
+// HIP-3 빌더 DEX 의 universe[i].name 은 "{dex}:{symbol}" 형태 (예: "xyz:SAMSUNG").
+// 매칭은 대소문자 무시 + 정확 일치 또는 ":{symbol}" 접미사 매칭.
+function matchPerpSymbol(universeName, symbol) {
+  const n = String(universeName || '').toUpperCase();
+  const s = String(symbol || '').toUpperCase();
+  if (!n || !s) return false;
+  return n === s || n.endsWith(':' + s) || n.endsWith('-' + s);
+}
+
 async function fetchHyperliquidPerp() {
-  // 1) HIP-3 'xyz' builder DEX (URL 패턴이 xyz:SAMSUNG 이므로 우선 시도)
-  // 2) 메인 DEX (혹시 등록되어 있으면)
-  const attempts = [
-    { type: 'metaAndAssetCtxs', dex: HYPERLIQUID_BUILDER },
-    { type: 'metaAndAssetCtxs' },
-  ];
   const aggregated = {};
-  for (const body of attempts) {
+  const diagnostics = { triedDexs: [], errors: [], universeSamples: [] };
+
+  // 1) perpDexs 로 모든 빌더 DEX 이름 가져오기
+  const builderDexs = await fetchHyperliquidPerpDexs();
+  diagnostics.builderDexs = builderDexs;
+
+  // 시도 순서: 알려진 'xyz' 우선 → 발견된 다른 builder DEX → 메인 DEX
+  const tryList = [];
+  const builderSet = new Set(builderDexs.map(s => s.toLowerCase()));
+  if (builderSet.has(HYPERLIQUID_BUILDER)) tryList.push({ dex: HYPERLIQUID_BUILDER });
+  for (const d of builderDexs) {
+    if (d.toLowerCase() !== HYPERLIQUID_BUILDER) tryList.push({ dex: d });
+  }
+  // perpDexs 가 빈 경우 (API 변경) 'xyz' 와 메인 둘 다 시도
+  if (!builderDexs.length) tryList.push({ dex: HYPERLIQUID_BUILDER });
+  tryList.push({}); // 메인 DEX (dex 파라미터 없음)
+
+  for (const opt of tryList) {
+    const body = { type: 'metaAndAssetCtxs', ...(opt.dex ? { dex: opt.dex } : {}) };
+    const dexLabel = opt.dex || 'main';
+    diagnostics.triedDexs.push(dexLabel);
     const r = await httpsPostJson(HYPERLIQUID_API, body, {
       headers: { 'Referer': 'https://app.hyperliquid.xyz/' },
       timeoutMs: 8000,
     });
     if (!r.ok) {
-      logLine('warn', 'hl.http', { dex: body.dex || 'main', status: r.status, err: r.error || null });
+      logLine('warn', 'hl.http', { dex: dexLabel, status: r.status, err: r.error || null });
+      diagnostics.errors.push({ dex: dexLabel, status: r.status });
       continue;
     }
     try {
@@ -1939,9 +2009,15 @@ async function fetchHyperliquidPerp() {
       if (!Array.isArray(j) || j.length < 2) continue;
       const universe = Array.isArray(j[0]?.universe) ? j[0].universe : [];
       const ctxs = Array.isArray(j[1]) ? j[1] : [];
+      // 진단용 — 처음 5개 universe.name 샘플
+      diagnostics.universeSamples.push({
+        dex: dexLabel,
+        size: universe.length,
+        firstNames: universe.slice(0, 5).map(u => u?.name).filter(Boolean),
+      });
       for (const sym of HYPERLIQUID_SYMBOLS) {
-        if (aggregated[sym]) continue; // 첫 번째 매치 우선
-        const idx = universe.findIndex(u => String(u.name || '').toUpperCase() === sym);
+        if (aggregated[sym]) continue;
+        const idx = universe.findIndex(u => matchPerpSymbol(u?.name, sym));
         if (idx < 0 || !ctxs[idx]) continue;
         const c = ctxs[idx];
         const markPx = Number(c.markPx);
@@ -1954,15 +2030,17 @@ async function fetchHyperliquidPerp() {
           funding: c.funding != null ? Number(c.funding) : null,
           openInterest: c.openInterest != null ? Number(c.openInterest) : null,
           dayNtlVlm: c.dayNtlVlm != null ? Number(c.dayNtlVlm) : null,
-          dex: body.dex || 'main',
+          universeName: String(universe[idx].name || ''),
+          dex: dexLabel,
         };
       }
     } catch (e) {
-      logLine('warn', 'hl.parse', { dex: body.dex || 'main', err: String(e) });
+      logLine('warn', 'hl.parse', { dex: dexLabel, err: String(e) });
+      diagnostics.errors.push({ dex: dexLabel, parseErr: String(e) });
     }
     if (Object.keys(aggregated).length === HYPERLIQUID_SYMBOLS.length) break;
   }
-  return aggregated;
+  return { symbols: aggregated, diagnostics };
 }
 
 async function handleNightFutures(req, res) {
@@ -1972,7 +2050,8 @@ async function handleNightFutures(req, res) {
   if (entry && !stale) {
     return reply(res, 200, { ok: true, ...entry.payload, cached: true });
   }
-  const symbols = await fetchHyperliquidPerp();
+  const result = await fetchHyperliquidPerp();
+  const symbols = result.symbols || {};
   const payload = {
     symbols,
     sources: {
@@ -1980,13 +2059,14 @@ async function handleNightFutures(req, res) {
       SKHYNIX: `https://app.hyperliquid.xyz/trade/${HYPERLIQUID_BUILDER}:SKHYNIX`,
     },
     labels: { SAMSUNG: '삼성전자', SKHYNIX: 'SK하이닉스' },
+    diagnostics: result.diagnostics || null,
     ts: nowKST(),
   };
-  if (Object.keys(symbols || {}).length) {
+  if (Object.keys(symbols).length) {
     writeStockCacheKey(cacheKey, payload);
-    logLine('info', 'hl.ok', { found: Object.keys(symbols) });
+    logLine('info', 'hl.ok', { found: Object.keys(symbols), dexs: Object.values(symbols).map(s => s.dex) });
   } else {
-    logLine('warn', 'hl.empty', {});
+    logLine('warn', 'hl.empty', { triedDexs: result.diagnostics?.triedDexs || [] });
     if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
   }
   reply(res, 200, { ok: true, ...payload });
