@@ -2543,6 +2543,103 @@ async function handleKrxPensionTrading(req, res) {
   reply(res, 200, { ok: true, ...payload });
 }
 
+// ============================================================================
+// 국민연금공단 기금 포트폴리오 (data.go.kr 자동변환 OpenAPI)
+// ----------------------------------------------------------------------------
+// 데이터셋 15106894 — 월별 자산군별/세부 포트폴리오 현황.
+// 호출: GET https://api.odcloud.kr/api/15106894/v1/uddi:{uuid}
+//        ?page=1&perPage=100&returnType=JSON&serviceKey=<DATA_GO_KR_SERVICE_KEY>
+// 인증: serviceKey (Encoding 키 — URL-safe %2B/%2F 포함). data.go.kr 마이페이지 발급.
+// ----------------------------------------------------------------------------
+
+const NPS_PORTFOLIO_BASE = 'https://api.odcloud.kr/api/15106894/v1';
+const NPS_PORTFOLIO_DEFAULT_UDDI = 'uddi:365e3f72-e17e-4b10-a6ef-db2587ac3ee0';
+const NPS_PORTFOLIO_TTL = 6 * 60 * 60 * 1000; // 6h (월별 데이터라 길게)
+
+function dataGoKrKey() { return (process.env.DATA_GO_KR_SERVICE_KEY || '').trim(); }
+function dataGoKrConfigured() { return dataGoKrKey().length >= 30; }
+
+async function fetchNpsPortfolio({ uddi, page = 1, perPage = 100 } = {}) {
+  if (!dataGoKrConfigured()) {
+    return { ok: false, reason: 'DATA_GO_KR_SERVICE_KEY 미설정' };
+  }
+  const u = uddi || NPS_PORTFOLIO_DEFAULT_UDDI;
+  // serviceKey 가 이미 URL-encoded 인 경우가 많아 그대로 두기 (Encoding 키).
+  const url = `${NPS_PORTFOLIO_BASE}/${encodeURIComponent(u)}`
+    + `?page=${page}&perPage=${perPage}&returnType=JSON&serviceKey=${dataGoKrKey()}`;
+  const r = await httpsGet(url, {
+    headers: { 'Accept': 'application/json' },
+    timeoutMs: 12_000,
+  });
+  if (!r.ok) {
+    const snippet = (r.body || '').slice(0, 200);
+    logLine('warn', 'nps.http', { status: r.status, snippet, err: r.error || null });
+    return { ok: false, reason: `data.go.kr HTTP ${r.status}`, status: r.status, snippet };
+  }
+  try {
+    const j = JSON.parse(r.body);
+    const data = Array.isArray(j.data) ? j.data : [];
+    return {
+      ok: true,
+      data,
+      currentCount: j.currentCount ?? data.length,
+      matchCount: j.matchCount ?? null,
+      totalCount: j.totalCount ?? null,
+      page: j.page ?? page,
+      perPage: j.perPage ?? perPage,
+    };
+  } catch (e) {
+    logLine('warn', 'nps.parse', { err: String(e) });
+    return { ok: false, reason: 'data.go.kr 응답 파싱 실패' };
+  }
+}
+
+async function handleNpsPortfolio(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  if (!dataGoKrConfigured()) {
+    return reply(res, 200, {
+      ok: false,
+      error: 'DATA_GO_KR_SERVICE_KEY 환경변수가 설정되지 않았습니다.',
+      hint: 'Render Environment 메뉴에서 등록 후 자동 재배포 완료까지 1-2분.',
+    });
+  }
+  const url = new URL(req.url, 'http://x');
+  const uddi = url.searchParams.get('uddi') || NPS_PORTFOLIO_DEFAULT_UDDI;
+  const page = parseInt(url.searchParams.get('page') || '1', 10) || 1;
+  const perPage = Math.min(parseInt(url.searchParams.get('perPage') || '100', 10) || 100, 1000);
+
+  const cacheKey = `__nps:${uddi}:${page}:${perPage}`;
+  const { entry, stale } = getStockCacheEntry(cacheKey, NPS_PORTFOLIO_TTL);
+  if (entry && !stale) {
+    return reply(res, 200, { ok: true, ...entry.payload, cached: true });
+  }
+  const result = await fetchNpsPortfolio({ uddi, page, perPage });
+  if (!result.ok) {
+    if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
+    return reply(res, 200, {
+      ok: false,
+      error: result.reason || 'data.go.kr 호출 실패',
+      status: result.status || null,
+      snippet: result.snippet || null,
+    });
+  }
+  const payload = {
+    data: result.data,
+    currentCount: result.currentCount,
+    matchCount: result.matchCount,
+    totalCount: result.totalCount,
+    page: result.page,
+    perPage: result.perPage,
+    uddi,
+    source: 'data.go.kr',
+    sourceUrl: 'https://www.data.go.kr/data/15106894/fileData.do',
+    ts: nowKST(),
+  };
+  writeStockCacheKey(cacheKey, payload);
+  logLine('info', 'nps.ok', { rows: result.data.length, totalCount: result.totalCount });
+  reply(res, 200, { ok: true, ...payload });
+}
+
 // 사용자가 새 환경변수 등록 후 활성 여부를 확인할 수 있도록 boolean 만 노출.
 // 민감 키(NAVER_CLIENT_SECRET / ANTHROPIC_API_KEY / TELEGRAM_BOT_TOKEN) 는 응답에서 제외.
 // 길이 노출도 형식 추측 단서가 되므로 제거. 이 endpoint 는 셋업 확인 후 제거 가능.
@@ -2580,6 +2677,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/stock-news')    return await handleStockNews(req, res);
     if (urlPath === '/api/pension-flows') return await handlePensionFlows(req, res);
     if (urlPath === '/api/krx-pension-trading') return await handleKrxPensionTrading(req, res);
+    if (urlPath === '/api/nps-portfolio') return await handleNpsPortfolio(req, res);
     if (urlPath === '/api/night-futures') return await handleNightFutures(req, res);
     if (urlPath === '/api/config-status') return await handleConfigStatus(req, res);
 
