@@ -2468,6 +2468,24 @@ async function handleKrxPensionTrading(req, res) {
   reply(res, 200, { ok: true, ...payload });
 }
 
+// 환경변수 등록 상태 확인 — 값은 노출하지 않고 boolean + 길이만.
+async function handleConfigStatus(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  const len = (k) => ((process.env[k] || '').trim().length) || 0;
+  reply(res, 200, {
+    ok: true,
+    keys: {
+      NAVER_CLIENT_ID:        { set: !!(process.env.NAVER_CLIENT_ID || '').trim(),     length: len('NAVER_CLIENT_ID') },
+      NAVER_CLIENT_SECRET:    { set: !!(process.env.NAVER_CLIENT_SECRET || '').trim(), length: len('NAVER_CLIENT_SECRET') },
+      DART_API_KEY:           { set: dartConfigured(),                                 length: len('DART_API_KEY') },
+      DATA_GO_KR_SERVICE_KEY: { set: !!(process.env.DATA_GO_KR_SERVICE_KEY || '').trim(), length: len('DATA_GO_KR_SERVICE_KEY') },
+      ANTHROPIC_API_KEY:      { set: !!(process.env.ANTHROPIC_API_KEY || '').trim(),   length: len('ANTHROPIC_API_KEY') },
+      TELEGRAM_BOT_TOKEN:     { set: !!(process.env.TELEGRAM_BOT_TOKEN || '').trim(),  length: len('TELEGRAM_BOT_TOKEN') },
+    },
+    ts: nowKST(),
+  });
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
@@ -2491,6 +2509,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/pension-flows') return await handlePensionFlows(req, res);
     if (urlPath === '/api/krx-pension-trading') return await handleKrxPensionTrading(req, res);
     if (urlPath === '/api/night-futures') return await handleNightFutures(req, res);
+    if (urlPath === '/api/config-status') return await handleConfigStatus(req, res);
 
     // 기기 간 동기화 (텔레그램 봇 기반)
     if (urlPath === '/api/sync/status')      return await handleSyncStatus(req, res);
