@@ -2362,12 +2362,15 @@ async function fetchKrxPensionTradingSingle(daysBack, market) {
     askBid: '3',     // 순매수
     detailView: '1',
   };
+  // pykrx 가 보내는 정확한 Referer — KRX 가 일반 도메인 Referer 는 거절.
+  // outerLoader/index.cmd 경로를 명시해야 200 응답.
   const r = await httpsPostForm(KRX_API, form, {
     headers: {
-      'Referer': 'https://data.krx.co.kr/',
-      'User-Agent': BROWSER_UA,
+      'Referer': 'https://data.krx.co.kr/contents/MDC/MDI/outerLoader/index.cmd',
+      'User-Agent': 'Mozilla/5.0',
       'X-Requested-With': 'XMLHttpRequest',
       'Origin': 'https://data.krx.co.kr',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
     },
     timeoutMs: 12_000,
   });
