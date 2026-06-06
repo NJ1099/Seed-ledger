@@ -2957,6 +2957,7 @@ main {
 }
 
 /* 연기금·외국인 순매수/순매도 상위 종목 */
+.flows-refresh-note { margin: 0 2px 10px; }
 .flows-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

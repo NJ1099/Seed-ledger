@@ -31,6 +31,8 @@ const state = {
   stockSearchDebounce: null,  // 종목 검색 디바운스 핸들
   pensionDays: 30,            // 국민연금 매수/매도 표 조회 기간 (일)
   flowsDays: 30,              // 연기금·외국인 순매수/순매도 조회 기간 (일)
+  flowsNextRefreshAt: 0,      // 다음 자동 갱신 예정 시각 (ms)
+  flowsTicker: null,          // 카운트다운/자동 갱신 1분 틱 타이머
 };
 
 const API = {
@@ -5512,6 +5514,7 @@ function stopStockRefresh() {
     clearInterval(state.stockRefreshTimer);
     state.stockRefreshTimer = null;
   }
+  stopFlowsTicker();
 }
 
 async function loadIndices() {
@@ -5990,6 +5993,8 @@ function setupFlowsRange() {
   });
 }
 
+const FLOWS_REFRESH_MS = 10 * 60 * 1000; // 10분마다 자동 갱신 (서버 캐시 TTL 과 동일)
+
 async function loadKrxInvestorFlows() {
   const out = $('#flows-wrap');
   if (!out) return;
@@ -6004,6 +6009,43 @@ async function loadKrxInvestorFlows() {
   } catch (e) {
     console.warn('[stock] investor-flows fetch failed', e);
     out.innerHTML = '<div class="pension-empty muted small">네트워크 오류</div>';
+  } finally {
+    // 성공/실패 무관하게 다음 갱신 예약 (실패해도 10분 뒤 재시도).
+    state.flowsNextRefreshAt = Date.now() + FLOWS_REFRESH_MS;
+    updateFlowsRefreshNote();
+    ensureFlowsTicker();
+  }
+}
+
+// 표 위 안내 문구 갱신 — "10분마다 자동 갱신 · 다음 갱신 N분 후".
+function updateFlowsRefreshNote() {
+  const note = $('#flows-refresh-note');
+  if (!note) return;
+  const ms = (state.flowsNextRefreshAt || 0) - Date.now();
+  if (ms <= 0) {
+    note.textContent = '🕒 갱신 중…';
+    return;
+  }
+  const mins = Math.max(0, Math.ceil(ms / 60000));
+  note.textContent = `🕒 10분마다 자동 갱신 · 다음 갱신 ${mins}분 후`;
+}
+
+// 1분 간격 틱 — 카운트다운 표시 + 시간 지나면 자동 갱신.
+function ensureFlowsTicker() {
+  if (state.flowsTicker) return;
+  state.flowsTicker = setInterval(() => {
+    if (state.tab !== 'stock') return; // 다른 탭이면 쉬었다가, 돌아오면 재개
+    if (Date.now() >= (state.flowsNextRefreshAt || 0)) {
+      loadKrxInvestorFlows(); // 내부에서 다음 예약 + 노트 갱신
+    } else {
+      updateFlowsRefreshNote();
+    }
+  }, 60 * 1000);
+}
+function stopFlowsTicker() {
+  if (state.flowsTicker) {
+    clearInterval(state.flowsTicker);
+    state.flowsTicker = null;
   }
 }
 
