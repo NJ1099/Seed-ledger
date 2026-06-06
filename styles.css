@@ -2955,6 +2955,61 @@ main {
   width: 100%;
   font-size: 13px;
 }
+
+/* 연기금·외국인 순매수/순매도 상위 종목 */
+.flows-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+.flow-block {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 16px;
+}
+.flow-block-title {
+  font-weight: 700;
+  font-size: 15px;
+  margin-bottom: 12px;
+}
+.flow-cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.flow-col-title {
+  font-size: 12.5px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.flow-col-title.up   { color: var(--up); }
+.flow-col-title.down { color: var(--down); }
+.flow-list { display: flex; flex-direction: column; gap: 2px; }
+.flow-row {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  text-decoration: none;
+  color: inherit;
+}
+.flow-row:hover { background: var(--surface-2); }
+.flow-rank { color: var(--ink-3); font-size: 12px; text-align: center; }
+.flow-name {
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.flow-amt { font-size: 12.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.flow-amt.up   { color: var(--up); }
+.flow-amt.down { color: var(--down); }
+@media (max-width: 900px) {
+  .flows-grid { grid-template-columns: 1fr; }
+}
 .pension-source a {
   color: var(--accent);
   text-decoration: none;

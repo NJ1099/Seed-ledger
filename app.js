@@ -30,6 +30,7 @@ const state = {
   stockRefreshTimer: null,    // 주식 탭 5분 폴링 타이머
   stockSearchDebounce: null,  // 종목 검색 디바운스 핸들
   pensionDays: 30,            // 국민연금 매수/매도 표 조회 기간 (일)
+  flowsDays: 30,              // 연기금·외국인 순매수/순매도 조회 기간 (일)
 };
 
 const API = {
@@ -5485,8 +5486,10 @@ function renderStock() {
   loadMovers();
   loadNews();
   loadNpsPortfolio();
+  loadKrxInvestorFlows();
   loadKrxPensionTrading();
   loadPensionFlows();
+  setupFlowsRange();
   setupKrxPensionRange();
   setupPensionRange();
   const el = $('#stock-updated-at');
@@ -5966,6 +5969,93 @@ function fillNpsPortfolio(payload) {
       ${rows.length > 50 ? `<div class="muted small" style="padding:8px 4px;">상위 50건 표시 · 전체 ${esc(String(rows.length))}건</div>` : ''}
     </div>`;
   out.innerHTML = sourceHtml + tableHtml;
+}
+
+// ============ 연기금·외국인 순매수/순매도 상위 종목 (KRX) ============
+
+function setupFlowsRange() {
+  const wrap = $('#flows-range');
+  if (!wrap || wrap.dataset.wired === '1') return;
+  wrap.dataset.wired = '1';
+  wrap.addEventListener('click', (ev) => {
+    const btn = ev.target.closest('.pr-btn');
+    if (!btn) return;
+    const days = parseInt(btn.getAttribute('data-days'), 10);
+    if (!days || days === state.flowsDays) return;
+    state.flowsDays = days;
+    $$('.pr-btn', wrap).forEach(b => b.classList.toggle('active', b === btn));
+    const out = $('#flows-wrap');
+    if (out) out.innerHTML = '<div class="pension-empty muted small">불러오는 중…</div>';
+    loadKrxInvestorFlows();
+  });
+}
+
+async function loadKrxInvestorFlows() {
+  const out = $('#flows-wrap');
+  if (!out) return;
+  const days = state.flowsDays || 30;
+  try {
+    // 연기금·외국인 동시 호출 (각 1회로 매수·매도 모두 얻음)
+    const [pensionRes, foreignRes] = await Promise.all([
+      fetch(`/api/krx-investor-flows?investor=pension&days=${days}&market=ALL&limit=10`, { credentials: 'same-origin' }).then(r => r.json()).catch(() => null),
+      fetch(`/api/krx-investor-flows?investor=foreign&days=${days}&market=ALL&limit=10`, { credentials: 'same-origin' }).then(r => r.json()).catch(() => null),
+    ]);
+    fillKrxInvestorFlows(pensionRes, foreignRes);
+  } catch (e) {
+    console.warn('[stock] investor-flows fetch failed', e);
+    out.innerHTML = '<div class="pension-empty muted small">네트워크 오류</div>';
+  }
+}
+
+// 순매수/순매도 한 컬럼 렌더 (rank · 종목명 · 금액).
+function flowListHtml(title, rows, dir) {
+  // dir: 'buy'(빨강) | 'sell'(파랑). 금액 필드는 buy=netBuyVal, sell=netSellVal.
+  const cls = dir === 'buy' ? 'up' : 'down';
+  if (!rows || !rows.length) {
+    return `<div class="flow-col">
+      <div class="flow-col-title ${cls}">${esc(title)}</div>
+      <div class="pension-empty muted small">데이터 없음</div>
+    </div>`;
+  }
+  const items = rows.map((s, i) => {
+    const amt = dir === 'buy' ? s.netBuyVal : s.netSellVal;
+    const href = buildNaverStockUrl({ code: String(s.code || '').trim(), name: String(s.name || '').trim(), type: 'stock_kr' });
+    const amtTxt = fmtKrwTrillion(Math.abs(amt || 0)).replace(/^\+/, '');
+    return `<a class="flow-row" href="${esc(href)}" target="_blank" rel="noopener noreferrer">
+      <span class="flow-rank">${i + 1}</span>
+      <span class="flow-name">${esc(s.name || s.code || '—')}</span>
+      <span class="flow-amt ${cls}">${esc(amtTxt)}</span>
+    </a>`;
+  }).join('');
+  return `<div class="flow-col">
+    <div class="flow-col-title ${cls}">${esc(title)}</div>
+    <div class="flow-list">${items}</div>
+  </div>`;
+}
+
+function flowBlockHtml(label, payload) {
+  if (!payload || !payload.ok) {
+    const msg = (payload && (payload.error)) || 'KRX 응답 없음';
+    return `<div class="flow-block">
+      <div class="flow-block-title">${esc(label)}</div>
+      <div class="pension-empty muted small">${esc(msg)}
+        <br><span class="muted">KRX 로그인/응답 문제일 수 있습니다 (/api/krx-auth-check 확인).</span>
+      </div>
+    </div>`;
+  }
+  return `<div class="flow-block">
+    <div class="flow-block-title">${esc(label)} <span class="muted small">최근 ${esc(String(payload.daysBack || ''))}일</span></div>
+    <div class="flow-cols">
+      ${flowListHtml('순매수 상위', payload.buy, 'buy')}
+      ${flowListHtml('순매도 상위', payload.sell, 'sell')}
+    </div>
+  </div>`;
+}
+
+function fillKrxInvestorFlows(pensionRes, foreignRes) {
+  const out = $('#flows-wrap');
+  if (!out) return;
+  out.innerHTML = flowBlockHtml('연기금', pensionRes) + flowBlockHtml('외국인', foreignRes);
 }
 
 // ============ 연기금 일별 순매수 거래대금 (KRX 정보데이터시스템) ============

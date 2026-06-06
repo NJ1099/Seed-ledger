@@ -2787,7 +2787,8 @@ async function handleNpsPortfolio(req, res) {
 // KRX_ID/KRX_PW 환경변수로 로그인 세션이 필요하다.
 // ----------------------------------------------------------------------------
 
-async function fetchKrxPensionTopStocks(daysBack, market) {
+// invstTpCd: '6000'=연기금 · '9000'=외국인 (pykrx 투자자코드)
+async function fetchKrxPensionTopStocks(daysBack, market, invstTpCd = '6000') {
   const endDt = new Date();
   const strtDt = new Date(Date.now() - daysBack * 86400_000);
   // pykrx 투자자별_순매수상위종목.fetch 파라미터 — askBid/trdVolVal 불필요
@@ -2797,7 +2798,7 @@ async function fetchKrxPensionTopStocks(daysBack, market) {
     strtDd:    ymdNoDash(strtDt),
     endDd:     ymdNoDash(endDt),
     mktId:     market,
-    invstTpCd: '6000',  // 연기금
+    invstTpCd,  // 6000=연기금 / 9000=외국인
   };
   const cookieJar = await getKrxSession();
   const r = await httpsPostForm(KRX_API, form, {
@@ -2915,6 +2916,76 @@ async function handleKrxPensionTopStocks(req, res) {
   reply(res, 200, { ok: true, ...out });
 }
 
+// ============================================================================
+// 투자자별 순매수/순매도 상위 종목 (연기금 6000 / 외국인 9000)
+// ----------------------------------------------------------------------------
+// 한 번의 KRX 호출(MDCSTAT02401)로 전체 종목 순매수액을 받아
+// 순매수(netBuyVal>0 내림차순) / 순매도(netBuyVal<0 → 절대값 내림차순) 두 리스트로 분리.
+// judal.co.kr 의 연기금/외국인 순매수·순매도 목록과 같은 구성.
+// ----------------------------------------------------------------------------
+const INVESTOR_CODE = { pension: '6000', foreign: '9000' };
+const INVESTOR_LABEL = { pension: '연기금', foreign: '외국인' };
+
+async function handleKrxInvestorFlows(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  const url = new URL(req.url, 'http://x');
+  const investor = (url.searchParams.get('investor') || 'pension').toLowerCase();
+  const invKey = INVESTOR_CODE[investor] ? investor : 'pension';
+  const invstTpCd = INVESTOR_CODE[invKey];
+  let daysBack = parseInt(url.searchParams.get('days') || '30', 10);
+  if (!Number.isFinite(daysBack) || daysBack < 1) daysBack = 30;
+  if (daysBack > 180) daysBack = 180;
+  const market = (url.searchParams.get('market') || 'ALL').toUpperCase();
+  const validMarket = ['STK', 'KSQ', 'KNX', 'ALL'].includes(market) ? market : 'ALL';
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '10', 10) || 10, 50);
+
+  const cacheKey = `__krx-flows:${invKey}:${daysBack}:${validMarket}`;
+  const sliceOut = (p) => ({
+    ...p,
+    buy: (p.buy || []).slice(0, limit),
+    sell: (p.sell || []).slice(0, limit),
+  });
+  const { entry, stale } = getStockCacheEntry(cacheKey, KRX_PENSION_BLD_TTL);
+  if (entry && !stale) {
+    return reply(res, 200, { ok: true, ...sliceOut(entry.payload), cached: true });
+  }
+
+  const result = await fetchKrxPensionTopStocks(daysBack, validMarket, invstTpCd);
+  if (!result.ok || !result.stocks.length) {
+    if (entry) return reply(res, 200, { ok: true, ...sliceOut(entry.payload), cached: true, stale: true });
+    return reply(res, 200, {
+      ok: false,
+      error: result.reason || 'KRX 응답 없음',
+      status: result.status || null,
+      hint: 'KRX_ID / KRX_PW 환경변수 확인. /api/krx-auth-check 로 로그인 상태 확인 가능.',
+      investor: invKey, market: validMarket, daysBack, buy: [], sell: [],
+    });
+  }
+
+  // 순매수: netBuyVal>0 내림차순(이미 정렬됨). 순매도: netBuyVal<0 → 순매도액(절대값) 내림차순.
+  const buy = result.stocks.filter(s => (s.netBuyVal || 0) > 0).slice(0, 50);
+  const sell = result.stocks
+    .filter(s => (s.netBuyVal || 0) < 0)
+    .sort((a, b) => (a.netBuyVal || 0) - (b.netBuyVal || 0))
+    .slice(0, 50)
+    .map(s => ({ ...s, netSellVal: -(s.netBuyVal || 0) }));
+
+  const payload = {
+    investor: invKey,
+    investorLabel: INVESTOR_LABEL[invKey],
+    market: validMarket,
+    daysBack,
+    buy,
+    sell,
+    source: 'krx',
+    sourceUrl: 'https://data.krx.co.kr/contents/MDC/MDI/outerLoader/index.cmd?screenId=MDCSTAT024',
+    ts: nowKST(),
+  };
+  writeStockCacheKey(cacheKey, payload);
+  logLine('info', 'krx.flows.ok', { investor: invKey, market: validMarket, days: daysBack, buy: buy.length, sell: sell.length });
+  reply(res, 200, { ok: true, ...sliceOut(payload) });
+}
+
 // 사용자가 새 환경변수 등록 후 활성 여부를 확인할 수 있도록 boolean 만 노출.
 // 민감 키(NAVER_CLIENT_SECRET / ANTHROPIC_API_KEY / TELEGRAM_BOT_TOKEN) 는 응답에서 제외.
 // 길이 노출도 형식 추측 단서가 되므로 제거. 이 endpoint 는 셋업 확인 후 제거 가능.
@@ -2990,6 +3061,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/pension-flows') return await handlePensionFlows(req, res);
     if (urlPath === '/api/krx-pension-trading') return await handleKrxPensionTrading(req, res);
     if (urlPath === '/api/krx-pension-top-stocks') return await handleKrxPensionTopStocks(req, res);
+    if (urlPath === '/api/krx-investor-flows') return await handleKrxInvestorFlows(req, res);
     if (urlPath === '/api/nps-portfolio') return await handleNpsPortfolio(req, res);
     if (urlPath === '/api/night-futures') return await handleNightFutures(req, res);
     if (urlPath === '/api/config-status') return await handleConfigStatus(req, res);
