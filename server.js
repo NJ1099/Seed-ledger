@@ -150,15 +150,6 @@ function inferCategory(e) {
   return 'economic';
 }
 
-function safeMerge(base, patch) {
-  const out = base && typeof base === 'object' ? { ...base } : {};
-  for (const k of Object.keys(patch || {})) {
-    if (k === '__proto__' || k === 'constructor' || k === 'prototype') continue;
-    out[k] = patch[k];
-  }
-  return out;
-}
-
 function readJSON(file, fallback) {
   try {
     if (!fs.existsSync(file)) return fallback;
@@ -2328,58 +2319,179 @@ async function handleNightFutures(req, res) {
 
 const KRX_API = 'https://data.krx.co.kr/comm/bldAttendant/getJsonData.cmd';
 const KRX_LOADER_URL = 'https://data.krx.co.kr/contents/MDC/MDI/outerLoader/index.cmd';
-const KRX_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
-const KRX_PENSION_TTL = 60 * 60 * 1000; // 1h
-const KRX_SESSION_TTL = 10 * 60 * 1000; // 10분
+// 2025-12-27 이후 KRX 로그인 필수화. pykrx auth.py 의 3단계 플로우를 재구현.
+const KRX_LOGIN_PAGE  = 'https://data.krx.co.kr/contents/MDC/COMS/client/MDCCOMS001.cmd';
+const KRX_LOGIN_JSP   = 'https://data.krx.co.kr/contents/MDC/COMS/client/view/login.jsp?site=mdc';
+const KRX_LOGIN_URL   = 'https://data.krx.co.kr/contents/MDC/COMS/client/MDCCOMS001D1.cmd';
+const KRX_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+const KRX_PENSION_TTL    = 60 * 60 * 1000;  // 1h
+const KRX_PENSION_BLD_TTL = 10 * 60 * 1000; // 종목 조회 10분
+const KRX_SESSION_TTL    = 50 * 60 * 1000;  // 세션 50분 (만료 전 갱신)
 
-// 세션 쿠키 캐시. pykrx 의 build_krx_session 패턴 — 먼저 outerLoader 페이지 GET 으로
-// JSESSIONID 받아두고 POST 요청에 Cookie 헤더로 동봉해야 KRX 가 400 안 줌.
-let krxSessionCache = null; // { cookie: 'JSESSIONID=...', expiresAt: ms }
+// ─────────────────────────────────────────────────────────────────────────────
+// KRX 로그인 세션 관리.
+// 2025-12-27 이후 KRX 는 로그인 필수. pykrx auth.py 의 3단계 플로우를 재구현:
+//   1) GET MDCCOMS001.cmd  → 초기 JSESSIONID 발급
+//   2) GET login.jsp       → iframe 세션 초기화
+//   3) POST MDCCOMS001D1.cmd (mbrId/pw) → 실제 로그인 → 인증된 JSESSIONID 갱신
+// 환경변수: KRX_ID, KRX_PW. 미설정 시 인증 없이 진행(로그인 전 조회 가능한 bld 한정).
+// ─────────────────────────────────────────────────────────────────────────────
 
-function fetchKrxSessionCookieOnce() {
+// 세션 캐시. cookieJar 는 'key=val; key2=val2' 형식으로 Set-Cookie 누적.
+let krxSessionCache = null; // { cookieJar: string, expiresAt: ms, authenticated: bool, errorCode: string }
+// 마지막 로그인 시도 결과 (진단용 — 자격증명 값은 절대 담지 않음).
+let krxLastAuth = null; // { authenticated: bool, errorCode: string, ts: string }
+
+/** 단일 GET/POST 요청을 보내고 Set-Cookie 헤더 배열을 반환 */
+function krxRawRequest(method, urlStr, { headers = {}, formObj = null, timeoutMs = 12_000 } = {}) {
   return new Promise((resolve) => {
     try {
-      const u = new URL(KRX_LOADER_URL);
+      const u = new URL(urlStr);
+      let payload = null;
+      const reqHeaders = {
+        'User-Agent': KRX_UA,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+        ...headers,
+      };
+      if (formObj) {
+        payload = Buffer.from(
+          Object.entries(formObj)
+            .map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(v ?? ''))
+            .join('&'),
+          'utf8'
+        );
+        reqHeaders['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
+        reqHeaders['Content-Length'] = payload.length;
+      }
       const opts = {
-        method: 'GET',
+        method,
         hostname: u.hostname,
-        path: u.pathname,
-        headers: {
-          'User-Agent': KRX_UA,
-          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
-        },
-        timeout: 8000,
+        path: u.pathname + u.search,
+        headers: reqHeaders,
+        timeout: timeoutMs,
       };
       const req = https.request(opts, (r) => {
-        const setCookie = r.headers['set-cookie'] || [];
-        let cookieStr = '';
-        for (const c of setCookie) {
-          const m = String(c).match(/JSESSIONID=([^;]+)/i);
-          if (m) { cookieStr = `JSESSIONID=${m[1]}`; break; }
-        }
-        r.on('data', () => {}); // body 버림
-        r.on('end', () => resolve({ ok: !!cookieStr, cookie: cookieStr, status: r.statusCode || 0 }));
+        let body = '';
+        r.on('data', (c) => { body += c.toString('utf8'); });
+        r.on('end', () => resolve({
+          ok: r.statusCode >= 200 && r.statusCode < 300,
+          status: r.statusCode,
+          body,
+          setCookie: r.headers['set-cookie'] || [],
+        }));
       });
-      req.on('error', (e) => resolve({ ok: false, cookie: '', status: 0, error: String(e) }));
+      req.on('error', (e) => resolve({ ok: false, status: 0, body: '', setCookie: [], error: String(e) }));
       req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
+      if (payload) req.write(payload);
       req.end();
     } catch (e) {
-      resolve({ ok: false, cookie: '', status: 0, error: String(e) });
+      resolve({ ok: false, status: 0, body: '', setCookie: [], error: String(e) });
     }
   });
 }
 
-async function getKrxSession() {
-  if (krxSessionCache && krxSessionCache.expiresAt > Date.now()) return krxSessionCache.cookie;
-  const r = await fetchKrxSessionCookieOnce();
-  if (r.ok && r.cookie) {
-    krxSessionCache = { cookie: r.cookie, expiresAt: Date.now() + KRX_SESSION_TTL };
-    logLine('info', 'krx.session.ok', { cookieLen: r.cookie.length });
-    return r.cookie;
+/**
+ * Set-Cookie 배열을 기존 cookieJar 문자열에 병합.
+ * 같은 키가 오면 덮어쓴다.
+ */
+function mergeCookies(jar, setCookieArr) {
+  const map = new Map();
+  // 기존 jar 파싱
+  for (const part of (jar || '').split(';')) {
+    const kv = part.trim();
+    const eq = kv.indexOf('=');
+    if (eq > 0) map.set(kv.slice(0, eq).trim(), kv.slice(eq + 1).trim());
   }
-  logLine('warn', 'krx.session.fail', { status: r.status, err: r.error || null });
-  return '';
+  // 새 Set-Cookie 병합
+  for (const raw of setCookieArr) {
+    const segment = String(raw).split(';')[0].trim();
+    const eq = segment.indexOf('=');
+    if (eq > 0) map.set(segment.slice(0, eq).trim(), segment.slice(eq + 1).trim());
+  }
+  return Array.from(map.entries()).map(([k, v]) => `${k}=${v}`).join('; ');
+}
+
+/**
+ * KRX 3단계 로그인. 성공 시 인증된 cookieJar 반환.
+ * KRX_ID / KRX_PW 환경변수 미설정이면 warmup 만 수행(비인증 cookieJar 반환).
+ */
+async function buildKrxAuthSession() {
+  let jar = '';
+
+  // 1단계: MDCCOMS001.cmd GET — 초기 JSESSIONID 발급
+  const r1 = await krxRawRequest('GET', KRX_LOGIN_PAGE, {
+    headers: { 'Accept': 'text/html,application/xhtml+xml,*/*' },
+  });
+  jar = mergeCookies(jar, r1.setCookie);
+
+  // 2단계: login.jsp GET — iframe 세션 초기화
+  const r2 = await krxRawRequest('GET', KRX_LOGIN_JSP, {
+    headers: { 'Referer': KRX_LOGIN_PAGE, 'Cookie': jar },
+  });
+  jar = mergeCookies(jar, r2.setCookie);
+
+  const id = (process.env.KRX_ID || '').trim();
+  const pw = (process.env.KRX_PW || '').trim();
+  if (!id || !pw) {
+    logLine('warn', 'krx.session.no-creds', { hint: 'KRX_ID/KRX_PW 미설정 — 비인증 세션으로 진행' });
+    return { cookieJar: jar, authenticated: false, errorCode: 'NO_CREDS' };
+  }
+
+  // 3단계: MDCCOMS001D1.cmd POST — 실제 로그인
+  const loginPayload = { mbrNm: '', telNo: '', di: '', certType: '', mbrId: id, pw };
+  const r3 = await krxRawRequest('POST', KRX_LOGIN_URL, {
+    headers: {
+      'Referer': KRX_LOGIN_PAGE,
+      'Cookie': jar,
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'X-Requested-With': 'XMLHttpRequest',
+      'Origin': 'https://data.krx.co.kr',
+    },
+    formObj: loginPayload,
+  });
+  jar = mergeCookies(jar, r3.setCookie);
+
+  let errorCode = '';
+  try { errorCode = JSON.parse(r3.body)?._error_code || ''; } catch {}
+
+  // CD011: 중복 로그인 → skipDup=Y 재전송
+  if (errorCode === 'CD011') {
+    const r3b = await krxRawRequest('POST', KRX_LOGIN_URL, {
+      headers: {
+        'Referer': KRX_LOGIN_PAGE,
+        'Cookie': jar,
+        'Accept': 'application/json, text/javascript, */*; q=0.01',
+        'X-Requested-With': 'XMLHttpRequest',
+        'Origin': 'https://data.krx.co.kr',
+      },
+      formObj: { ...loginPayload, skipDup: 'Y' },
+    });
+    jar = mergeCookies(jar, r3b.setCookie);
+    try { errorCode = JSON.parse(r3b.body)?._error_code || ''; } catch {}
+  }
+
+  const authenticated = errorCode === 'CD001';
+  if (!authenticated) {
+    logLine('warn', 'krx.login.fail', { errorCode, hint: errorCode === 'CD010' ? 'KRX 비밀번호 변경 필요' : '자격증명 오류' });
+  } else {
+    logLine('info', 'krx.login.ok', { cookieLen: jar.length });
+  }
+  return { cookieJar: jar, authenticated, errorCode: errorCode || (authenticated ? 'CD001' : 'UNKNOWN') };
+}
+
+async function getKrxSession() {
+  if (krxSessionCache && krxSessionCache.expiresAt > Date.now()) return krxSessionCache.cookieJar;
+  const result = await buildKrxAuthSession();
+  krxSessionCache = {
+    cookieJar: result.cookieJar,
+    expiresAt: Date.now() + KRX_SESSION_TTL,
+    authenticated: result.authenticated,
+    errorCode: result.errorCode,
+  };
+  // 진단용 마지막 로그인 결과 기록 (자격증명 값은 미포함).
+  krxLastAuth = { authenticated: result.authenticated, errorCode: result.errorCode, ts: nowKST() };
+  return result.cookieJar;
 }
 
 function ymdNoDash(d) {
@@ -2662,9 +2774,159 @@ async function handleNpsPortfolio(req, res) {
   reply(res, 200, { ok: true, ...payload });
 }
 
+// ============================================================================
+// KRX 연기금 순매수 상위 종목 (개별 종목 리스트)
+// ----------------------------------------------------------------------------
+// pykrx 의 투자자별_순매수상위종목 클래스 패턴.
+//   bld  = dbms/MDC/STAT/standard/MDCSTAT02401
+//   invstTpCd = '6000' (연기금)
+//   mktId: STK(KOSPI) / KSQ(KOSDAQ) / KNX(코넥스) / ALL
+// 응답 컬럼: ISU_SRT_CD(단축코드), ISU_NM(종목명),
+//   ASK_TRDVOL/BID_TRDVOL/NETBID_TRDVOL (매도/매수/순매수 수량),
+//   ASK_TRDVAL/BID_TRDVAL/NETBID_TRDVAL  (매도/매수/순매수 금액)
+// KRX_ID/KRX_PW 환경변수로 로그인 세션이 필요하다.
+// ----------------------------------------------------------------------------
+
+async function fetchKrxPensionTopStocks(daysBack, market) {
+  const endDt = new Date();
+  const strtDt = new Date(Date.now() - daysBack * 86400_000);
+  // pykrx 투자자별_순매수상위종목.fetch 파라미터 — askBid/trdVolVal 불필요
+  const form = {
+    bld:       'dbms/MDC/STAT/standard/MDCSTAT02401',
+    locale:    'ko_KR',
+    strtDd:    ymdNoDash(strtDt),
+    endDd:     ymdNoDash(endDt),
+    mktId:     market,
+    invstTpCd: '6000',  // 연기금
+  };
+  const cookieJar = await getKrxSession();
+  const r = await httpsPostForm(KRX_API, form, {
+    headers: {
+      'Referer': KRX_LOADER_URL,
+      'User-Agent': KRX_UA,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Origin': 'https://data.krx.co.kr',
+      'Accept': 'application/json, text/javascript, */*; q=0.01',
+      'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+      ...(cookieJar ? { 'Cookie': cookieJar } : {}),
+    },
+    timeoutMs: 15_000,
+  });
+
+  // 400 → 세션 만료 가능성. 캐시 무효화 후 1회 재시도.
+  if (r.status === 400) {
+    krxSessionCache = null;
+    const cookieJar2 = await getKrxSession();
+    if (cookieJar2 && cookieJar2 !== cookieJar) {
+      const r2 = await httpsPostForm(KRX_API, form, {
+        headers: {
+          'Referer': KRX_LOADER_URL,
+          'User-Agent': KRX_UA,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Origin': 'https://data.krx.co.kr',
+          'Accept': 'application/json, text/javascript, */*; q=0.01',
+          'Accept-Language': 'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
+          'Cookie': cookieJar2,
+        },
+        timeoutMs: 15_000,
+      });
+      Object.assign(r, r2);
+    }
+  }
+
+  if (!r.ok) {
+    const snippet = (r.body || '').slice(0, 300);
+    logLine('warn', 'krx.top.http', { market, status: r.status, snippet, err: r.error || null });
+    return { ok: false, status: r.status, reason: `KRX HTTP ${r.status}`, stocks: [] };
+  }
+
+  try {
+    const j = JSON.parse(r.body);
+    const output = Array.isArray(j.output) ? j.output : [];
+    const stocks = output.map(rec => ({
+      code:         rec.ISU_SRT_CD  || rec.isu_srt_cd  || '',
+      name:         rec.ISU_NM      || rec.isu_nm      || '',
+      sellVol:      parseKrxNumber(rec.ASK_TRDVOL   || rec.ask_trdvol),
+      buyVol:       parseKrxNumber(rec.BID_TRDVOL   || rec.bid_trdvol),
+      netBuyVol:    parseKrxNumber(rec.NETBID_TRDVOL || rec.netbid_trdvol),
+      sellVal:      parseKrxNumber(rec.ASK_TRDVAL   || rec.ask_trdval),
+      buyVal:       parseKrxNumber(rec.BID_TRDVAL   || rec.bid_trdval),
+      netBuyVal:    parseKrxNumber(rec.NETBID_TRDVAL || rec.netbid_trdval),
+    })).filter(s => s.code || s.name);
+    // 연기금 순매수 금액 기준 내림차순 정렬
+    stocks.sort((a, b) => (b.netBuyVal || 0) - (a.netBuyVal || 0));
+    return { ok: true, stocks };
+  } catch (e) {
+    logLine('warn', 'krx.top.parse', { market, err: String(e) });
+    return { ok: false, reason: 'KRX 응답 파싱 실패', stocks: [] };
+  }
+}
+
+// GET /api/krx-pension-top-stocks?days=30&market=ALL&limit=50
+async function handleKrxPensionTopStocks(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  const url = new URL(req.url, 'http://x');
+  let daysBack = parseInt(url.searchParams.get('days') || '30', 10);
+  if (!Number.isFinite(daysBack) || daysBack < 1) daysBack = 30;
+  if (daysBack > 180) daysBack = 180;
+  const market = (url.searchParams.get('market') || 'ALL').toUpperCase();
+  const validMarket = ['STK', 'KSQ', 'KNX', 'ALL'].includes(market) ? market : 'ALL';
+  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10) || 50, 200);
+
+  const cacheKey = `__krx-top:${daysBack}:${validMarket}`;
+  const { entry, stale } = getStockCacheEntry(cacheKey, KRX_PENSION_BLD_TTL);
+  if (entry && !stale) {
+    const cached = { ...entry.payload };
+    if (limit < (cached.stocks || []).length) cached.stocks = cached.stocks.slice(0, limit);
+    return reply(res, 200, { ok: true, ...cached, cached: true });
+  }
+
+  const result = await fetchKrxPensionTopStocks(daysBack, validMarket);
+  if (!result.ok || !result.stocks.length) {
+    if (entry) {
+      const cached = { ...entry.payload };
+      if (limit < (cached.stocks || []).length) cached.stocks = cached.stocks.slice(0, limit);
+      return reply(res, 200, { ok: true, ...cached, cached: true, stale: true });
+    }
+    return reply(res, 200, {
+      ok: false,
+      error: result.reason || 'KRX 응답 없음',
+      status: result.status || null,
+      hint: 'KRX_ID / KRX_PW 환경변수가 설정되어 있는지 확인하세요. /api/config-status 로 키 등록 여부 확인 가능.',
+      stocks: [],
+      daysBack,
+      market: validMarket,
+    });
+  }
+
+  const payload = {
+    stocks: result.stocks,
+    totalCount: result.stocks.length,
+    daysBack,
+    market: validMarket,
+    source: 'krx',
+    sourceUrl: 'https://data.krx.co.kr/contents/MDC/MDI/outerLoader/index.cmd?screenId=MDCSTAT024',
+    ts: nowKST(),
+  };
+  writeStockCacheKey(cacheKey, payload);
+  logLine('info', 'krx.top.ok', { market: validMarket, days: daysBack, count: result.stocks.length });
+  const out = { ...payload };
+  if (limit < out.stocks.length) out.stocks = out.stocks.slice(0, limit);
+  reply(res, 200, { ok: true, ...out });
+}
+
 // 사용자가 새 환경변수 등록 후 활성 여부를 확인할 수 있도록 boolean 만 노출.
 // 민감 키(NAVER_CLIENT_SECRET / ANTHROPIC_API_KEY / TELEGRAM_BOT_TOKEN) 는 응답에서 제외.
 // 길이 노출도 형식 추측 단서가 되므로 제거. 이 endpoint 는 셋업 확인 후 제거 가능.
+// KRX 로그인 errorCode → 사람이 읽는 사유 (자격증명 노출 없음).
+const KRX_AUTH_HINT = {
+  CD001:    '로그인 성공',
+  CD010:    '비밀번호 변경 필요 — data.krx.co.kr 에 로그인해 비밀번호를 갱신하세요',
+  CD011:    '중복 로그인 (skipDup 재시도 후에도 실패)',
+  NO_CREDS: 'KRX_ID/KRX_PW 미설정 — 환경변수를 등록하세요',
+  UNKNOWN:  '알 수 없는 로그인 실패 (자격증명 오류 또는 IP 차단 가능)',
+};
+
 async function handleConfigStatus(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
   reply(res, 200, {
@@ -2672,7 +2934,35 @@ async function handleConfigStatus(req, res) {
     keys: {
       DART_API_KEY:           dartConfigured(),
       DATA_GO_KR_SERVICE_KEY: !!(process.env.DATA_GO_KR_SERVICE_KEY || '').trim(),
+      KRX_ID:                 !!(process.env.KRX_ID || '').trim(),
+      KRX_PW:                 !!(process.env.KRX_PW || '').trim(),
     },
+    // 마지막 로그인 시도 결과 (아직 시도 전이면 null). /api/krx-auth-check 로 강제 갱신 가능.
+    krxAuth: krxLastAuth
+      ? { authenticated: krxLastAuth.authenticated, errorCode: krxLastAuth.errorCode, ts: krxLastAuth.ts }
+      : null,
+    ts: nowKST(),
+  });
+}
+
+// GET /api/krx-auth-check — 강제로 KRX 로그인 1회 시도 후 성패만 반환 (자격증명 미노출).
+async function handleKrxAuthCheck(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  const hasCreds = !!(process.env.KRX_ID || '').trim() && !!(process.env.KRX_PW || '').trim();
+  // 캐시 무효화 후 새 로그인 강제.
+  krxSessionCache = null;
+  try {
+    await getKrxSession();
+  } catch (e) {
+    logLine('warn', 'krx.authcheck.err', { err: String(e) });
+  }
+  const errorCode = krxLastAuth?.errorCode || 'UNKNOWN';
+  reply(res, 200, {
+    ok: true,
+    hasCreds,
+    authenticated: !!krxLastAuth?.authenticated,
+    errorCode,
+    hint: KRX_AUTH_HINT[errorCode] || errorCode,
     ts: nowKST(),
   });
 }
@@ -2699,9 +2989,11 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/stock-news')    return await handleStockNews(req, res);
     if (urlPath === '/api/pension-flows') return await handlePensionFlows(req, res);
     if (urlPath === '/api/krx-pension-trading') return await handleKrxPensionTrading(req, res);
+    if (urlPath === '/api/krx-pension-top-stocks') return await handleKrxPensionTopStocks(req, res);
     if (urlPath === '/api/nps-portfolio') return await handleNpsPortfolio(req, res);
     if (urlPath === '/api/night-futures') return await handleNightFutures(req, res);
     if (urlPath === '/api/config-status') return await handleConfigStatus(req, res);
+    if (urlPath === '/api/krx-auth-check') return await handleKrxAuthCheck(req, res);
 
     // 기기 간 동기화 (텔레그램 봇 기반)
     if (urlPath === '/api/sync/status')      return await handleSyncStatus(req, res);

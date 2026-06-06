@@ -37,10 +37,7 @@
   --orange:     #FF8A3D;
 
   /* Compat aliases for inline styles in app.js */
-  --gold:       var(--accent);
-  --mute:       var(--ink-3);
   --cinnabar:   var(--danger);
-  --font-serif: var(--font-kr);
 
   /* Shadows */
   --shadow-sm: 0 1px 2px rgba(17, 24, 39, 0.04);
@@ -339,7 +336,6 @@ input, select, textarea { font-family: inherit; }
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
 }
-.ts-dot { display: none; }
 .ts-quote {
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -577,30 +573,6 @@ main {
   border-radius: var(--r-sm);
   background: var(--surface);
   color: var(--ink);
-}
-.ev-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.ev-section-title {
-  font-size: 10.5px;
-  font-weight: 600;
-  color: var(--text-2);
-  padding: 8px 2px 3px;
-  letter-spacing: 0.2px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.ev-section-title:first-child { padding-top: 2px; }
-.ev-section-count {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-3, var(--text-2));
-  background: var(--surface-2);
-  border-radius: 8px;
-  padding: 0px 5px;
 }
 .ev-date { font-size: 10.5px; }
 .ev-tag { font-size: 9.5px; padding: 1px 5px; }
@@ -2900,16 +2872,6 @@ main {
   margin-bottom: 6px;
   letter-spacing: -0.01em;
 }
-.news-summary {
-  font-size: 13px;
-  color: var(--ink-2);
-  line-height: 1.5;
-  margin-bottom: 8px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
 .news-meta {
   font-size: 12px;
   color: var(--ink-3);
@@ -3012,21 +2974,6 @@ main {
   padding: 24px;
   text-align: center;
   color: var(--ink-3);
-}
-.pension-help {
-  padding: 20px;
-  background: var(--surface-2);
-  border-radius: var(--r-md);
-  font-size: 13px;
-  color: var(--ink-2);
-  line-height: 1.6;
-}
-.pension-help code {
-  background: var(--surface);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: var(--font-mono);
-  font-size: 12px;
 }
 
 .pension-summary {

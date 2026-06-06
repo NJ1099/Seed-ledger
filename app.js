@@ -439,8 +439,6 @@ const BROKERS = [
   '신한투자증권','KB증권','하나증권','대신증권','유안타증권','유진투자증권',
   '메리츠증권','DB금융투자','토스증권','카카오페이증권',
 ];
-const BANK_PRODUCTS = ['예금','적금','파킹통장','수시입출','CMA','대출'];
-const BROKER_ACCOUNT_KINDS = ['일반','ISA','연금저축','IRP','청년도약'];
 
 // CSV 가져오기 프리셋 — 은행 8 / 카드 6 / 마이데이터 통합 앱 4.
 // 컬럼 자동 추정은 `autoMapColumns` 가 헤더명으로 추론. 프리셋은 인코딩·날짜포맷·카테고리 힌트만 제공.
@@ -1858,15 +1856,7 @@ function renderPortfolioTable() {
 // ---------- 주요 이벤트 캘린더 ----------
 const EV_IMPORTANCE_LABEL = { critical: '최상', high: '상', mid: '중', low: '하' };
 const EV_IMPORTANCE_ORDER = { critical: 0, high: 1, mid: 2, low: 3 };
-const EV_CATEGORY_LABEL = { economic: '경제지표', earnings: '실적' };
 
-// category 가 없는 구 이벤트를 tag/title 로 추정 (서버 GET 에서 이미 주입하지만 2중 방어).
-function inferEventCategory(e) {
-  if (e.category === 'economic' || e.category === 'earnings') return e.category;
-  if (typeof e.tag === 'string' && /실적|earnings/i.test(e.tag)) return 'earnings';
-  if (typeof e.title === 'string' && /실적|earnings|분기|Q[1-4]/i.test(e.title)) return 'earnings';
-  return 'economic';
-}
 
 function renderEvents() {
   const list = document.getElementById('ev-list');
@@ -1892,12 +1882,6 @@ function renderEvents() {
     return;
   }
 
-  const economic = [];
-  const earnings = [];
-  for (const e of events) {
-    (inferEventCategory(e) === 'earnings' ? earnings : economic).push(e);
-  }
-
   const DOW = ['일', '월', '화', '수', '목', '금', '토'];
   const todayD = new Date(today + 'T00:00:00+09:00');
   const renderRow = (e) => {
@@ -1906,7 +1890,6 @@ function renderEvents() {
     const isPast = e.date < today;
     const isToday = e.date === today;
     const daysDiff = Math.round((d - todayD) / 86400000);
-    // 사이드바 폭 절감: 2026-04-22 대신 04/22 형태. 오늘/내일/어제는 라벨화.
     let when = e.date.slice(5).replace('-', '/') + `(${dow})`;
     if (isToday) when = `오늘(${dow})`;
     else if (daysDiff === 1) when = `내일(${dow})`;
@@ -1921,19 +1904,8 @@ function renderEvents() {
         <button class="ev-del" data-evdel="${e.id}" title="삭제">×</button>
       </div>`;
   };
-  const renderSection = (label, rows) => {
-    if (!rows.length) return '';
-    return `<div class="ev-section-title">${label} <span class="ev-section-count">${rows.length}</span></div>`
-      + rows.map(renderRow).join('');
-  };
 
-  // 가로 스트립 모드 (대시보드 최상단)는 섹션 구분 없이 날짜순 단일 흐름으로 출력.
-  const isStrip = list.parentElement && list.parentElement.classList.contains('events-strip');
-  if (isStrip) {
-    list.innerHTML = events.map(renderRow).join('');
-  } else {
-    list.innerHTML = renderSection('📊 경제지표', economic) + renderSection('💼 실적', earnings);
-  }
+  list.innerHTML = events.map(renderRow).join('');
 }
 
 function setupEvents() {
@@ -2560,14 +2532,6 @@ function renderAll() {
 
 // ---------- 소비 렌더 ----------
 function monthKey(d) { return d.slice(0, 7); }
-function weekStartKST(dateStr) {
-  // ISO 기준 월요일 시작. KST 날짜 문자열 'YYYY-MM-DD' 입력.
-  const d = new Date(dateStr + 'T00:00:00+09:00');
-  const dow = d.getDay(); // 0=Sun
-  const diff = dow === 0 ? -6 : 1 - dow; // move back to Monday
-  d.setDate(d.getDate() + diff);
-  return d.toLocaleString('sv', { timeZone: 'Asia/Seoul' }).slice(0, 10);
-}
 
 function renderSpend() {
   const today = todayKST();
@@ -2753,7 +2717,6 @@ function renderCalendar() {
     const classes = ['cal-cell'];
     if (dateStr === today) classes.push('cal-today');
     if (dateStr === selected) classes.push('cal-selected');
-    if (amt > 0) classes.push('cal-has-spend');
     // 지출 강도 (heatmap 3단계)
     if (amt > 0 && monthTotal > 0) {
       const ratio = amt / (monthTotal / daysInMonth); // 일평균 대비
