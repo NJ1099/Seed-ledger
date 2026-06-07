@@ -3707,8 +3707,10 @@ function newsPushTick() {
   if (minute >= 5) return;
   const slot = `${date}:${hour}`;
   if (slot === lastNewsPushSlot) return;
-  lastNewsPushSlot = slot;
-  sendDailyNews('scheduled').catch((e) => logLine('error', 'newspush.tick.fail', { err: String(e) }));
+  lastNewsPushSlot = slot;   // slot 선점 (GitHub Actions HTTP 트리거와 중복 발송 방지)
+  sendDailyNews('scheduled')
+    .then((ok) => { if (!ok) lastNewsPushSlot = ''; })  // 실패 시 해제 → 다음 트리거 재시도
+    .catch((e) => { lastNewsPushSlot = ''; logLine('error', 'newspush.tick.fail', { err: String(e) }); });
 }
 
 if (NEWS_PUSH_ENABLED) {
@@ -3720,12 +3722,29 @@ if (NEWS_PUSH_ENABLED) {
   });
 }
 
-// 수동 검증용 — GET /api/news-push-now. 항상 고정 채팅방으로만 발송.
-// 남용 방지로 30초 쿨다운. 배포 직후 동작 확인에만 사용.
+// GET /api/news-push-now — 외부 스케줄러(GitHub Actions) / 수동 검증용 트리거.
+// 항상 고정 채팅방으로만 발송.
+//   ?scheduled=1 : 스케줄 트리거. KST 시각 slot 으로 in-process 틱과 중복 발송 방지
+//                  (같은 slot 이미 발송 시 skip). GitHub Actions 가 이 형태로 호출.
+//   (파라미터 없음) : 수동 테스트. slot 무관, 30초 쿨다운.
 async function handleNewsPushNow(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
   if (!NEWS_BOT_TOKEN) return reply(res, 503, { ok: false, error: 'no-token' });
   if (!NEWS_PUSH_CHAT_ID) return reply(res, 503, { ok: false, error: 'no-chat-id' });
+
+  const url = new URL(req.url, 'http://x');
+  if (url.searchParams.get('scheduled') === '1') {
+    const { date, hour } = kstClockParts();
+    const slot = `${date}:${hour}`;
+    if (slot === lastNewsPushSlot) {
+      return reply(res, 200, { ok: true, skipped: 'already-sent', slot });
+    }
+    lastNewsPushSlot = slot;   // slot 선점 (in-process 틱과 중복 방지)
+    const sent = await sendDailyNews('scheduled-http');
+    if (!sent) lastNewsPushSlot = '';   // 실패 시 해제 → 다음 트리거 재시도
+    return reply(res, sent ? 200 : 502, { ok: sent, slot });
+  }
+
   const now = Date.now();
   if (now - lastManualNewsPush < 30_000) {
     return reply(res, 429, { ok: false, error: 'cooldown', hint: '30초 후 다시 시도' });

@@ -1,0 +1,25 @@
+name: 일일 주식 뉴스 발송
+
+# Render Free 플랜은 무접속 시 sleep 되어 in-process 스케줄러가 정각에
+# 안 깨어날 수 있다. GitHub Actions cron 으로 외부에서 확실하게 트리거한다.
+# 서버 측에서 KST slot 중복 방지가 되어 있어 in-process 틱과 겹쳐도 1회만 발송.
+on:
+  schedule:
+    # GitHub Actions cron 은 UTC 기준. KST = UTC + 9.
+    - cron: '0 1 * * *'   # KST 10:00
+    - cron: '0 9 * * *'   # KST 18:00
+  workflow_dispatch:        # 수동 실행 버튼 (Actions 탭에서 즉시 테스트용)
+
+jobs:
+  push-news:
+    runs-on: ubuntu-latest
+    steps:
+      # Render Free cold start 대비 — 먼저 깨운다 (실패해도 무시).
+      - name: 서버 깨우기
+        run: curl -fsS -m 90 "https://seed-ledger.onrender.com/healthz" || true
+
+      - name: 뉴스 푸시 트리거
+        run: |
+          curl -fsS -m 120 --retry 2 --retry-delay 20 --retry-all-errors \
+            "https://seed-ledger.onrender.com/api/news-push-now?scheduled=1" \
+            -w "\n[HTTP %{http_code}]\n"
