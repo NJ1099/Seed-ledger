@@ -33,6 +33,9 @@ const state = {
   flowsDays: 30,              // 연기금·외국인 순매수/순매도 조회 기간 (일)
   flowsNextRefreshAt: 0,      // 다음 자동 갱신 예정 시각 (ms)
   flowsTicker: null,          // 카운트다운/자동 갱신 1분 틱 타이머
+  kimchiPremiumPct: null,     // 최신 김치프리미엄 % (야간선물 보정용)
+  kimpApplied: false,         // 야간선물 가격에 김프 보정 적용 여부 (토글)
+  lastNightFutures: null,     // 야간선물 마지막 payload (토글 시 재렌더용)
 };
 
 const API = {
@@ -5661,7 +5664,9 @@ function stockTimeAgo(iso) {
 
 function renderStock() {
   // API 병렬 호출
+  setupKimpToggle();
   loadIndices();
+  loadCryptoIndicators();
   loadNightFutures();
   loadMovers();
   loadNews();
@@ -5679,6 +5684,7 @@ function renderStock() {
   state.stockRefreshTimer = setInterval(() => {
     if (state.tab === 'stock') {
       loadIndices();
+      loadCryptoIndicators();
       loadNightFutures();
       loadMovers();
       loadNews();
@@ -5751,6 +5757,11 @@ async function loadNightFutures() {
 }
 
 function fillNightFutures(symbols, sources, units, usdKrwRate, diagnostics) {
+  // 토글 재렌더용으로 마지막 payload 보관.
+  state.lastNightFutures = { symbols, sources, units, usdKrwRate, diagnostics };
+  // 김프 보정 ON + 유효한 김프값이면 원화 환산가에 (1 + 김프%) 를 곱한다.
+  const kimp = (state.kimpApplied && Number.isFinite(state.kimchiPremiumPct)) ? state.kimchiPremiumPct : 0;
+  const kimpFactor = 1 + kimp / 100;
   for (const sym of ['SAMSUNG', 'SKHYNIX']) {
     const card = document.getElementById(`night-card-${sym}`);
     if (!card) continue;
@@ -5782,13 +5793,14 @@ function fillNightFutures(symbols, sources, units, usdKrwRate, diagnostics) {
     const fxNote = usdKrwRate
       ? ` · 환율 ${formatKrwInt(usdKrwRate)}원`
       : '';
-    if (footEl) footEl.textContent = `Hyperliquid ${uname} · ADR 환산${fxNote} →`;
+    const kimpNote = kimp ? ` · 김프 ${kimp >= 0 ? '+' : ''}${kimp.toFixed(2)}% 보정` : '';
+    if (footEl) footEl.textContent = `Hyperliquid ${uname} · ADR 환산${fxNote}${kimpNote} →`;
     card.classList.remove('loading');
     if (priceEl) {
       while (priceEl.firstChild) priceEl.removeChild(priceEl.firstChild);
       // 메인: KRW 환산 가격, 서브: 원 USD 가격
       if (usdKrwRate && Number.isFinite(usdKrwRate)) {
-        const krw = data.markPx * usdKrwRate;
+        const krw = data.markPx * usdKrwRate * kimpFactor;
         priceEl.appendChild(document.createTextNode(formatKrwInt(krw) + '원'));
         const sub = document.createElement('span');
         sub.className = 'night-price-sub';
@@ -5811,7 +5823,7 @@ function fillNightFutures(symbols, sources, units, usdKrwRate, diagnostics) {
         const sub = document.createElement('span');
         sub.className = 'muted';
         const prevTxt = usdKrwRate
-          ? formatKrwInt(data.prevDayPx * usdKrwRate) + '원'
+          ? formatKrwInt(data.prevDayPx * usdKrwRate * kimpFactor) + '원'
           : formatHlPrice(data.prevDayPx);
         sub.textContent = `(전일 ${prevTxt})`;
         changeEl.appendChild(sub);
@@ -5833,6 +5845,93 @@ function formatHlPrice(n) {
 function formatKrwInt(n) {
   if (n == null || !isFinite(n)) return '—';
   return Math.round(n).toLocaleString('ko-KR');
+}
+
+// ============ 암호화폐 심리지표 (공포·탐욕 + 김치프리미엄) ============
+
+async function loadCryptoIndicators() {
+  try {
+    const r = await stockApiGet('/api/crypto-indicators');
+    if (r && r.ok) fillCryptoIndicators(r.fearGreed, r.kimchiPremium);
+    else fillCryptoIndicators(null, null);
+  } catch (e) {
+    console.warn('[stock] crypto-indicators fetch failed', e);
+    fillCryptoIndicators(null, null);
+  }
+}
+
+const FG_CLASS_KR = {
+  'Extreme Fear': '극단적 공포', 'Fear': '공포', 'Neutral': '중립',
+  'Greed': '탐욕', 'Extreme Greed': '극단적 탐욕',
+};
+function fgColorClass(v) {
+  if (v == null) return '';
+  if (v <= 24) return 'fg-extreme-fear';
+  if (v <= 44) return 'fg-fear';
+  if (v <= 55) return 'fg-neutral';
+  if (v <= 74) return 'fg-greed';
+  return 'fg-extreme-greed';
+}
+
+function fillCryptoIndicators(fearGreed, kimchiPremium) {
+  // 공포·탐욕 지수
+  const fgV = document.getElementById('ci-fg-value');
+  const fgS = document.getElementById('ci-fg-sub');
+  const fgCard = document.getElementById('ci-feargreed');
+  if (fgCard) fgCard.classList.remove('fg-extreme-fear', 'fg-fear', 'fg-neutral', 'fg-greed', 'fg-extreme-greed');
+  if (fearGreed && Number.isFinite(fearGreed.value)) {
+    if (fgV) fgV.textContent = String(fearGreed.value);
+    const kr = FG_CLASS_KR[fearGreed.classification] || fearGreed.classification || '';
+    if (fgS) fgS.textContent = kr ? `${kr} · 암호화폐 시장` : '암호화폐 시장';
+    if (fgCard) fgCard.classList.add(fgColorClass(fearGreed.value));
+  } else {
+    if (fgV) fgV.textContent = '—';
+    if (fgS) fgS.textContent = '데이터 없음';
+  }
+
+  // 김치 프리미엄
+  state.kimchiPremiumPct = (kimchiPremium && Number.isFinite(kimchiPremium.pct)) ? kimchiPremium.pct : null;
+  const kV = document.getElementById('ci-kimp-value');
+  const kS = document.getElementById('ci-kimp-sub');
+  const kCard = document.getElementById('ci-kimp');
+  if (kCard) kCard.classList.remove('up', 'down');
+  if (state.kimchiPremiumPct != null) {
+    const p = state.kimchiPremiumPct;
+    if (kV) kV.textContent = `${p >= 0 ? '+' : ''}${p.toFixed(2)}%`;
+    if (kCard) kCard.classList.add(p >= 0 ? 'up' : 'down');
+    if (kS && kimchiPremium) kS.textContent = `업비트 ${formatKrwInt(kimchiPremium.upbitKRW)}원 · 환율 ${formatKrwInt(kimchiPremium.usdKrw)}`;
+  } else {
+    if (kV) kV.textContent = '—';
+    if (kS) kS.textContent = '데이터 없음';
+  }
+
+  // 토글 라벨에 현재 김프% 표기 + 야간선물 재렌더(보정 반영)
+  updateKimpToggleLabel();
+  if (state.lastNightFutures) {
+    const n = state.lastNightFutures;
+    fillNightFutures(n.symbols, n.sources, n.units, n.usdKrwRate, n.diagnostics);
+  }
+}
+
+function updateKimpToggleLabel() {
+  const el = document.getElementById('kimp-toggle-pct');
+  if (!el) return;
+  el.textContent = state.kimchiPremiumPct != null
+    ? `(${state.kimchiPremiumPct >= 0 ? '+' : ''}${state.kimchiPremiumPct.toFixed(2)}%)`
+    : '';
+}
+
+function setupKimpToggle() {
+  const cb = document.getElementById('kimp-toggle');
+  if (!cb || cb.dataset.bound) return;
+  cb.dataset.bound = '1';
+  cb.addEventListener('change', () => {
+    state.kimpApplied = cb.checked;
+    if (state.lastNightFutures) {
+      const n = state.lastNightFutures;
+      fillNightFutures(n.symbols, n.sources, n.units, n.usdKrwRate, n.diagnostics);
+    }
+  });
 }
 
 async function loadMovers() {

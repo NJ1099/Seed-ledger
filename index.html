@@ -509,11 +509,32 @@
       </div>
     </section>
 
+    <!-- 1-a) 암호화폐 심리지표 (공포·탐욕 지수 + 김치프리미엄) -->
+    <section class="stock-section">
+      <div class="section-title">암호화폐 심리지표 <span class="muted small">— 공포·탐욕 · 김치프리미엄</span></div>
+      <div class="crypto-ind-grid">
+        <div class="crypto-ind-card" id="ci-feargreed">
+          <div class="ci-label">공포 · 탐욕 지수</div>
+          <div class="ci-value tnum" id="ci-fg-value">—</div>
+          <div class="ci-sub" id="ci-fg-sub">암호화폐 시장</div>
+        </div>
+        <div class="crypto-ind-card" id="ci-kimp">
+          <div class="ci-label">김치 프리미엄 <span class="muted small">(BTC)</span></div>
+          <div class="ci-value tnum" id="ci-kimp-value">—</div>
+          <div class="ci-sub" id="ci-kimp-sub">업비트 vs 글로벌</div>
+        </div>
+      </div>
+    </section>
+
     <!-- 1-bis) 해외 야간선물 (Hyperliquid HIP-3) -->
     <section class="stock-section">
       <div class="section-title">
         해외 야간선물
         <span class="muted small">— Hyperliquid (24/7 RWA perp)</span>
+        <label class="kimp-toggle" id="kimp-toggle-wrap" title="김치프리미엄만큼 원화 가격을 보정해서 표시">
+          <input type="checkbox" id="kimp-toggle" />
+          <span class="kimp-toggle-label">김프 보정 <span class="muted small" id="kimp-toggle-pct"></span></span>
+        </label>
       </div>
       <div class="night-grid" id="night-grid">
         <a class="night-card loading" id="night-card-SAMSUNG"

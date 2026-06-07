@@ -395,6 +395,7 @@ main {
   display: grid;
   grid-template-columns: 1fr;
   grid-template-areas:
+    "notice"
     "events"
     "kpis"
     "split";
@@ -402,6 +403,7 @@ main {
   margin-bottom: 28px;
   align-items: start;
 }
+.notice-card  { grid-area: notice; }
 .events-strip { grid-area: events; }
 .dash-kpis    { grid-area: kpis; }
 .dash-split   { grid-area: split; }
@@ -507,6 +509,41 @@ main {
   white-space: pre-wrap; word-break: break-word;
 }
 .notice-item-actions { display: flex; gap: 6px; margin-top: 10px; }
+
+/* 암호화폐 심리지표 (공포·탐욕 + 김치프리미엄) */
+.crypto-ind-grid {
+  display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px;
+}
+.crypto-ind-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--r-lg, 12px); padding: 16px 18px;
+  border-left: 3px solid var(--ink-5);
+}
+.crypto-ind-card .ci-label { font-size: 12px; color: var(--ink-3); margin-bottom: 6px; }
+.crypto-ind-card .ci-value { font-size: 26px; font-weight: 700; color: var(--ink); line-height: 1.1; }
+.crypto-ind-card .ci-sub { font-size: 11px; color: var(--ink-4); margin-top: 4px; }
+/* 김프 부호별 색 */
+#ci-kimp.up   { border-left-color: #E5484D; } #ci-kimp.up .ci-value   { color: #E5484D; }
+#ci-kimp.down { border-left-color: var(--accent); } #ci-kimp.down .ci-value { color: var(--accent); }
+/* 공포·탐욕 색 */
+.fg-extreme-fear  { border-left-color: #D1383D; } .fg-extreme-fear  .ci-value { color: #D1383D; }
+.fg-fear          { border-left-color: #E5844D; } .fg-fear          .ci-value { color: #E5844D; }
+.fg-neutral       { border-left-color: #C9A227; } .fg-neutral       .ci-value { color: #C9A227; }
+.fg-greed         { border-left-color: #4DA15A; } .fg-greed         .ci-value { color: #4DA15A; }
+.fg-extreme-greed { border-left-color: #1F8B3B; } .fg-extreme-greed .ci-value { color: #1F8B3B; }
+
+/* 김프 보정 토글 (야간선물 섹션 타이틀) */
+.kimp-toggle {
+  margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--ink-2); cursor: pointer; user-select: none;
+}
+.kimp-toggle input { accent-color: var(--accent); cursor: pointer; }
+/* 김프 토글이 있는 타이틀만 flex 로 (전역 .section-title 영향 X) */
+.section-title:has(.kimp-toggle) { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+@media (max-width: 560px) {
+  .crypto-ind-grid { grid-template-columns: 1fr; }
+}
 
 /* 이벤트 캘린더 위젯 — 대시보드 최상단 가로 스트립 */
 .events-card {
@@ -2110,7 +2147,7 @@ main {
   .spend-layout { grid-template-columns: 1fr; }
   .dashboard {
     grid-template-columns: 1fr;
-    grid-template-areas: "kpis" "split" "events";
+    grid-template-areas: "notice" "kpis" "split" "events";
   }
   .events-card {
     position: static;

@@ -2322,6 +2322,77 @@ async function handleNightFutures(req, res) {
   reply(res, 200, { ok: true, ...payload });
 }
 
+// ============ 암호화폐 심리지표 — 공포·탐욕 지수 + 김치프리미엄 ============
+// 공포·탐욕: alternative.me (무료, 키 불필요). 김치프리미엄: Upbit KRW-BTC 대비
+// 글로벌 BTC(USD)×USDKRW. 글로벌은 Binance 우선, 실패 시 Yahoo BTC-USD 폴백.
+const CRYPTO_INDICATORS_TTL = 180_000; // 3분
+
+async function fetchFearGreed() {
+  const r = await httpsGet('https://api.alternative.me/fng/?limit=1', { timeoutMs: 8000 });
+  if (!r.ok) { logLine('warn', 'fng.http', { status: r.status }); return null; }
+  try {
+    const j = JSON.parse(r.body);
+    const d = Array.isArray(j?.data) ? j.data[0] : null;
+    if (!d) return null;
+    const value = parseInt(d.value, 10);
+    if (!Number.isFinite(value)) return null;
+    return { value, classification: d.value_classification || '', ts: d.timestamp || null };
+  } catch (e) { logLine('warn', 'fng.parse', { err: String(e) }); return null; }
+}
+
+// 글로벌 BTC 가격(USD) — Binance 우선, 실패 시 Yahoo BTC-USD.
+async function fetchGlobalBtcUsd() {
+  const r = await httpsGet('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT', { timeoutMs: 7000 });
+  if (r.ok) {
+    try { const j = JSON.parse(r.body); const p = Number(j?.price); if (Number.isFinite(p) && p > 0) return p; }
+    catch {}
+  }
+  logLine('warn', 'kimp.binance.fail', { status: r.status });
+  try {
+    const yh = await fetchYahoo(['BTC-USD']);
+    const p = Number(yh['BTC-USD']?.price);
+    if (Number.isFinite(p) && p > 0) return p;
+  } catch (e) { logLine('warn', 'kimp.yahoo.fail', { err: String(e && e.message || e) }); }
+  return null;
+}
+
+async function fetchKimchiPremium() {
+  const [up, btcUsd, usdKrw] = await Promise.all([
+    fetchUpbit(['KRW-BTC']),
+    fetchGlobalBtcUsd(),
+    getUsdKrwRate(),
+  ]);
+  const upbitKRW = Number(up?.['KRW-BTC']?.priceKRW);
+  if (!Number.isFinite(upbitKRW) || !Number.isFinite(btcUsd) || !Number.isFinite(usdKrw)) {
+    return null;
+  }
+  const globalKRW = btcUsd * usdKrw;
+  const pct = (upbitKRW / globalKRW - 1) * 100;
+  return {
+    pct: Math.round(pct * 100) / 100,
+    basis: 'BTC',
+    upbitKRW: Math.round(upbitKRW),
+    globalUSD: Math.round(btcUsd * 100) / 100,
+    usdKrw: Math.round(usdKrw * 100) / 100,
+  };
+}
+
+async function handleCryptoIndicators(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  const cacheKey = '__crypto_ind';
+  const { entry, stale } = getStockCacheEntry(cacheKey, CRYPTO_INDICATORS_TTL);
+  if (entry && !stale) return reply(res, 200, { ok: true, ...entry.payload, cached: true });
+
+  const [fearGreed, kimchiPremium] = await Promise.all([fetchFearGreed(), fetchKimchiPremium()]);
+  const payload = { fearGreed, kimchiPremium, ts: nowKST() };
+  if (fearGreed || kimchiPremium) {
+    writeStockCacheKey(cacheKey, payload);
+  } else if (entry) {
+    return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
+  }
+  reply(res, 200, { ok: true, ...payload });
+}
+
 // ============================================================================
 // KRX 정보데이터시스템 — 연기금 일별 매매 (시장 전체)
 // ----------------------------------------------------------------------------
@@ -3080,6 +3151,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/krx-investor-flows') return await handleKrxInvestorFlows(req, res);
     if (urlPath === '/api/nps-portfolio') return await handleNpsPortfolio(req, res);
     if (urlPath === '/api/night-futures') return await handleNightFutures(req, res);
+    if (urlPath === '/api/crypto-indicators') return await handleCryptoIndicators(req, res);
     if (urlPath === '/api/config-status') return await handleConfigStatus(req, res);
     if (urlPath === '/api/krx-auth-check') return await handleKrxAuthCheck(req, res);
 
