@@ -23,3 +23,10 @@ jobs:
           curl -fsS -m 120 --retry 2 --retry-delay 20 --retry-all-errors \
             "https://seed-ledger.onrender.com/api/news-push-now?scheduled=1" \
             -w "\n[HTTP %{http_code}]\n"
+
+      # 주요 이벤트(toss) 갱신 트리거 — GET 시 stale 이면 서버가 백그라운드 갱신.
+      - name: 이벤트 갱신 트리거
+        run: |
+          curl -fsS -m 60 --retry 1 --retry-delay 10 \
+            "https://seed-ledger.onrender.com/api/events" -o /dev/null \
+            -w "[events HTTP %{http_code}]\n" || true

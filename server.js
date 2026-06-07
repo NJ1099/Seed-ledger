@@ -774,7 +774,22 @@ async function handleEvents(req, res) {
       if (e && e.category == null) e.category = inferCategory(e);
     }
   }
+  // 데이터가 오래됐으면(>1h) 백그라운드로 갱신 트리거. Render Free sleep 으로 6시간
+  // 인터벌이 못 돌아도 방문 시 self-heal 되게 한다. (응답은 기다리지 않음 — 다음 로드부터 반영)
+  maybeRefreshEvents(data.updatedAt);
   return reply(res, 200, { ok: true, ...data });
+}
+
+let eventsRefreshInFlight = false;
+let lastEventsRefreshAt = 0;
+function maybeRefreshEvents(updatedAt) {
+  const ageMs = updatedAt ? (Date.now() - Date.parse(updatedAt)) : Infinity;
+  if (ageMs < 60 * 60 * 1000) return;                       // 1시간 이내면 스킵
+  if (eventsRefreshInFlight) return;
+  if (Date.now() - lastEventsRefreshAt < 10 * 60 * 1000) return;  // 10분 내 재시도 방지
+  eventsRefreshInFlight = true;
+  lastEventsRefreshAt = Date.now();
+  Promise.resolve(refreshEvents()).finally(() => { eventsRefreshInFlight = false; });
 }
 
 // ============ STOCK TAB APIS ============
@@ -3322,13 +3337,14 @@ async function refreshEvents() {
       return;
     }
     const today = todayKST();
-    const upcoming = fresh
-      .filter(e => e.date >= today)
-      .sort((a, b) => a.date.localeCompare(b.date))
-      .slice(0, EVENTS_TOP_N);
+    const sorted = fresh.slice().sort((a, b) => a.date.localeCompare(b.date));
+    const upcoming = sorted.filter(e => e.date >= today);
 
-    if (!upcoming.length) {
-      logLine('warn', 'events.refresh.no-upcoming', { total: fresh.length });
+    // 다가오는 일정이 있으면 그걸, 없으면(주말/주중 갱신 공백) 가장 최근 일정이라도 기록한다.
+    // 예전엔 upcoming 0건이면 갱신을 건너뛰어 파일이 영구히 stale 에 빠졌음.
+    const chosen = upcoming.length ? upcoming.slice(0, EVENTS_TOP_N) : sorted.slice(-EVENTS_TOP_N);
+    if (!chosen.length) {
+      logLine('warn', 'events.refresh.empty-after-filter', { total: fresh.length });
       return;
     }
 
@@ -3336,9 +3352,9 @@ async function refreshEvents() {
       version: 2,
       updatedAt: nowKST(),
       source: 'toss-invest-ai-key-events',
-      events: upcoming,
+      events: chosen,
     });
-    logLine('info', 'events.refresh.ok', { count: upcoming.length, first: upcoming[0].date, last: upcoming[upcoming.length - 1].date });
+    logLine('info', 'events.refresh.ok', { count: chosen.length, upcoming: upcoming.length, first: chosen[0].date, last: chosen[chosen.length - 1].date });
   } catch (e) {
     logLine('error', 'events.refresh.fail', { err: String(e && e.stack || e) });
   }

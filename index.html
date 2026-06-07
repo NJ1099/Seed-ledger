@@ -86,38 +86,8 @@
 
     <!-- 대시보드: KPI + 포트폴리오 구성 도넛 + 미니 스파크라인 -->
     <div class="dashboard">
-      <div class="dash-kpis">
-        <div class="dkpi"><div class="d-lab">금융 자산</div><div class="d-val" id="dk-financial">—</div><div class="d-sub" id="dk-financial-sub">부동산 제외</div></div>
-        <div class="dkpi"><div class="d-lab">투자 자산</div><div class="d-val" id="dk-invest">—</div><div class="d-sub" id="dk-invest-sub">주식·코인</div></div>
-        <div class="dkpi"><div class="d-lab">평가 손익</div><div class="d-val" id="dk-pl">—</div><div class="d-sub" id="dk-pl-sub">&nbsp;</div></div>
-        <div class="dkpi"><div class="d-lab">이번 달 지출</div><div class="d-val" id="dk-spend">—</div><div class="d-sub" id="dk-spend-sub">저축 제외</div></div>
-      </div>
 
-      <div class="dash-split">
-        <div class="dash-card dash-donut">
-          <div class="dc-title">자산 구성</div>
-          <div class="dd-wrap">
-            <canvas id="alloc-donut" width="200" height="200"></canvas>
-            <div class="alloc-legend" id="alloc-legend"></div>
-          </div>
-        </div>
-
-        <div class="dash-card dash-portfolio">
-          <div class="dc-title">투자 포트폴리오</div>
-          <div class="pf-table" id="pf-table"><!-- 종목별 비중·손익 --></div>
-        </div>
-
-        <div class="dash-card dash-trend">
-          <div class="dc-title">최근 30일 총자산</div>
-          <div class="spark-wrap">
-            <canvas id="mini-spark" height="110"></canvas>
-            <div class="chart-tooltip spark-tooltip hidden" id="spark-tooltip"></div>
-          </div>
-          <div class="dt-stat" id="dt-stat">—</div>
-        </div>
-      </div>
-
-      <!-- 공지 (admin 작성 / 누구나 읽기) -->
+      <!-- 공지 (admin 작성 / 누구나 읽기) — 대시보드 최상단 -->
       <div class="dash-card notice-card" id="notice-card">
         <div class="dc-title">
           📢 공지
@@ -147,6 +117,37 @@
         </div>
 
         <div class="notice-list" id="notice-list"><!-- 공지 목록 --></div>
+      </div>
+
+      <div class="dash-kpis">
+        <div class="dkpi"><div class="d-lab">금융 자산</div><div class="d-val" id="dk-financial">—</div><div class="d-sub" id="dk-financial-sub">부동산 제외</div></div>
+        <div class="dkpi"><div class="d-lab">투자 자산</div><div class="d-val" id="dk-invest">—</div><div class="d-sub" id="dk-invest-sub">주식·코인</div></div>
+        <div class="dkpi"><div class="d-lab">평가 손익</div><div class="d-val" id="dk-pl">—</div><div class="d-sub" id="dk-pl-sub">&nbsp;</div></div>
+        <div class="dkpi"><div class="d-lab">이번 달 지출</div><div class="d-val" id="dk-spend">—</div><div class="d-sub" id="dk-spend-sub">저축 제외</div></div>
+      </div>
+
+      <div class="dash-split">
+        <div class="dash-card dash-donut">
+          <div class="dc-title">자산 구성</div>
+          <div class="dd-wrap">
+            <canvas id="alloc-donut" width="200" height="200"></canvas>
+            <div class="alloc-legend" id="alloc-legend"></div>
+          </div>
+        </div>
+
+        <div class="dash-card dash-portfolio">
+          <div class="dc-title">투자 포트폴리오</div>
+          <div class="pf-table" id="pf-table"><!-- 종목별 비중·손익 --></div>
+        </div>
+
+        <div class="dash-card dash-trend">
+          <div class="dc-title">최근 30일 총자산</div>
+          <div class="spark-wrap">
+            <canvas id="mini-spark" height="110"></canvas>
+            <div class="chart-tooltip spark-tooltip hidden" id="spark-tooltip"></div>
+          </div>
+          <div class="dt-stat" id="dt-stat">—</div>
+        </div>
       </div>
 
       <!-- 주요 이벤트 (가로 스트립 - 대시보드 최상단 배치) -->
