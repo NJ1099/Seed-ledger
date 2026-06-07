@@ -3068,6 +3068,9 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/config-status') return await handleConfigStatus(req, res);
     if (urlPath === '/api/krx-auth-check') return await handleKrxAuthCheck(req, res);
 
+    // 공지 (admin 작성 / 누구나 읽기)
+    if (urlPath === '/api/notices')       return await handleNotices(req, res);
+
     // 기기 간 동기화 (텔레그램 봇 기반)
     if (urlPath === '/api/sync/status')      return await handleSyncStatus(req, res);
     if (urlPath === '/api/sync/init')        return await handleSyncInit(req, res);
@@ -3595,6 +3598,8 @@ setTimeout(bootTelegram, 2000);
 // 운영할 수 있다. 미설정 시 TELEGRAM_BOT_TOKEN 으로 폴백(하위 호환).
 const NEWS_BOT_TOKEN = (process.env.TELEGRAM_NEWS_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN || '').trim();
 const NEWS_PUSH_CHAT_ID = (process.env.TELEGRAM_NEWS_CHAT_ID || '').trim();
+// 뉴스 메시지 하단에 항상 붙이는 사이트 주소. env 로 재정의 가능.
+const PUBLIC_SITE_URL = (process.env.PUBLIC_SITE_URL || 'https://seed-ledger.onrender.com').trim();
 const NEWS_PUSH_ENABLED = !!(NEWS_BOT_TOKEN && NEWS_PUSH_CHAT_ID);
 const NEWS_PUSH_HOURS_KST = [10, 18];   // 발송 시각 (KST 정각)
 const NEWS_PUSH_COUNT = 10;             // 발송할 뉴스 건수
@@ -3679,9 +3684,14 @@ async function sendDailyNews(reason) {
     return [head, meta, sum].filter(Boolean).join('\n');
   });
 
-  // 텔레그램 메시지 길이 한도(4096자) 안전 여유. 넘으면 뒤에서 잘라낸다.
-  let text = [header, ...items].join('\n\n');
-  if (text.length > 3900) text = text.slice(0, 3900) + '\n…';
+  // 메시지 하단에 항상 사이트 주소 링크를 붙인다.
+  const footer = `🔗 <a href="${tgEscapeHtml(PUBLIC_SITE_URL)}">자산 포트폴리오 사이트 바로가기 →</a>`;
+
+  // 텔레그램 메시지 길이 한도(4096자) 안전 여유. 넘으면 뉴스 본문에서 잘라내되 푸터는 보존.
+  let body = [header, ...items].join('\n\n');
+  const maxBody = 3900 - footer.length - 2;
+  if (body.length > maxBody) body = body.slice(0, maxBody) + '\n…';
+  const text = `${body}\n\n${footer}`;
 
   try {
     await tgSendNews('sendMessage', {
@@ -3752,6 +3762,129 @@ async function handleNewsPushNow(req, res) {
   lastManualNewsPush = now;
   const sent = await sendDailyNews('manual');
   return reply(res, sent ? 200 : 502, { ok: sent });
+}
+
+// ---------- 공지(notice) ----------
+// admin 만 작성/수정/삭제, 누구나 읽기. 영속성 위해 Upstash Redis REST 우선,
+// 미설정 시 data/notices.json 파일로 폴백(로컬 개발/임시 — Render Free 에선 휘발).
+const ADMIN_TOKEN = (process.env.ADMIN_TOKEN || '').trim();
+const UPSTASH_URL = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '').trim().replace(/\/+$/, '');
+const UPSTASH_TOKEN = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '').trim();
+const NOTICES_KEY = 'seed:notices';
+const NOTICES_FILE = path.join(DATA_DIR, 'notices.json');
+const NOTICE_MAX_TITLE = 200;
+const NOTICE_MAX_BODY = 4000;
+const NOTICE_MAX_COUNT = 100;
+
+function upstashEnabled() { return !!(UPSTASH_URL && UPSTASH_TOKEN); }
+
+// Upstash Redis REST 단일 명령. 결과(.result) 반환, 실패 시 throw.
+async function upstashCmd(args) {
+  const r = await httpsPostJson(UPSTASH_URL, args, {
+    timeoutMs: 8000,
+    headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+  });
+  if (!r.ok) throw new Error(`upstash http ${r.status}`);
+  let j;
+  try { j = JSON.parse(r.body); } catch { throw new Error('upstash parse'); }
+  if (j.error) throw new Error(`upstash: ${j.error}`);
+  return j.result;
+}
+
+async function loadNotices() {
+  if (upstashEnabled()) {
+    const raw = await upstashCmd(['GET', NOTICES_KEY]);
+    if (!raw) return [];
+    try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; }
+    catch { return []; }
+  }
+  const arr = readJSON(NOTICES_FILE, []);
+  return Array.isArray(arr) ? arr : [];
+}
+
+async function saveNotices(arr) {
+  if (upstashEnabled()) { await upstashCmd(['SET', NOTICES_KEY, JSON.stringify(arr)]); return; }
+  writeJSON(NOTICES_FILE, arr);
+}
+
+// admin 인증 — Authorization: Bearer <token> 또는 X-Admin-Token 헤더. timing-safe 비교.
+function isAdminReq(req) {
+  if (!ADMIN_TOKEN) return false;
+  const auth = req.headers['authorization'] || '';
+  const m = /^Bearer\s+(.+)$/i.exec(auth);
+  const tok = (m ? m[1] : (req.headers['x-admin-token'] || '')).trim();
+  if (!tok) return false;
+  try {
+    const a = Buffer.from(tok), b = Buffer.from(ADMIN_TOKEN);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch { return false; }
+}
+
+function cleanNoticeText(s, max) {
+  return String(s == null ? '' : s).replace(/\r\n/g, '\n').trim().slice(0, max);
+}
+
+async function handleNotices(req, res) {
+  // 공개 읽기
+  if (req.method === 'GET') {
+    let notices = [];
+    try { notices = await loadNotices(); }
+    catch (e) { logLine('error', 'notices.load', { err: String(e) }); }
+    notices.sort((a, b) => String(b.ts || '').localeCompare(String(a.ts || '')));
+    return reply(res, 200, {
+      ok: true, notices,
+      admin: isAdminReq(req),
+      adminEnabled: !!ADMIN_TOKEN,
+      persistent: upstashEnabled(),
+    });
+  }
+
+  // 쓰기 — admin 전용
+  if (!ADMIN_TOKEN) return reply(res, 503, { ok: false, error: 'admin-disabled', hint: 'ADMIN_TOKEN 미설정' });
+  if (!isAdminReq(req)) return reply(res, 401, { ok: false, error: 'unauthorized' });
+
+  const url = new URL(req.url, 'http://x');
+
+  if (req.method === 'POST' || req.method === 'PUT') {
+    let body;
+    try { body = JSON.parse((await readBody(req, 64 * 1024)) || '{}'); }
+    catch { return reply(res, 400, { ok: false, error: 'bad-json' }); }
+    const title = cleanNoticeText(body.title, NOTICE_MAX_TITLE);
+    const text = cleanNoticeText(body.body, NOTICE_MAX_BODY);
+    if (!title && !text) return reply(res, 400, { ok: false, error: 'empty' });
+
+    let notices;
+    try { notices = await loadNotices(); }
+    catch (e) { logLine('error', 'notices.load', { err: String(e) }); return reply(res, 502, { ok: false, error: 'load-failed' }); }
+
+    const id = (body.id || '').toString();
+    if (req.method === 'PUT' && id) {
+      const n = notices.find(x => x.id === id);
+      if (!n) return reply(res, 404, { ok: false, error: 'not-found' });
+      n.title = title; n.body = text; n.updatedAt = nowKST();
+    } else {
+      notices.unshift({ id: crypto.randomBytes(8).toString('hex'), title, body: text, ts: nowKST(), updatedAt: nowKST() });
+      if (notices.length > NOTICE_MAX_COUNT) notices.length = NOTICE_MAX_COUNT;
+    }
+    try { await saveNotices(notices); }
+    catch (e) { logLine('error', 'notices.save', { err: String(e) }); return reply(res, 502, { ok: false, error: 'save-failed' }); }
+    return reply(res, 200, { ok: true });
+  }
+
+  if (req.method === 'DELETE') {
+    const id = url.searchParams.get('id') || '';
+    let notices;
+    try { notices = await loadNotices(); }
+    catch (e) { return reply(res, 502, { ok: false, error: 'load-failed' }); }
+    const before = notices.length;
+    notices = notices.filter(x => x.id !== id);
+    if (notices.length === before) return reply(res, 404, { ok: false, error: 'not-found' });
+    try { await saveNotices(notices); }
+    catch (e) { logLine('error', 'notices.save', { err: String(e) }); return reply(res, 502, { ok: false, error: 'save-failed' }); }
+    return reply(res, 200, { ok: true });
+  }
+
+  return reply(res, 405, { ok: false, error: 'method' });
 }
 
 // ---------- /api/sync/* 핸들러 ----------

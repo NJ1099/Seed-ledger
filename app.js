@@ -43,6 +43,7 @@ const API = {
   snapshots: '/api/snapshots',
   events: '/api/events',
   history: '/api/history',
+  notices: '/api/notices',
 };
 
 // ---------- 유틸 ----------
@@ -3547,6 +3548,181 @@ function esc(s) {
   }[ch]));
 }
 
+// ---------- 공지 (admin 작성 / 누구나 읽기) ----------
+const noticeState = { notices: [], admin: false, adminEnabled: false, persistent: false, editingId: null };
+
+function getAdminToken() { try { return localStorage.getItem('seedAdminToken') || ''; } catch { return ''; } }
+function setAdminToken(t) {
+  try { if (t) localStorage.setItem('seedAdminToken', t); else localStorage.removeItem('seedAdminToken'); } catch {}
+}
+
+async function loadNotices() {
+  try {
+    const headers = {};
+    const tok = getAdminToken();
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
+    const r = await fetch(API.notices, { headers });
+    const j = await r.json();
+    if (!j.ok) throw new Error(j.error || 'load');
+    noticeState.notices = Array.isArray(j.notices) ? j.notices : [];
+    noticeState.admin = !!j.admin;
+    noticeState.adminEnabled = !!j.adminEnabled;
+    noticeState.persistent = !!j.persistent;
+  } catch {
+    noticeState.notices = [];
+  }
+  renderNotices();
+}
+
+function fmtNoticeDate(ts) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(ts || ''));
+  return m ? `${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}` : String(ts || '').slice(0, 16);
+}
+
+function renderNotices() {
+  const list = document.getElementById('notice-list');
+  if (!list) return;
+  const writeBtn = document.getElementById('notice-write-btn');
+  if (writeBtn) writeBtn.classList.toggle('hidden', !noticeState.admin);
+
+  const items = noticeState.notices;
+  if (!items.length) {
+    list.innerHTML = '';
+    const empty = document.createElement('div');
+    empty.className = 'notice-empty';
+    empty.textContent = '등록된 공지가 없습니다.';
+    list.appendChild(empty);
+    return;
+  }
+  list.innerHTML = '';
+  for (const n of items) {
+    const card = document.createElement('div');
+    card.className = 'notice-item';
+
+    const head = document.createElement('div');
+    head.className = 'notice-item-head';
+    const title = document.createElement('div');
+    title.className = 'notice-item-title';
+    title.textContent = n.title || '(제목 없음)';
+    const date = document.createElement('div');
+    date.className = 'notice-item-date';
+    date.textContent = fmtNoticeDate(n.ts);
+    head.appendChild(title);
+    head.appendChild(date);
+    card.appendChild(head);
+
+    if (n.body) {
+      const body = document.createElement('div');
+      body.className = 'notice-item-body';
+      body.textContent = n.body;   // textContent 로 XSS 차단, 줄바꿈은 CSS 처리
+      card.appendChild(body);
+    }
+
+    if (noticeState.admin) {
+      const actions = document.createElement('div');
+      actions.className = 'notice-item-actions';
+      const edit = document.createElement('button');
+      edit.type = 'button'; edit.className = 'btn-ghost btn-xs'; edit.textContent = '수정';
+      edit.addEventListener('click', () => startEditNotice(n.id));
+      const del = document.createElement('button');
+      del.type = 'button'; del.className = 'btn-ghost btn-xs'; del.textContent = '삭제';
+      del.addEventListener('click', () => deleteNotice(n.id));
+      actions.appendChild(edit);
+      actions.appendChild(del);
+      card.appendChild(actions);
+    }
+    list.appendChild(card);
+  }
+}
+
+function startEditNotice(id) {
+  const n = noticeState.notices.find(x => x.id === id);
+  if (!n) return;
+  noticeState.editingId = id;
+  document.getElementById('notice-f-title').value = n.title || '';
+  document.getElementById('notice-f-body').value = n.body || '';
+  document.getElementById('notice-form').classList.remove('hidden');
+  document.getElementById('notice-save-btn').textContent = '수정';
+  document.getElementById('notice-f-title').focus();
+}
+
+async function deleteNotice(id) {
+  if (!confirm('이 공지를 삭제할까요?')) return;
+  try {
+    const r = await fetch(API.notices + '?id=' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + getAdminToken() },
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.error || r.status);
+    await loadNotices();
+  } catch (e) {
+    alert('삭제 실패: ' + e.message);
+  }
+}
+
+async function saveNotice() {
+  const title = document.getElementById('notice-f-title').value.trim();
+  const body = document.getElementById('notice-f-body').value.trim();
+  const msg = document.getElementById('notice-form-msg');
+  if (!title && !body) { msg.textContent = '제목 또는 내용을 입력하세요.'; return; }
+  const editing = noticeState.editingId;
+  try {
+    const r = await fetch(API.notices, {
+      method: editing ? 'PUT' : 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getAdminToken() },
+      body: JSON.stringify(editing ? { id: editing, title, body } : { title, body }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.error || r.status);
+    cancelNoticeForm();
+    await loadNotices();
+  } catch (e) {
+    msg.textContent = '저장 실패: ' + e.message;
+  }
+}
+
+function cancelNoticeForm() {
+  noticeState.editingId = null;
+  document.getElementById('notice-f-title').value = '';
+  document.getElementById('notice-f-body').value = '';
+  document.getElementById('notice-form-msg').textContent = '';
+  document.getElementById('notice-save-btn').textContent = '등록';
+  document.getElementById('notice-form').classList.add('hidden');
+}
+
+function setupNotices() {
+  const adminBtn = document.getElementById('notice-admin-btn');
+  if (!adminBtn) return;
+  const login = document.getElementById('notice-login');
+  const tokenInput = document.getElementById('notice-token');
+  const loginMsg = document.getElementById('notice-login-msg');
+
+  adminBtn.addEventListener('click', () => login.classList.toggle('hidden'));
+  document.getElementById('notice-login-btn').addEventListener('click', async () => {
+    const t = tokenInput.value.trim();
+    if (!t) return;
+    setAdminToken(t);
+    tokenInput.value = '';
+    loginMsg.textContent = '확인 중…';
+    await loadNotices();
+    if (noticeState.admin) { loginMsg.textContent = '관리자 로그인됨'; login.classList.add('hidden'); }
+    else { loginMsg.textContent = '토큰이 올바르지 않습니다.'; setAdminToken(''); }
+  });
+  document.getElementById('notice-logout-btn').addEventListener('click', async () => {
+    setAdminToken('');
+    loginMsg.textContent = '로그아웃됨';
+    await loadNotices();
+  });
+  document.getElementById('notice-write-btn').addEventListener('click', () => {
+    cancelNoticeForm();
+    document.getElementById('notice-form').classList.remove('hidden');
+    document.getElementById('notice-f-title').focus();
+  });
+  document.getElementById('notice-save-btn').addEventListener('click', saveNotice);
+  document.getElementById('notice-cancel-btn').addEventListener('click', cancelNoticeForm);
+}
+
 // ---------- CSV 가져오기 ----------
 const csvState = {
   rows: [],          // parseCSV 결과
@@ -5147,6 +5323,8 @@ async function boot() {
   setupSync();
   setupPrivacyModal();
   setupWelcomeBanner();
+  setupNotices();
+  loadNotices();
 }
 
 // ---------- 종목 Historical 차트 모달 ----------

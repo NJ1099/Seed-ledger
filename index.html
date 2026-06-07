@@ -117,6 +117,38 @@
         </div>
       </div>
 
+      <!-- 공지 (admin 작성 / 누구나 읽기) -->
+      <div class="dash-card notice-card" id="notice-card">
+        <div class="dc-title">
+          📢 공지
+          <span class="notice-admin-actions">
+            <button type="button" class="btn-ghost btn-xs notice-write-btn hidden" id="notice-write-btn">＋ 작성</button>
+            <button type="button" class="btn-ghost btn-xs" id="notice-admin-btn">관리자</button>
+          </span>
+        </div>
+
+        <!-- 관리자 로그인 -->
+        <div class="notice-login hidden" id="notice-login">
+          <input type="password" id="notice-token" placeholder="관리자 토큰" autocomplete="off" />
+          <button type="button" class="btn-primary btn-xs" id="notice-login-btn">로그인</button>
+          <button type="button" class="btn-ghost btn-xs" id="notice-logout-btn">로그아웃</button>
+          <span class="notice-login-msg" id="notice-login-msg"></span>
+        </div>
+
+        <!-- 작성/수정 폼 (admin 전용) -->
+        <div class="notice-form hidden" id="notice-form">
+          <input type="text" id="notice-f-title" placeholder="제목" maxlength="200" />
+          <textarea id="notice-f-body" placeholder="내용" rows="3" maxlength="4000"></textarea>
+          <div class="notice-form-actions">
+            <button type="button" class="btn-primary btn-xs" id="notice-save-btn">등록</button>
+            <button type="button" class="btn-ghost btn-xs" id="notice-cancel-btn">취소</button>
+            <span class="notice-form-msg" id="notice-form-msg"></span>
+          </div>
+        </div>
+
+        <div class="notice-list" id="notice-list"><!-- 공지 목록 --></div>
+      </div>
+
       <!-- 주요 이벤트 (가로 스트립 - 대시보드 최상단 배치) -->
       <div class="dash-card events-card events-strip">
         <div class="dc-title">

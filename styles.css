@@ -469,6 +469,45 @@ main {
   gap: 8px;
 }
 
+/* 공지 (admin 작성 / 누구나 읽기) */
+.notice-card .notice-admin-actions { display: flex; gap: 6px; align-items: center; }
+.notice-login,
+.notice-form { margin-bottom: 12px; }
+.notice-login {
+  display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  padding: 10px; background: var(--surface-2); border-radius: var(--r-md, 8px);
+}
+.notice-login input {
+  flex: 1 1 160px; min-width: 0; padding: 6px 10px;
+  border: 1px solid var(--border); border-radius: 6px; font-size: 13px;
+}
+.notice-login-msg,
+.notice-form-msg { font-size: 12px; color: var(--ink-3); }
+.notice-form { display: flex; flex-direction: column; gap: 8px; }
+.notice-form input,
+.notice-form textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical;
+}
+.notice-form-actions { display: flex; gap: 6px; align-items: center; }
+
+.notice-list { display: flex; flex-direction: column; gap: 10px; }
+.notice-empty { font-size: 13px; color: var(--ink-4); padding: 6px 0; }
+.notice-item {
+  border: 1px solid var(--border-soft); border-left: 3px solid var(--accent);
+  border-radius: 8px; padding: 12px 14px; background: var(--surface);
+}
+.notice-item-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+}
+.notice-item-title { font-size: 14px; font-weight: 600; color: var(--ink); word-break: break-word; }
+.notice-item-date { font-size: 11px; color: var(--ink-4); white-space: nowrap; flex-shrink: 0; }
+.notice-item-body {
+  margin-top: 6px; font-size: 13px; line-height: 1.55; color: var(--ink-2);
+  white-space: pre-wrap; word-break: break-word;
+}
+.notice-item-actions { display: flex; gap: 6px; margin-top: 10px; }
+
 /* 이벤트 캘린더 위젯 — 대시보드 최상단 가로 스트립 */
 .events-card {
   padding: 10px 14px;
