@@ -3058,6 +3058,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/stock-movers')  return await handleStockMovers(req, res);
     if (urlPath === '/api/stock-search')  return await handleStockSearch(req, res);
     if (urlPath === '/api/stock-news')    return await handleStockNews(req, res);
+    if (urlPath === '/api/news-push-now') return await handleNewsPushNow(req, res);
     if (urlPath === '/api/pension-flows') return await handlePensionFlows(req, res);
     if (urlPath === '/api/krx-pension-trading') return await handleKrxPensionTrading(req, res);
     if (urlPath === '/api/krx-pension-top-stocks') return await handleKrxPensionTopStocks(req, res);
@@ -3584,6 +3585,121 @@ async function bootTelegram() {
   }
 }
 setTimeout(bootTelegram, 2000);
+
+// ---------- 일일 주식 뉴스 푸시 (매일 10:00 / 18:00 KST) ----------
+// 자산 포트폴리오 주식 뉴스(사이트에 표시되는 최신 뉴스)를 제목+요약으로 정리해
+// 텔레그램 채팅방(TELEGRAM_NEWS_CHAT_ID)으로 하루 두 번 자동 발송한다.
+// 봇 토큰은 동기화 기능과 동일한 TELEGRAM_BOT_TOKEN 을 재사용한다.
+const NEWS_PUSH_CHAT_ID = (process.env.TELEGRAM_NEWS_CHAT_ID || '').trim();
+const NEWS_PUSH_HOURS_KST = [10, 18];   // 발송 시각 (KST 정각)
+const NEWS_PUSH_COUNT = 10;             // 발송할 뉴스 건수
+let lastNewsPushSlot = '';              // 중복 발송 방지 키 (YYYY-MM-DD:HH)
+let lastManualNewsPush = 0;             // 수동 트리거 쿨다운용 타임스탬프
+
+// HTML parse_mode 용 최소 escape (텔레그램은 & < > 만 escape 하면 됨).
+function tgEscapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// KST 기준 날짜/시/분 분해.
+function kstClockParts(d = new Date()) {
+  const s = d.toLocaleString('sv', { timeZone: 'Asia/Seoul' }); // "YYYY-MM-DD HH:MM:SS"
+  const [date, time] = s.split(' ');
+  const [hour, minute] = time.split(':').map(Number);
+  return { date, hour, minute };
+}
+
+// 최신 뉴스 NEWS_PUSH_COUNT 건을 제목+요약으로 묶어 텔레그램 메시지로 발송.
+async function sendDailyNews(reason) {
+  if (!SYNC_ENABLED) { logLine('warn', 'newspush.skip', { reason: 'no-token' }); return false; }
+  if (!NEWS_PUSH_CHAT_ID) { logLine('warn', 'newspush.skip', { reason: 'no-chat-id' }); return false; }
+
+  let news = [];
+  try {
+    news = await fetchStockNews(NEWS_PUSH_COUNT, '');
+  } catch (e) {
+    logLine('error', 'newspush.fetch.fail', { err: String(e) });
+  }
+  if (!Array.isArray(news) || !news.length) {
+    logLine('warn', 'newspush.empty', { reason });
+    return false;
+  }
+
+  const { date, hour } = kstClockParts();
+  const hh = String(hour).padStart(2, '0');
+  const header =
+    `📈 <b>오늘의 주식 뉴스</b> · ${date} ${hh}:00\n` +
+    `자산 포트폴리오 관련 최신 뉴스 ${Math.min(news.length, NEWS_PUSH_COUNT)}건`;
+
+  const items = news.slice(0, NEWS_PUSH_COUNT).map((n, i) => {
+    const title = tgEscapeHtml(n.title || '');
+    const url = safeNewsUrl(n.url || '');
+    const src = tgEscapeHtml(n.source || '');
+    const summary = tgEscapeHtml((n.summary || '').slice(0, 120));
+    const head = url
+      ? `${i + 1}. <a href="${tgEscapeHtml(url)}">${title}</a>`
+      : `${i + 1}. ${title}`;
+    const meta = src ? `   <i>${src}</i>` : '';
+    const sum = summary ? `   ${summary}` : '';
+    return [head, meta, sum].filter(Boolean).join('\n');
+  });
+
+  // 텔레그램 메시지 길이 한도(4096자) 안전 여유. 넘으면 뒤에서 잘라낸다.
+  let text = [header, ...items].join('\n\n');
+  if (text.length > 3900) text = text.slice(0, 3900) + '\n…';
+
+  try {
+    await tgPostJson('sendMessage', {
+      chat_id: NEWS_PUSH_CHAT_ID,
+      text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    });
+    logLine('info', 'newspush.sent', { count: items.length, reason, slot: `${date}:${hour}` });
+    return true;
+  } catch (e) {
+    logLine('error', 'newspush.send.fail', { err: String(e) });
+    return false;
+  }
+}
+
+// 1분 주기 틱 — KST 10:00 / 18:00 정시(분 0~4 윈도우)에 1회만 발송.
+// 윈도우 + slot dedupe 로 setInterval 드리프트/중복을 흡수한다.
+function newsPushTick() {
+  if (!SYNC_ENABLED || !NEWS_PUSH_CHAT_ID) return;
+  const { date, hour, minute } = kstClockParts();
+  if (!NEWS_PUSH_HOURS_KST.includes(hour)) return;
+  if (minute >= 5) return;
+  const slot = `${date}:${hour}`;
+  if (slot === lastNewsPushSlot) return;
+  lastNewsPushSlot = slot;
+  sendDailyNews('scheduled').catch((e) => logLine('error', 'newspush.tick.fail', { err: String(e) }));
+}
+
+if (SYNC_ENABLED && NEWS_PUSH_CHAT_ID) {
+  setInterval(newsPushTick, 60_000);
+  logLine('info', 'newspush.enabled', { hoursKst: NEWS_PUSH_HOURS_KST, count: NEWS_PUSH_COUNT });
+} else {
+  logLine('info', 'newspush.disabled', {
+    reason: !SYNC_ENABLED ? 'no-token' : 'no-chat-id',
+  });
+}
+
+// 수동 검증용 — GET /api/news-push-now. 항상 고정 채팅방으로만 발송.
+// 남용 방지로 30초 쿨다운. 배포 직후 동작 확인에만 사용.
+async function handleNewsPushNow(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'no-token' });
+  if (!NEWS_PUSH_CHAT_ID) return reply(res, 503, { ok: false, error: 'no-chat-id' });
+  const now = Date.now();
+  if (now - lastManualNewsPush < 30_000) {
+    return reply(res, 429, { ok: false, error: 'cooldown', hint: '30초 후 다시 시도' });
+  }
+  lastManualNewsPush = now;
+  const sent = await sendDailyNews('manual');
+  return reply(res, sent ? 200 : 502, { ok: sent });
+}
 
 // ---------- /api/sync/* 핸들러 ----------
 
