@@ -5324,10 +5324,33 @@ async function boot() {
   renderTickerStrip();
   schedulePolling();
   setupSync();
+  setupBottomNav();
   setupPrivacyModal();
   setupWelcomeBanner();
   setupNotices();
   loadNotices();
+}
+
+// 모바일 하단 탭바 — 중앙 텔레그램 FAB 는 자산 스냅샷 + 동기화 모달 한 번에.
+// .tab 클래스를 공유하므로 좌/우 탭 버튼들은 setupTabs() 의 기존 핸들러가 자동 처리.
+function setupBottomNav() {
+  const fab = document.getElementById('bn-fab');
+  if (!fab || fab.dataset.wired === '1') return;
+  fab.dataset.wired = '1';
+  fab.addEventListener('click', async () => {
+    if (fab.classList.contains('bn-fab-busy')) return;
+    fab.classList.add('bn-fab-busy');
+    try {
+      // 자산이 비어있을 땐 takeSnapshot 의 alert 을 띄우지 않고 조용히 건너뛴다.
+      // (FAB UX 가 두 단계 → 자산 없음 alert 만 떠 버리면 sync 모달이 뒤따라 와 혼란).
+      if (Number(state.totalKRW) > 0) {
+        try { await takeSnapshot(); } catch (e) { console.warn('[bottom-nav] snapshot failed', e); }
+      }
+    } finally {
+      fab.classList.remove('bn-fab-busy');
+      openSyncModal();
+    }
+  });
 }
 
 // ---------- 종목 Historical 차트 모달 ----------
@@ -6176,8 +6199,19 @@ function fillNews(news) {
     el.innerHTML = '<div class="news-empty muted small">뉴스를 불러올 수 없습니다.</div>';
     return;
   }
+  // 최신순 안전망 — 서버 폴백 경로(EUC-KR HTML / RSS) 가 정렬을 보장하지 않을 수 있어
+  // publishedAt 을 파싱 가능한 항목은 desc 로 다시 정렬한다. 파싱 실패한 항목은
+  // 같은 원본 순서를 유지하도록 인덱스 tiebreaker 사용 (Array.sort 는 stable 하지만
+  // 동률 처리 명시).
+  const sorted = news
+    .map((it, idx) => {
+      const t = it && it.publishedAt ? Date.parse(it.publishedAt) : NaN;
+      return { it, idx, t: Number.isFinite(t) ? t : -Infinity };
+    })
+    .sort((a, b) => (b.t - a.t) || (a.idx - b.idx))
+    .map(x => x.it);
   // 제목 + 매체명 + 시간만. 요약은 표시하지 않는다.
-  el.innerHTML = news.map(it => {
+  el.innerHTML = sorted.map(it => {
     const href = safeHttpUrl(it.url);
     if (!href) return '';
     const ago = stockTimeAgo(it.publishedAt);

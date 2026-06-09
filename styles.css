@@ -3004,8 +3004,67 @@ main {
   display: inline-block;
 }
 .nps-wrap { display: block; }
-.nps-table-wrap { overflow-x: auto; }
-.nps-table { width: 100%; font-size: 13px; }
+.nps-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  -webkit-overflow-scrolling: touch;
+}
+/* 국민연금 포트폴리오 표 — 컬럼 폭이 자산군별로 들쭉날쭉해서
+   줄바꿈을 막고 가로 스크롤로 보여 준다. 헤더는 surface-2 sticky. */
+.nps-table {
+  width: 100%;
+  font-size: 12.5px;
+  border-collapse: collapse;
+}
+.nps-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--surface-2);
+  color: var(--ink-3);
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.nps-table tbody td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border-soft);
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+.nps-table tbody tr:last-child td { border-bottom: 0; }
+.nps-table tbody tr:hover { background: var(--surface-2); }
+.nps-table tbody td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink);
+}
+/* 첫 컬럼(보통 자산군명/종목명) 은 좌측에 고정해 가로 스크롤 시에도 컨텍스트 유지 */
+.nps-table thead th:first-child,
+.nps-table tbody td:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--surface);
+  z-index: 2;
+}
+.nps-table thead th:first-child { background: var(--surface-2); z-index: 3; }
+
+@media (max-width: 768px) {
+  .nps-table { font-size: 12px; }
+  .nps-table thead th,
+  .nps-table tbody td { padding: 6px 8px; }
+  .nps-table tbody td { max-width: 180px; }
+}
 .nps-snippet {
   display: inline-block;
   margin-top: 6px;
@@ -3425,4 +3484,79 @@ main {
   .news-title { font-size: 14px; }
   .market-toggle { padding: 3px; }
   .mt-btn { padding: 5px 10px; font-size: 12px; }
+}
+
+/* ============ BOTTOM NAV (mobile) ============
+   ≤768px 에서만 body 하단에 고정. 5칸 grid 의 가운데 슬롯은 비워두고
+   FAB(텔레그램) 가 absolute 로 들어가 약간 떠 보이게 한다. iOS 안전영역 보정. */
+.bottom-nav { display: none; }
+
+@media (max-width: 768px) {
+  body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
+
+  /* 모바일에서 상단 가로 스크롤 탭(.sidenav)을 숨겨 메뉴 중복 제거.
+     상단 사이드바는 brand 만 슬림하게 남는다. */
+  .sidebar .sidenav { display: none; }
+  .sidebar { padding: 10px 16px; gap: 8px; }
+
+  .bottom-nav {
+    display: grid;
+    grid-template-columns: 1fr 1fr 72px 1fr 1fr;
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 64px;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    background: var(--surface);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
+    z-index: 80;
+  }
+  .bn-tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 0 0;
+    background: transparent;
+    border: 0;
+    color: var(--ink-3);
+    font-size: 11px;
+    cursor: pointer;
+    transition: color 120ms ease;
+  }
+  .bn-tab .bn-ico { font-size: 20px; line-height: 1; }
+  .bn-tab .bn-lab { font-size: 11px; letter-spacing: 0.02em; }
+  .bn-tab.active { color: var(--accent); }
+  .bn-tab:active { transform: scale(0.96); }
+
+  /* 사이드바는 모바일에서 이미 다른 미디어 쿼리로 숨겨져 있을 수 있으나,
+     혹시 보이고 있다면 bottom-nav 와 함께 떠 있어 혼란을 주므로 명시적으로 처리.
+     기존 미디어 쿼리에서 sidebar 가 표시되고 있다면 이 규칙은 무시됨. */
+  .bn-fab-slot { /* 가운데 빈 슬롯 — FAB 가 absolute 로 자리잡음 */ }
+
+  .bn-fab {
+    position: absolute;
+    left: 50%;
+    top: -22px;
+    transform: translateX(-50%);
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 4px solid var(--bg, var(--surface));
+    background: linear-gradient(135deg, #229ED9 0%, #1E88C8 100%); /* 텔레그램 톤 */
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 6px 18px rgba(34, 158, 217, 0.42);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .bn-fab .bn-fab-ico { font-size: 26px; line-height: 1; }
+  .bn-fab:active { transform: translateX(-50%) scale(0.94); }
+  .bn-fab.bn-fab-busy {
+    pointer-events: none;
+    opacity: 0.7;
+  }
 }

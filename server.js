@@ -1604,13 +1604,26 @@ async function fetchGoogleNewsRss(query, limit) {
   }
 }
 
+// publishedAt 기준 desc 정렬 (파싱 실패 항목은 원본 순서 유지). 폴백 경로(HTML/RSS)
+// 가 정렬을 보장하지 않을 수 있어 호출부에서 항상 한 번 통과시킨다.
+function sortNewsByPublishedDesc(items) {
+  if (!Array.isArray(items) || items.length < 2) return items;
+  return items
+    .map((it, idx) => {
+      const t = it && it.publishedAt ? Date.parse(it.publishedAt) : NaN;
+      return { it, idx, t: Number.isFinite(t) ? t : -Infinity };
+    })
+    .sort((a, b) => (b.t - a.t) || (a.idx - b.idx))
+    .map(x => x.it);
+}
+
 async function fetchStockNews(limit, query) {
   // 네이버 검색 API 전용 — 사용자 명시 선호 (라운드 12-bis).
   // 키 있을 때는 OpenAPI 결과만 사용한다 (빈 응답이어도 다른 매체로 폴백하지 않음).
   // 다른 매체가 섞여 들어오는 걸 막기 위함.
   if (process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET) {
     const out = await fetchNaverOpenApiNews(query, limit);
-    return Array.isArray(out) ? out : [];
+    return sortNewsByPublishedDesc(Array.isArray(out) ? out : []);
   }
 
   // 키 미설정 시에만 폴백 체인 활성화.
@@ -1631,7 +1644,7 @@ async function fetchStockNews(limit, query) {
       const items = j?.newsList || j?.items || j?.result?.list || j?.news || j?.list || [];
       if (Array.isArray(items) && items.length) {
         const out = items.slice(0, limit).map(normalizeNewsItem).filter(Boolean);
-        if (out.length) return out;
+        if (out.length) return sortNewsByPublishedDesc(out);
       }
     } catch (e) {
       logLine('warn', 'news.parse.stock', { url, err: String(e) });
@@ -1647,7 +1660,7 @@ async function fetchStockNews(limit, query) {
       const items = j?.items || j?.newsList || j?.result || j?.news || [];
       if (Array.isArray(items) && items.length) {
         const out = items.slice(0, limit).map(normalizeNewsItem).filter(Boolean);
-        if (out.length) return out;
+        if (out.length) return sortNewsByPublishedDesc(out);
       }
     } catch (e) {
       logLine('warn', 'news.parse.m', { err: String(e) });
@@ -1681,7 +1694,7 @@ async function fetchStockNews(limit, query) {
           image: null,
         });
       }
-      if (items.length) return items;
+      if (items.length) return sortNewsByPublishedDesc(items);
     } catch (e) {
       logLine('warn', 'news.parse.html', { err: String(e) });
     }
@@ -1690,7 +1703,7 @@ async function fetchStockNews(limit, query) {
   // 4차 (최종): Google News RSS — 키 불필요, 매우 안정적인 폴백.
   // 1-3차가 모두 빈 응답이거나 차단되는 환경(Render 등)에서도 동작.
   const gout = await fetchGoogleNewsRss(query, limit);
-  if (gout && gout.length) return gout;
+  if (gout && gout.length) return sortNewsByPublishedDesc(gout);
 
   return [];
 }
@@ -3677,7 +3690,7 @@ async function bootTelegram() {
 }
 setTimeout(bootTelegram, 2000);
 
-// ---------- 일일 주식 뉴스 푸시 (매일 10:00 / 18:00 KST) ----------
+// ---------- 일일 주식 뉴스 푸시 (매일 09:30 / 18:00 KST) ----------
 // 자산 포트폴리오 주식 뉴스(사이트에 표시되는 최신 뉴스)를 제목+요약으로 정리해
 // 텔레그램 채팅방(TELEGRAM_NEWS_CHAT_ID)으로 하루 두 번 자동 발송한다.
 //
@@ -3689,9 +3702,14 @@ const NEWS_PUSH_CHAT_ID = (process.env.TELEGRAM_NEWS_CHAT_ID || '').trim();
 // 뉴스 메시지 하단에 항상 붙이는 사이트 주소. env 로 재정의 가능.
 const PUBLIC_SITE_URL = (process.env.PUBLIC_SITE_URL || 'https://seed-ledger.onrender.com').trim();
 const NEWS_PUSH_ENABLED = !!(NEWS_BOT_TOKEN && NEWS_PUSH_CHAT_ID);
-const NEWS_PUSH_HOURS_KST = [10, 18];   // 발송 시각 (KST 정각)
+// 발송 시각 (KST). { hour, minute } 객체 배열로 분 단위까지 지정.
+const NEWS_PUSH_SLOTS_KST = [
+  { hour: 9, minute: 30 },
+  { hour: 18, minute: 0 },
+];
+const NEWS_PUSH_WINDOW_MIN = 5;         // slot 분 ±N분 윈도우 안에서 1회 발송
 const NEWS_PUSH_COUNT = 10;             // 발송할 뉴스 건수
-let lastNewsPushSlot = '';              // 중복 발송 방지 키 (YYYY-MM-DD:HH)
+let lastNewsPushSlot = '';              // 중복 발송 방지 키 (YYYY-MM-DD:HH:MM)
 let lastManualNewsPush = 0;             // 수동 트리거 쿨다운용 타임스탬프
 
 // HTML parse_mode 용 최소 escape (텔레그램은 & < > 만 escape 하면 됨).
@@ -3753,10 +3771,11 @@ async function sendDailyNews(reason) {
     return false;
   }
 
-  const { date, hour } = kstClockParts();
+  const { date, hour, minute } = kstClockParts();
   const hh = String(hour).padStart(2, '0');
+  const mm = String(minute).padStart(2, '0');
   const header =
-    `📈 <b>오늘의 주식 뉴스</b> · ${date} ${hh}:00\n` +
+    `📈 <b>오늘의 주식 뉴스</b> · ${date} ${hh}:${mm}\n` +
     `자산 포트폴리오 관련 최신 뉴스 ${Math.min(news.length, NEWS_PUSH_COUNT)}건`;
 
   const items = news.slice(0, NEWS_PUSH_COUNT).map((n, i) => {
@@ -3788,7 +3807,7 @@ async function sendDailyNews(reason) {
       parse_mode: 'HTML',
       disable_web_page_preview: true,
     });
-    logLine('info', 'newspush.sent', { count: items.length, reason, slot: `${date}:${hour}` });
+    logLine('info', 'newspush.sent', { count: items.length, reason, slot: `${date}:${hh}:${mm}` });
     return true;
   } catch (e) {
     logLine('error', 'newspush.send.fail', { err: String(e) });
@@ -3796,16 +3815,34 @@ async function sendDailyNews(reason) {
   }
 }
 
-// 1분 주기 틱 — KST 10:00 / 18:00 정시(분 0~4 윈도우)에 1회만 발송.
+// 현재 KST 시각에 해당하는 발송 slot(`{hour,minute}`) 을 찾아 반환. 윈도우 밖이면 null.
+// 윈도우: slot.minute 이상 slot.minute+NEWS_PUSH_WINDOW_MIN 미만 (같은 시각 hour 안에서만 매칭).
+function currentNewsSlot(parts) {
+  for (const slot of NEWS_PUSH_SLOTS_KST) {
+    if (parts.hour !== slot.hour) continue;
+    if (parts.minute < slot.minute) continue;
+    if (parts.minute >= slot.minute + NEWS_PUSH_WINDOW_MIN) continue;
+    return slot;
+  }
+  return null;
+}
+
+function slotKey(date, slot) {
+  const hh = String(slot.hour).padStart(2, '0');
+  const mm = String(slot.minute).padStart(2, '0');
+  return `${date}:${hh}:${mm}`;
+}
+
+// 1분 주기 틱 — KST 09:30 / 18:00 윈도우 안에서 1회만 발송.
 // 윈도우 + slot dedupe 로 setInterval 드리프트/중복을 흡수한다.
 function newsPushTick() {
   if (!NEWS_PUSH_ENABLED) return;
-  const { date, hour, minute } = kstClockParts();
-  if (!NEWS_PUSH_HOURS_KST.includes(hour)) return;
-  if (minute >= 5) return;
-  const slot = `${date}:${hour}`;
-  if (slot === lastNewsPushSlot) return;
-  lastNewsPushSlot = slot;   // slot 선점 (GitHub Actions HTTP 트리거와 중복 발송 방지)
+  const parts = kstClockParts();
+  const slot = currentNewsSlot(parts);
+  if (!slot) return;
+  const key = slotKey(parts.date, slot);
+  if (key === lastNewsPushSlot) return;
+  lastNewsPushSlot = key;   // slot 선점 (GitHub Actions HTTP 트리거와 중복 발송 방지)
   sendDailyNews('scheduled')
     .then((ok) => { if (!ok) lastNewsPushSlot = ''; })  // 실패 시 해제 → 다음 트리거 재시도
     .catch((e) => { lastNewsPushSlot = ''; logLine('error', 'newspush.tick.fail', { err: String(e) }); });
@@ -3813,7 +3850,7 @@ function newsPushTick() {
 
 if (NEWS_PUSH_ENABLED) {
   setInterval(newsPushTick, 60_000);
-  logLine('info', 'newspush.enabled', { hoursKst: NEWS_PUSH_HOURS_KST, count: NEWS_PUSH_COUNT });
+  logLine('info', 'newspush.enabled', { slotsKst: NEWS_PUSH_SLOTS_KST, count: NEWS_PUSH_COUNT });
 } else {
   logLine('info', 'newspush.disabled', {
     reason: !NEWS_BOT_TOKEN ? 'no-token' : 'no-chat-id',
@@ -3832,15 +3869,20 @@ async function handleNewsPushNow(req, res) {
 
   const url = new URL(req.url, 'http://x');
   if (url.searchParams.get('scheduled') === '1') {
-    const { date, hour } = kstClockParts();
-    const slot = `${date}:${hour}`;
-    if (slot === lastNewsPushSlot) {
-      return reply(res, 200, { ok: true, skipped: 'already-sent', slot });
+    const parts = kstClockParts();
+    // 외부 cron 은 약간의 지연을 가질 수 있으므로 윈도우를 벗어나도
+    // "가장 가까운 같은 시각 slot" 이 있으면 그 slot 키로 dedupe + 발송.
+    const matched = currentNewsSlot(parts)
+      || NEWS_PUSH_SLOTS_KST.find((s) => s.hour === parts.hour)
+      || null;
+    const key = matched ? slotKey(parts.date, matched) : `${parts.date}:${parts.hour}:adhoc`;
+    if (key === lastNewsPushSlot) {
+      return reply(res, 200, { ok: true, skipped: 'already-sent', slot: key });
     }
-    lastNewsPushSlot = slot;   // slot 선점 (in-process 틱과 중복 방지)
+    lastNewsPushSlot = key;   // slot 선점 (in-process 틱과 중복 방지)
     const sent = await sendDailyNews('scheduled-http');
     if (!sent) lastNewsPushSlot = '';   // 실패 시 해제 → 다음 트리거 재시도
-    return reply(res, sent ? 200 : 502, { ok: sent, slot });
+    return reply(res, sent ? 200 : 502, { ok: sent, slot: key });
   }
 
   const now = Date.now();

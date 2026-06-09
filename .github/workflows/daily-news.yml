@@ -6,7 +6,7 @@ name: 일일 주식 뉴스 발송
 on:
   schedule:
     # GitHub Actions cron 은 UTC 기준. KST = UTC + 9.
-    - cron: '0 1 * * *'   # KST 10:00
+    - cron: '30 0 * * *'  # KST 09:30
     - cron: '0 9 * * *'   # KST 18:00
   workflow_dispatch:        # 수동 실행 버튼 (Actions 탭에서 즉시 테스트용)
 
