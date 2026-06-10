@@ -874,12 +874,60 @@ async function handleIndices(req, res) {
   reply(res, 200, { ok: true, ...payload });
 }
 
-// ---------- 사이드카(서킷브레이커 근사) ----------
-// KOSPI/KOSDAQ 현물 지수 급변동을 기준으로 사이드카 발동 여부를 근사 판정.
-// 실제 사이드카는 KOSPI200/KOSDAQ150 선물 ±5%(1분 지속) 기준이지만, 공개 데이터로는
-// 현물 지수 등락률을 임계치로 근사한다.
+// ---------- 사이드카 (코스피·코스닥 사이드카 발동/해제 실시간 추적) ----------
+// 실제 사이드카는 KOSPI200/KOSDAQ150 선물 ±5%/±6% 가 1분 지속될 때 발동 → 5분 후 자동해제.
+// 공개 JSON 피드가 없어, 발동 즉시 보도되는 네이버 뉴스(연합/머투 등 "[속보] … 매도 사이드카 발동")를
+// 파싱해 실시간 판정한다. 현물 지수(^KS11/^KQ11) 등락률은 베이시스 차이로 실제 발동을 놓치므로
+// 판정 기준이 아니라 보조(툴팁 컨텍스트)로만 사용한다.
 let _sidecarCache = { ts: 0, payload: null };
-let _sidecarDay = { date: null, buyTime: null, sellTime: null };
+let _sidecarLatch = { date: null, trigger: null };   // 뉴스 일시 누락 대비 메모리 래치
+const SIDECAR_WINDOW_MIN = 6;                          // 발동 후 active 로 보는 시간(5분 + 버퍼)
+
+const SIDECAR_NOTE = '네이버 속보 기반 코스피·코스닥 사이드카 발동/해제 실시간 판정 (현물 등락률은 참고용)';
+
+// ISO(UTC) 문자열 → KST { date:'YYYY-MM-DD', hhmm:'HH:MM', timeMin }
+function isoToKstParts(iso) {
+  if (!iso) return null;
+  let d;
+  try { d = new Date(iso); } catch { return null; }
+  if (isNaN(d.getTime())) return null;
+  const s = d.toLocaleString('sv', { timeZone: 'Asia/Seoul' }); // 'YYYY-MM-DD HH:MM:SS'
+  const hh = parseInt(s.slice(11, 13), 10);
+  const mm = parseInt(s.slice(14, 16), 10);
+  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+  return { date: s.slice(0, 10), hhmm: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, timeMin: hh * 60 + mm };
+}
+
+// 네이버 뉴스에서 오늘(KST) 코스피·코스닥 사이드카 발동/해제 이벤트 추출.
+async function fetchSidecarNewsEvents(todayKST) {
+  let items = null;
+  try { items = await fetchNaverOpenApiNews('사이드카', 30); } catch { items = null; }
+  // null = 키 미설정/예외(판정 불가) · [] = 정상 조회했으나 매칭 기사 없음/HTTP 실패
+  const available = items != null;
+  if (!items || !items.length) return { available, events: [] };
+  const events = [];
+  for (const it of items) {
+    const title = String(it.title || '');
+    if (!/사이드카/.test(title)) continue;
+    const isRelease = /해제/.test(title);
+    const isTrigger = !isRelease && /발동|효력\s*정지/.test(title);
+    if (!isTrigger && !isRelease) continue;
+    // 방향: 매도=하락(sell) · 매수=상승(buy). 없으면 급락/급등으로 추정.
+    let direction = null;
+    if (/매도/.test(title)) direction = 'sell';
+    else if (/매수/.test(title)) direction = 'buy';
+    else if (/급락|폭락|하락/.test(title)) direction = 'sell';
+    else if (/급등|폭등|반등|상승/.test(title)) direction = 'buy';
+    // 시장
+    let market = null;
+    if (/코스닥|KOSDAQ/i.test(title)) market = 'kosdaq';
+    else if (/코스피|유가증권|KOSPI/i.test(title)) market = 'kospi';
+    const tm = isoToKstParts(it.publishedAt);
+    if (!tm || tm.date !== todayKST) continue;   // 오늘 이벤트만
+    events.push({ type: isRelease ? 'release' : 'trigger', direction, market, hhmm: tm.hhmm, timeMin: tm.timeMin });
+  }
+  return { available: true, events };
+}
 
 async function handleSidecar(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
@@ -896,98 +944,77 @@ async function handleSidecar(req, res) {
     const today = nowStr.slice(0, 10);    // 'YYYY-MM-DD'
     const hh = parseInt(nowStr.slice(11, 13), 10);
     const mm = parseInt(nowStr.slice(14, 16), 10);
+    const nowMin = hh * 60 + mm;
 
-    // 날짜가 바뀌면 발동 시각 추적 리셋
-    if (_sidecarDay.date !== today) {
-      _sidecarDay = { date: today, buyTime: null, sellTime: null };
-    }
-
-    // 요일 계산 (KST 날짜 기준, 외부 의존성 없이) — 0=일 ~ 6=토
+    // 요일 계산 (KST 날짜 기준) — 0=일 ~ 6=토. 장중: 평일 09:00 ~ 15:30
     const dow = new Date(today + 'T00:00:00Z').getUTCDay();
-    const isWeekday = dow >= 1 && dow <= 5;
-    // 장중: 평일 09:00 ~ 15:30
-    const minutes = hh * 60 + mm;
-    const marketOpen = isWeekday && minutes >= (9 * 60) && minutes <= (15 * 60 + 30);
+    const marketOpen = dow >= 1 && dow <= 5 && nowMin >= (9 * 60) && nowMin <= (15 * 60 + 30);
 
-    const yahoo = await fetchYahoo(['^KS11', '^KQ11']);
-    const ks = yahoo['^KS11'];
-    const kq = yahoo['^KQ11'];
+    if (_sidecarLatch.date !== today) _sidecarLatch = { date: today, trigger: null };
 
-    const calcPct = (y) => {
-      if (!y || y.price == null || y.previousClose == null || y.previousClose === 0) return null;
-      return ((y.price - y.previousClose) / y.previousClose) * 100;
-    };
+    // 뉴스(판정 기준) + 현물 등락률(툴팁 보조) 병렬 — 둘 다 best-effort.
+    const [newsRes, spot] = await Promise.all([
+      fetchSidecarNewsEvents(today),
+      (async () => { try { return await fetchYahoo(['^KS11', '^KQ11']); } catch { return {}; } })(),
+    ]);
+    const ks = spot['^KS11'];
+    const kq = spot['^KQ11'];
+    const calcPct = (y) => (!y || y.price == null || y.previousClose == null || y.previousClose === 0)
+      ? null : ((y.price - y.previousClose) / y.previousClose) * 100;
     const kospiPct = calcPct(ks);
     const kosdaqPct = calcPct(kq);
-    const kospiPrice = ks && ks.price != null ? ks.price : null;
-    const kosdaqPrice = kq && kq.price != null ? kq.price : null;
 
-    let status;
-    let time = null;
-
-    if (kospiPct == null && kosdaqPct == null) {
-      // 데이터 둘 다 없음 → unknown
-      status = 'unknown';
-    } else {
-      // 임계치: KOSPI |%|>=5, KOSDAQ |%|>=6
-      const kospiCand = kospiPct != null && Math.abs(kospiPct) >= 5;
-      const kosdaqCand = kosdaqPct != null && Math.abs(kosdaqPct) >= 6;
-
-      let dir = null;          // 'buy' | 'sell'
-      if (kospiCand && kosdaqCand) {
-        // 둘 다 후보면 |%| 더 큰 쪽의 방향 채택
-        const pick = Math.abs(kospiPct) >= Math.abs(kosdaqPct) ? kospiPct : kosdaqPct;
-        dir = pick > 0 ? 'buy' : 'sell';
-      } else if (kospiCand) {
-        dir = kospiPct > 0 ? 'buy' : 'sell';
-      } else if (kosdaqCand) {
-        dir = kosdaqPct > 0 ? 'buy' : 'sell';
-      }
-
-      if (dir) {
-        status = dir;
-      } else if (!marketOpen) {
-        status = 'closed';
-      } else {
-        status = 'normal';
-      }
+    // 오늘 최신 발동 이벤트
+    const triggers = newsRes.events.filter(e => e.type === 'trigger' && e.direction);
+    const releases = newsRes.events.filter(e => e.type === 'release');
+    let latestTrigger = null;
+    for (const t of triggers) if (!latestTrigger || t.timeMin > latestTrigger.timeMin) latestTrigger = t;
+    // 메모리 래치 병합 (뉴스가 잠깐 비어도 발동 사실 유지)
+    if (latestTrigger && (!_sidecarLatch.trigger || latestTrigger.timeMin >= _sidecarLatch.trigger.timeMin)) {
+      _sidecarLatch.trigger = latestTrigger;
     }
+    const effTrigger = latestTrigger || _sidecarLatch.trigger;
 
-    // 발동 시각 추적 — 오늘 처음 판정 시 기록(이미 있으면 유지)
-    const hhmm = `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-    if (status === 'buy' && !_sidecarDay.buyTime) _sidecarDay.buyTime = hhmm;
-    if (status === 'sell' && !_sidecarDay.sellTime) _sidecarDay.sellTime = hhmm;
-    time = status === 'buy' ? _sidecarDay.buyTime
-         : status === 'sell' ? _sidecarDay.sellTime
-         : null;
+    let status, time = null, active = false, today_ = null;
+
+    if (effTrigger) {
+      // 해제: 발동 이후 해제 기사 존재 OR 5분(+버퍼) 경과
+      const hasLaterRelease = releases.some(r => r.timeMin >= effTrigger.timeMin);
+      const elapsed = nowMin - effTrigger.timeMin;
+      const released = hasLaterRelease || elapsed > SIDECAR_WINDOW_MIN || elapsed < 0;
+      active = !released;
+      today_ = { fired: true, direction: effTrigger.direction, market: effTrigger.market, time: effTrigger.hhmm, released };
+      if (active) { status = effTrigger.direction; time = effTrigger.hhmm; }
+      else { status = marketOpen ? 'normal' : 'closed'; }
+    } else if (!newsRes.available) {
+      status = 'unknown';        // 뉴스 자체를 못 받음(키 미설정 등)
+    } else {
+      status = marketOpen ? 'normal' : 'closed';
+    }
 
     const payload = {
       ok: true,
       status,
       time,
-      kospi: { changePct: kospiPct, price: kospiPrice },
-      kosdaq: { changePct: kosdaqPct, price: kosdaqPrice },
+      active,
+      today: today_,
+      kospi: { changePct: kospiPct, price: ks && ks.price != null ? ks.price : null },
+      kosdaq: { changePct: kosdaqPct, price: kq && kq.price != null ? kq.price : null },
       marketOpen,
-      source: 'kospi-kosdaq-spot',
-      note: 'KOSPI/KOSDAQ 현물 지수 급변동 기준 근사치 — 실제 사이드카는 KOSPI200/KOSDAQ150 선물 기준',
+      source: 'naver-news',
+      note: SIDECAR_NOTE,
       ts: nowKST(),
     };
     _sidecarCache = { ts: now, payload };
-    logLine('info', 'sidecar.ok', { status, kospiPct, kosdaqPct, marketOpen });
+    logLine('info', 'sidecar.ok', { status, active, trig: effTrigger ? effTrigger.hhmm : null, kospiPct, kosdaqPct });
     return reply(res, 200, payload);
   } catch (e) {
     // 실패해도 200 + unknown 으로 graceful 반환
     logLine('warn', 'sidecar.fail', { err: String(e) });
     return reply(res, 200, {
-      ok: true,
-      status: 'unknown',
-      time: null,
-      kospi: { changePct: null, price: null },
-      kosdaq: { changePct: null, price: null },
-      marketOpen: false,
-      source: 'kospi-kosdaq-spot',
-      note: 'KOSPI/KOSDAQ 현물 지수 급변동 기준 근사치 — 실제 사이드카는 KOSPI200/KOSDAQ150 선물 기준',
-      ts: nowKST(),
+      ok: true, status: 'unknown', time: null, active: false, today: null,
+      kospi: { changePct: null, price: null }, kosdaq: { changePct: null, price: null },
+      marketOpen: false, source: 'naver-news', note: SIDECAR_NOTE, ts: nowKST(),
     });
   }
 }

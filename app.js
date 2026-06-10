@@ -3600,6 +3600,7 @@ function renderNotices() {
     return;
   }
   list.innerHTML = '';
+  const cards = [];
   for (const n of items) {
     const card = document.createElement('div');
     card.className = 'notice-item';
@@ -3647,7 +3648,27 @@ function renderNotices() {
       actions.appendChild(del);
       card.appendChild(actions);
     }
-    list.appendChild(card);
+    cards.push(card);
+  }
+
+  // 첫 공지는 항상 표시. 2개 이상이면 나머지는 'view all' 로 접는다.
+  list.appendChild(cards[0]);
+  if (cards.length >= 2) {
+    const more = document.createElement('div');
+    more.className = 'notice-more';
+    for (let i = 1; i < cards.length; i++) more.appendChild(cards[i]);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'notice-viewall-btn';
+    const rest = cards.length - 1;
+    const sync = () => {
+      const open = more.classList.contains('is-open');
+      btn.textContent = open ? '공지 접기 ▴' : `전체 공지 보기 (${rest}개 더) ▾`;
+    };
+    sync();
+    btn.addEventListener('click', () => { more.classList.toggle('is-open'); sync(); });
+    list.appendChild(more);
+    list.appendChild(btn);
   }
 }
 
@@ -5808,11 +5829,26 @@ function renderSidecar(p) {
   else                        { cls='sidecar-unknown'; label='확인 불가'; }
   badge.classList.add(cls);
   txt.textContent = label;
-  if (p && (p.note || (p.kospi && p.kosdaq))) {
-    const k = p.kospi && p.kospi.changePct!=null ? p.kospi.changePct.toFixed(2)+'%' : '—';
-    const q = p.kosdaq && p.kosdaq.changePct!=null ? p.kosdaq.changePct.toFixed(2)+'%' : '—';
-    badge.title = `KOSPI ${k} · KOSDAQ ${q} — 지수 급변동 기준 사이드카(프로그램매매 일시정지) 발동 현황`;
+
+  // 오늘 발동 이력 — 현재는 해제됐지만 오늘 발동했던 경우 작은 글씨로 표기.
+  const sub = document.getElementById('sidecar-sub');
+  if (sub) {
+    const ev = p && p.today;
+    if (ev && ev.fired && ev.released && (status === 'normal' || status === 'closed')) {
+      const dirTxt = ev.direction === 'buy' ? '매수' : ev.direction === 'sell' ? '매도' : '';
+      const mkt = ev.market === 'kosdaq' ? '코스닥 ' : ev.market === 'kospi' ? '코스피 ' : '';
+      sub.textContent = `· 오늘 ${ev.time} ${mkt}${dirTxt} 사이드카 발동(해제)`;
+      sub.classList.add('is-on');
+    } else {
+      sub.textContent = '';
+      sub.classList.remove('is-on');
+    }
   }
+
+  // 툴팁: 실시간 등락률 + 출처
+  const k = p && p.kospi && p.kospi.changePct!=null ? p.kospi.changePct.toFixed(2)+'%' : '—';
+  const q = p && p.kosdaq && p.kosdaq.changePct!=null ? p.kosdaq.changePct.toFixed(2)+'%' : '—';
+  badge.title = `KOSPI ${k} · KOSDAQ ${q} — 네이버 속보 기반 코스피·코스닥 사이드카 발동/해제 실시간 판정`;
 }
 
 // ============ 야간선물 (Hyperliquid HIP-3 RWA perp) ============

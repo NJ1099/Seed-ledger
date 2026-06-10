@@ -518,6 +518,16 @@ main {
   display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical;
   overflow: hidden; white-space: normal; text-overflow: ellipsis;
 }
+/* 공지 2개 이상 시 'view all' 로 나머지 접기 */
+.notice-more { display: none; flex-direction: column; gap: 10px; }
+.notice-more.is-open { display: flex; }
+.notice-viewall-btn {
+  align-self: flex-start;
+  background: none; border: 1px solid var(--border-soft); border-radius: 999px;
+  padding: 5px 12px; font-size: 12.5px; color: var(--ink-2); cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.notice-viewall-btn:hover { background: var(--surface-2); border-color: var(--ink-5); color: var(--ink); }
 
 /* 암호화폐 심리지표 (공포·탐욕 + 김치프리미엄) */
 .crypto-ind-grid {
@@ -2663,6 +2673,9 @@ main {
 .sidecar-unknown { color: var(--ink-3); background: #F2F4F6; border-color: var(--border-soft); }
 .sidecar-buy .sidecar-dot, .sidecar-sell .sidecar-dot { animation: sidecarPulse 1.2s ease-in-out infinite; }
 @keyframes sidecarPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+/* 오늘 사이드카 발동 이력(현재 해제) — 배지 옆 작은 글씨 */
+.sidecar-sub { display: none; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
+.sidecar-sub.is-on { display: inline; }
 
 .stock-section {
   margin-bottom: 28px;
