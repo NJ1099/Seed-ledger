@@ -492,6 +492,15 @@ main {
   border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical;
 }
 .notice-form-actions { display: flex; gap: 6px; align-items: center; }
+/* 채널 발송 (admin 전용) */
+.notice-broadcast {
+  display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
+  padding: 10px; background: var(--surface-2); border-radius: var(--r-md, 8px);
+}
+.notice-broadcast textarea {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+  border-radius: 6px; font-size: 12.5px; font-family: inherit; resize: vertical; line-height: 1.5;
+}
 
 .notice-list { display: flex; flex-direction: column; gap: 10px; }
 .notice-empty { font-size: 13px; color: var(--ink-4); padding: 6px 0; }

@@ -49,6 +49,7 @@ const API = {
   history: '/api/history',
   notices: '/api/notices',
   sidecar: '/api/sidecar',
+  broadcast: '/api/broadcast',
 };
 
 // ---------- 유틸 ----------
@@ -3589,6 +3590,9 @@ function renderNotices() {
   if (!list) return;
   const writeBtn = document.getElementById('notice-write-btn');
   if (writeBtn) writeBtn.classList.toggle('hidden', !noticeState.admin);
+  const bcBtn = document.getElementById('notice-broadcast-btn');
+  if (bcBtn) bcBtn.classList.toggle('hidden', !noticeState.admin);
+  if (!noticeState.admin) { const bp = document.getElementById('notice-broadcast'); if (bp) bp.classList.add('hidden'); }
 
   const items = noticeState.notices;
   if (!items.length) {
@@ -3758,6 +3762,70 @@ function setupNotices() {
   });
   document.getElementById('notice-save-btn').addEventListener('click', saveNotice);
   document.getElementById('notice-cancel-btn').addEventListener('click', cancelNoticeForm);
+
+  // 채널 발송 (admin 전용)
+  const bcBtn = document.getElementById('notice-broadcast-btn');
+  const bcPanel = document.getElementById('notice-broadcast');
+  if (bcBtn && bcPanel) {
+    bcBtn.addEventListener('click', () => bcPanel.classList.toggle('hidden'));
+    const fillBtn = document.getElementById('broadcast-fill-btn');
+    if (fillBtn) fillBtn.addEventListener('click', () => {
+      const ta = document.getElementById('broadcast-text');
+      if (ta) ta.value = PORTFOLIO_POST;
+    });
+    const sendBtn = document.getElementById('broadcast-send-btn');
+    if (sendBtn) sendBtn.addEventListener('click', sendBroadcast);
+  }
+}
+
+// 채널 발송용 포트폴리오 소개글 (텔레그램 plain text — 이모지/구분선/줄바꿈 그대로 렌더).
+const PORTFOLIO_POST = `🌱 종잣돈 — 내 자산 포트폴리오를 한눈에
+"흩어진 현금·예적금·주식·코인·부동산을 한 화면에서"
+━━━━━━━━━━━━━━
+
+💰 자산 대시보드
+"입력만 하면 실시간 시세로 자동 평가"
+보유 주식·코인을 업비트·네이버·야후 시세로 자동 계산해 총자산·평가손익을 실시간 표시.
+✅ 주요 기능
+· 자산 구성 도넛 + 투자 포트폴리오 비중·손익
+· 최근 30일 총자산 추이 그래프
+· 소비 추적 & 월 지출 자동 집계
+
+📊 주식 탭 — 시장을 한 페이지에
+"경제지표부터 수급·사이드카까지"
+✅ 주요 기능
+· 8대 경제지표 · 공포·탐욕 지수 · 김치프리미엄
+· 연기금·외국인 순매수/순매도 상위 종목
+· 코스피·코스닥 사이드카 발동 실시간 배지
+· 삼성·SK하이닉스 야간선물(Hyperliquid)
+
+🔒 프라이버시 우선
+"데이터는 내 브라우저에만"
+회원가입 없이 바로 사용. 자산 데이터는 서버에 저장하지 않고 브라우저(localStorage)에만 보관. 텔레그램 2단계 인증으로 기기 간 동기화는 선택.
+
+👉 지금 바로: https://seed-ledger.onrender.com
+
+#종잣돈 #자산관리 #포트폴리오 #주식 #코인 #핀테크 #무료`;
+
+async function sendBroadcast() {
+  const ta = document.getElementById('broadcast-text');
+  const msg = document.getElementById('broadcast-msg');
+  const text = ((ta && ta.value) || '').trim();
+  if (!text) { if (msg) msg.textContent = '내용을 입력하세요.'; return; }
+  if (!confirm('이 메시지를 텔레그램 채널로 발송할까요?')) return;
+  if (msg) msg.textContent = '발송 중…';
+  try {
+    const r = await fetch(API.broadcast, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getAdminToken() },
+      body: JSON.stringify({ text, disable_web_page_preview: false }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    if (msg) msg.textContent = '발송 완료 (message #' + (j.message_id || '?') + ')';
+  } catch (e) {
+    if (msg) msg.textContent = '발송 실패: ' + e.message;
+  }
 }
 
 // ---------- CSV 가져오기 ----------

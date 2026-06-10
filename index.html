@@ -95,6 +95,7 @@
           📢 공지
           <span class="notice-admin-actions">
             <button type="button" class="btn-ghost btn-xs notice-write-btn hidden" id="notice-write-btn">＋ 작성</button>
+            <button type="button" class="btn-ghost btn-xs notice-broadcast-btn hidden" id="notice-broadcast-btn">📢 채널 발송</button>
             <button type="button" class="btn-ghost btn-xs" id="notice-admin-btn">관리자</button>
           </span>
         </div>
@@ -115,6 +116,16 @@
             <button type="button" class="btn-primary btn-xs" id="notice-save-btn">등록</button>
             <button type="button" class="btn-ghost btn-xs" id="notice-cancel-btn">취소</button>
             <span class="notice-form-msg" id="notice-form-msg"></span>
+          </div>
+        </div>
+
+        <!-- 채널 발송 (admin 전용) — 텔레그램 뉴스 봇으로 고정 채널에 발송 -->
+        <div class="notice-broadcast hidden" id="notice-broadcast">
+          <textarea id="broadcast-text" rows="8" placeholder="채널로 보낼 메시지 (텔레그램 뉴스 봇 → 고정 채널)" maxlength="4096"></textarea>
+          <div class="notice-form-actions">
+            <button type="button" class="btn-ghost btn-xs" id="broadcast-fill-btn">포트폴리오 소개글 채우기</button>
+            <button type="button" class="btn-primary btn-xs" id="broadcast-send-btn">발송</button>
+            <span class="notice-form-msg" id="broadcast-msg"></span>
           </div>
         </div>
 

@@ -3316,6 +3316,7 @@ const server = http.createServer(async (req, res) => {
 
     // 공지 (admin 작성 / 누구나 읽기)
     if (urlPath === '/api/notices')       return await handleNotices(req, res);
+    if (urlPath === '/api/broadcast')     return await handleBroadcast(req, res);
 
     // 기기 간 동기화 (텔레그램 봇 기반)
     if (urlPath === '/api/sync/status')      return await handleSyncStatus(req, res);
@@ -4038,6 +4039,43 @@ async function handleNewsPushNow(req, res) {
   lastManualNewsPush = now;
   const sent = await sendDailyNews('manual');
   return reply(res, sent ? 200 : 502, { ok: sent });
+}
+
+// POST /api/broadcast — admin 전용. 뉴스 봇으로 임의 텍스트를 고정 채널(NEWS_PUSH_CHAT_ID)에 발송.
+// 공지 admin 토큰(ADMIN_TOKEN)으로 인증. 포트폴리오 소개글 등 1회성 공지/홍보 발송용.
+async function handleBroadcast(req, res) {
+  if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'POST only' });
+  if (!ADMIN_TOKEN) return reply(res, 503, { ok: false, error: 'admin-disabled', hint: 'ADMIN_TOKEN 미설정' });
+  if (!isAdminReq(req)) return reply(res, 401, { ok: false, error: 'unauthorized' });
+  if (!NEWS_BOT_TOKEN) return reply(res, 503, { ok: false, error: 'no-token', hint: 'TELEGRAM_NEWS_BOT_TOKEN/TELEGRAM_BOT_TOKEN 미설정' });
+  if (!NEWS_PUSH_CHAT_ID) return reply(res, 503, { ok: false, error: 'no-chat-id', hint: 'TELEGRAM_NEWS_CHAT_ID 미설정' });
+
+  let body;
+  try { body = JSON.parse((await readBody(req, 64 * 1024)) || '{}'); }
+  catch { return reply(res, 400, { ok: false, error: 'bad-json' }); }
+
+  const text = String(body.text == null ? '' : body.text).replace(/\r\n/g, '\n').trim();
+  if (!text) return reply(res, 400, { ok: false, error: 'empty-text' });
+  if (text.length > 4096) return reply(res, 400, { ok: false, error: 'too-long', hint: '텔레그램 4096자 제한' });
+
+  // parse_mode 화이트리스트. 기본 plain. 'HTML' | 'Markdown' | 'MarkdownV2' 허용.
+  const pm = String(body.parse_mode || '').trim();
+  const parseMode = ['HTML', 'Markdown', 'MarkdownV2'].includes(pm) ? pm : null;
+  const payload = {
+    chat_id: NEWS_PUSH_CHAT_ID,
+    text,
+    disable_web_page_preview: body.disable_web_page_preview === true, // 기본: 링크 미리보기 표시
+  };
+  if (parseMode) payload.parse_mode = parseMode;
+
+  try {
+    const result = await tgSendNews('sendMessage', payload);
+    logLine('info', 'broadcast.sent', { len: text.length, mid: result && result.message_id });
+    return reply(res, 200, { ok: true, message_id: result && result.message_id, chat: NEWS_PUSH_CHAT_ID });
+  } catch (e) {
+    logLine('error', 'broadcast.fail', { err: String(e) });
+    return reply(res, 502, { ok: false, error: 'send-failed', detail: String((e && e.message) || e) });
+  }
 }
 
 // ---------- 공지(notice) ----------
