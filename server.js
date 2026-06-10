@@ -899,25 +899,38 @@ function isoToKstParts(iso) {
 }
 
 // 네이버 뉴스에서 오늘(KST) 코스피·코스닥 사이드카 발동/해제 이벤트 추출.
+// 1차 네이버 OpenAPI(키 필요) → 키 없거나 빈 결과면 2차 Google News RSS(키 불필요)로 폴백.
 async function fetchSidecarNewsEvents(todayKST) {
   let items = null;
+  let available = false;
+  // 1차: 네이버 OpenAPI (NAVER_CLIENT_ID/SECRET 있을 때만 non-null)
   try { items = await fetchNaverOpenApiNews('사이드카', 30); } catch { items = null; }
-  // null = 키 미설정/예외(판정 불가) · [] = 정상 조회했으나 매칭 기사 없음/HTTP 실패
-  const available = items != null;
+  if (items != null) available = true;
+  // 2차: 키 미설정/빈 결과 → Google News RSS (키 불필요)
+  if (!items || !items.length) {
+    try {
+      const g = await fetchGoogleNewsRss('사이드카', 30);
+      if (Array.isArray(g)) { items = g; available = true; }
+    } catch {}
+  }
   if (!items || !items.length) return { available, events: [] };
   const events = [];
   for (const it of items) {
     const title = String(it.title || '');
     if (!/사이드카/.test(title)) continue;
+    // 설명/개념 기사 제외 (오탐 방지): "사이드카 뜻/조건/이란/…"
+    if (/조건|뜻|이란|무엇|설명|개념|차이|역사|용어|가능성|우려|전망|임박/.test(title)) continue;
     const isRelease = /해제/.test(title);
-    const isTrigger = !isRelease && /발동|효력\s*정지/.test(title);
+    // 발동은 '속보' 표시가 있는 실제 속보만 채택 — 전망/분석/리캡 기사의 pubDate 오탐 방지.
+    // (실제 사이드카 속보는 다수 매체가 [속보]로 동시 보도하므로 누락 위험 낮음)
+    const isTrigger = !isRelease && /발동|효력\s*정지/.test(title) && /속보/.test(title);
     if (!isTrigger && !isRelease) continue;
     // 방향: 매도=하락(sell) · 매수=상승(buy). 없으면 급락/급등으로 추정.
     let direction = null;
     if (/매도/.test(title)) direction = 'sell';
     else if (/매수/.test(title)) direction = 'buy';
-    else if (/급락|폭락|하락/.test(title)) direction = 'sell';
-    else if (/급등|폭등|반등|상승/.test(title)) direction = 'buy';
+    else if (/급락|폭락/.test(title)) direction = 'sell';
+    else if (/급등|폭등|급반등/.test(title)) direction = 'buy';
     // 시장
     let market = null;
     if (/코스닥|KOSDAQ/i.test(title)) market = 'kosdaq';
@@ -964,16 +977,17 @@ async function handleSidecar(req, res) {
     const kospiPct = calcPct(ks);
     const kosdaqPct = calcPct(kq);
 
-    // 오늘 최신 발동 이벤트
+    // 오늘 '최초' 발동 이벤트 — 사이드카는 1일 1회라, 가장 이른 속보가 실제 발동 시각에 가장 근접.
+    // (최신 기사를 쓰면 마감 후 리캡 기사의 pubDate 가 잡혀 시각이 틀리고 가짜 active 가 생김)
     const triggers = newsRes.events.filter(e => e.type === 'trigger' && e.direction);
     const releases = newsRes.events.filter(e => e.type === 'release');
-    let latestTrigger = null;
-    for (const t of triggers) if (!latestTrigger || t.timeMin > latestTrigger.timeMin) latestTrigger = t;
-    // 메모리 래치 병합 (뉴스가 잠깐 비어도 발동 사실 유지)
-    if (latestTrigger && (!_sidecarLatch.trigger || latestTrigger.timeMin >= _sidecarLatch.trigger.timeMin)) {
-      _sidecarLatch.trigger = latestTrigger;
+    let firstTrigger = null;
+    for (const t of triggers) if (!firstTrigger || t.timeMin < firstTrigger.timeMin) firstTrigger = t;
+    // 메모리 래치 병합 (뉴스가 잠깐 비어도 발동 사실 유지) — 더 이른 발동을 보존.
+    if (firstTrigger && (!_sidecarLatch.trigger || firstTrigger.timeMin < _sidecarLatch.trigger.timeMin)) {
+      _sidecarLatch.trigger = firstTrigger;
     }
-    const effTrigger = latestTrigger || _sidecarLatch.trigger;
+    const effTrigger = _sidecarLatch.trigger || firstTrigger;
 
     let status, time = null, active = false, today_ = null;
 
@@ -986,9 +1000,10 @@ async function handleSidecar(req, res) {
       today_ = { fired: true, direction: effTrigger.direction, market: effTrigger.market, time: effTrigger.hhmm, released };
       if (active) { status = effTrigger.direction; time = effTrigger.hhmm; }
       else { status = marketOpen ? 'normal' : 'closed'; }
-    } else if (!newsRes.available) {
-      status = 'unknown';        // 뉴스 자체를 못 받음(키 미설정 등)
     } else {
+      // 발동 이벤트 미검출 → 정상(장중) / 장마감.
+      // 뉴스 소스를 전혀 못 받아도 사이드카는 극히 드문 이벤트라 'normal' 이 올바른 기본값
+      // (양성 발동을 포착했을 때만 buy/sell 로 뒤집는다). 'unknown' 으로 "확인 불가" 표시하지 않음.
       status = marketOpen ? 'normal' : 'closed';
     }
 
