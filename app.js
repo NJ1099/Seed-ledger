@@ -28,6 +28,7 @@ const state = {
   txPageShown: 30,       // 리스트 표시 개수 (더보기로 +30 씩 증가)
   stockMarket: 'kr',          // 주식 탭 시장 토글
   stockRefreshTimer: null,    // 주식 탭 5분 폴링 타이머
+  sidecarTimer: null,        // 사이드카 배지 폴링 타이머
   stockSearchDebounce: null,  // 종목 검색 디바운스 핸들
   pensionDays: 30,            // 국민연금 매수/매도 표 조회 기간 (일)
   flowsDays: 30,              // 연기금·외국인 순매수/순매도 조회 기간 (일)
@@ -47,6 +48,7 @@ const API = {
   events: '/api/events',
   history: '/api/history',
   notices: '/api/notices',
+  sidecar: '/api/sidecar',
 };
 
 // ---------- 유틸 ----------
@@ -3612,6 +3614,17 @@ function renderNotices() {
     date.textContent = fmtNoticeDate(n.ts);
     head.appendChild(title);
     head.appendChild(date);
+
+    if (n.body) {
+      // 본문 있는 항목은 접기/펼치기 가능. 기본 접힘.
+      card.className = 'notice-item is-collapsible is-collapsed';
+      const toggle = document.createElement('span');
+      toggle.className = 'notice-toggle';
+      toggle.textContent = '▾';
+      toggle.setAttribute('aria-hidden', 'true');
+      head.appendChild(toggle);
+      head.addEventListener('click', () => card.classList.toggle('is-collapsed'));
+    }
     card.appendChild(head);
 
     if (n.body) {
@@ -5689,6 +5702,7 @@ function renderStock() {
   // API 병렬 호출
   setupKimpToggle();
   loadIndices();
+  loadSidecar();
   loadCryptoIndicators();
   loadNightFutures();
   loadMovers();
@@ -5704,9 +5718,12 @@ function renderStock() {
   if (el) el.textContent = `${nowKSTDisplay()} 갱신`;
   // 5분 폴링 (연기금은 24h TTL, hyperliquid 는 30s TTL — 같이 호출해도 캐시가 흡수)
   stopStockRefresh();
+  // 사이드카 전용 60초 틱 (발동 시각 빠른 반영)
+  state.sidecarTimer = setInterval(() => { if (state.tab === 'stock') loadSidecar(); }, 60 * 1000);
   state.stockRefreshTimer = setInterval(() => {
     if (state.tab === 'stock') {
       loadIndices();
+      loadSidecar();
       loadCryptoIndicators();
       loadNightFutures();
       loadMovers();
@@ -5720,6 +5737,10 @@ function stopStockRefresh() {
   if (state.stockRefreshTimer) {
     clearInterval(state.stockRefreshTimer);
     state.stockRefreshTimer = null;
+  }
+  if (state.sidecarTimer) {
+    clearInterval(state.sidecarTimer);
+    state.sidecarTimer = null;
   }
   stopFlowsTicker();
 }
@@ -5764,6 +5785,34 @@ function fillIndicesGrid(indices) {
       </div>`;
   }).join('');
   grid.innerHTML = html;
+}
+
+// ============ 사이드카 발동 배지 (코스피·코스닥) ============
+
+async function loadSidecar() {
+  try { const r = await stockApiGet('/api/sidecar'); if (r && r.ok) renderSidecar(r); else renderSidecar({ status: 'unknown' }); }
+  catch (e) { console.warn('[stock] sidecar fetch failed', e); renderSidecar({ status: 'unknown' }); }
+}
+function renderSidecar(p) {
+  const badge = document.getElementById('sidecar-badge');
+  const txt = document.getElementById('sidecar-text');
+  if (!badge || !txt) return;
+  const status = (p && p.status) || 'unknown';
+  badge.classList.remove('sidecar-normal','sidecar-buy','sidecar-sell','sidecar-closed','sidecar-unknown');
+  const t = p && p.time ? ` (${p.time})` : '';
+  let cls, label;
+  if (status === 'buy')       { cls='sidecar-buy';     label='매수 사이드카 발동' + t; }
+  else if (status === 'sell') { cls='sidecar-sell';    label='매도 사이드카 발동' + t; }
+  else if (status === 'closed'){ cls='sidecar-closed'; label='장 마감'; }
+  else if (status === 'normal'){ cls='sidecar-normal'; label='정상'; }
+  else                        { cls='sidecar-unknown'; label='확인 불가'; }
+  badge.classList.add(cls);
+  txt.textContent = label;
+  if (p && (p.note || (p.kospi && p.kosdaq))) {
+    const k = p.kospi && p.kospi.changePct!=null ? p.kospi.changePct.toFixed(2)+'%' : '—';
+    const q = p.kosdaq && p.kosdaq.changePct!=null ? p.kosdaq.changePct.toFixed(2)+'%' : '—';
+    badge.title = `KOSPI ${k} · KOSDAQ ${q} — 지수 급변동 기준 사이드카(프로그램매매 일시정지) 발동 현황`;
+  }
 }
 
 // ============ 야간선물 (Hyperliquid HIP-3 RWA perp) ============

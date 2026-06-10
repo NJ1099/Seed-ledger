@@ -509,6 +509,15 @@ main {
   white-space: pre-wrap; word-break: break-word;
 }
 .notice-item-actions { display: flex; gap: 6px; margin-top: 10px; }
+/* 공지 접기/펼치기 — 접힌 상태는 본문 한 줄 + 말줄임 */
+.notice-item.is-collapsible .notice-item-head { cursor: pointer; }
+.notice-toggle { font-size: 11px; color: var(--ink-4); margin-left: 6px; flex-shrink: 0; transition: transform 150ms ease; }
+.notice-item.is-collapsed .notice-toggle { transform: rotate(-90deg); }
+.notice-item.is-collapsed .notice-item-body {
+  margin-top: 4px;
+  display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical;
+  overflow: hidden; white-space: normal; text-overflow: ellipsis;
+}
 
 /* 암호화폐 심리지표 (공포·탐욕 + 김치프리미엄) */
 .crypto-ind-grid {
@@ -2309,6 +2318,8 @@ main {
   margin-bottom: 10px;
 }
 .welcome-banner-text b { color: var(--ink); font-weight: 600; }
+/* 환영문구 안내: 데스크톱은 좌측 하단 동기화, 모바일은 가운데 텔레그램 FAB */
+.welcome-sync-mobile { display: none; }
 .welcome-banner-actions { display: flex; gap: 14px; align-items: center; }
 .welcome-banner-link {
   background: none;
@@ -2641,6 +2652,17 @@ main {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
+/* 사이드카 상태 배지 — 코스피/코스닥 사이드카 발동 판정 */
+.stock-head-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
+.sidecar-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; line-height: 1.2; white-space: nowrap; border: 1px solid transparent; }
+.sidecar-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
+.sidecar-normal  { color: #1F8A4C; background: #E9F8EF; border-color: #BFE6CD; }
+.sidecar-buy     { color: var(--up);   background: var(--up-soft);   border-color: #F7C5CC; }
+.sidecar-sell    { color: var(--down); background: var(--down-soft); border-color: #BFD8FB; }
+.sidecar-closed,
+.sidecar-unknown { color: var(--ink-3); background: #F2F4F6; border-color: var(--border-soft); }
+.sidecar-buy .sidecar-dot, .sidecar-sell .sidecar-dot { animation: sidecarPulse 1.2s ease-in-out infinite; }
+@keyframes sidecarPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
 
 .stock-section {
   margin-bottom: 28px;
@@ -3473,6 +3495,9 @@ main {
   .movers-grid { grid-template-columns: 1fr; }
   .stock-head { flex-direction: column; align-items: flex-start; gap: 4px; }
   .idx-price { font-size: 18px; }
+  /* 환영문구: 모바일에서는 가운데 텔레그램 FAB 안내로 전환 */
+  .welcome-sync-desktop { display: none; }
+  .welcome-sync-mobile { display: inline; }
 }
 @media (max-width: 480px) {
   .index-card { padding: 12px; min-height: 80px; }
@@ -3554,6 +3579,8 @@ main {
     transition: transform 120ms ease, box-shadow 120ms ease;
   }
   .bn-fab .bn-fab-ico { font-size: 26px; line-height: 1; }
+  /* FAB 텔레그램 종이비행기 SVG — currentColor(흰색) */
+  .bn-fab .bn-fab-ico .tg-glyph { width: 30px; height: 30px; display: block; }
   .bn-fab:active { transform: translateX(-50%) scale(0.94); }
   .bn-fab.bn-fab-busy {
     pointer-events: none;

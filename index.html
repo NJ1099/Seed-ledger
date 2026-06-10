@@ -75,7 +75,9 @@
         <div class="welcome-banner-title">환영합니다</div>
         <div class="welcome-banner-text">
           입력하신 자산 데이터는 <b>이 브라우저에만 저장</b>되고 서버로 가지 않습니다.
-          다른 PC 에서도 같은 데이터를 보시려면 좌측 하단 <b>☁ 기기 동기화</b> 로 텔레그램을 연동해주세요.
+          다른 PC 에서도 같은 데이터를 보시려면
+          <span class="welcome-sync-desktop">좌측 하단 <b>☁ 기기 동기화</b> 로 텔레그램을 연동해주세요.</span>
+          <span class="welcome-sync-mobile">화면 <b>가운데 텔레그램 버튼</b>을 누르면 연동됩니다.</span>
         </div>
         <div class="welcome-banner-actions">
           <button type="button" class="welcome-banner-link" id="welcome-open-privacy">자세히 보기 →</button>
@@ -490,7 +492,13 @@
   <!-- =================== 주식 탭 =================== -->
   <section class="panel hidden" id="panel-stock">
     <header class="stock-head">
-      <h2 class="stock-title">주식 대시보드</h2>
+      <div class="stock-head-left">
+        <h2 class="stock-title">주식 대시보드</h2>
+        <span class="sidecar-badge sidecar-unknown" id="sidecar-badge" title="KOSPI·KOSDAQ 지수 급변동 기준 사이드카(프로그램매매 일시정지) 발동 현황">
+          <span class="sidecar-dot" aria-hidden="true"></span>
+          <span class="sidecar-text" id="sidecar-text">확인 중…</span>
+        </span>
+      </div>
       <div class="stock-updated muted small" id="stock-updated-at">—</div>
     </header>
 
@@ -961,7 +969,7 @@
   </button>
   <!-- 가운데 텔레그램 FAB — 누르면 자산 스냅샷 + 텔레그램 동기화 모달 -->
   <button type="button" class="bn-fab" id="bn-fab" title="자산 스냅샷 저장 + 텔레그램 동기화" aria-label="텔레그램 동기화">
-    <span class="bn-fab-ico" aria-hidden="true">✈</span>
+    <span class="bn-fab-ico" aria-hidden="true"><svg class="tg-glyph" viewBox="0 0 448 512" aria-hidden="true"><path fill="currentColor" d="M446.7 98.6l-67.6 318.8c-5.1 22.5-18.4 28.1-37.3 17.5l-103-75.9-49.7 47.8c-5.5 5.5-10.1 10.1-20.7 10.1l7.4-104.9 190.9-172.5c8.3-7.4-1.8-11.5-12.9-4.1L117.8 284 16.2 252.2c-22.1-6.9-22.5-22.1 4.6-32.7L418.2 66.4c18.4-6.8 34.5 4.4 28.5 32.2z"/></svg></span>
   </button>
 </nav>
 
