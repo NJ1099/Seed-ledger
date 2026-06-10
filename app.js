@@ -5889,12 +5889,12 @@ function renderSidecar(p) {
   const status = (p && p.status) || 'unknown';
   badge.classList.remove('sidecar-normal','sidecar-buy','sidecar-sell','sidecar-closed','sidecar-unknown');
   const t = p && p.time ? ` (${p.time})` : '';
+  // 사용자 스펙: 사이드카 발동 중이 아니면 무조건 초록 "정상".
+  // (normal/closed/unknown 모두 '정상' 으로 통일 — 장마감/확인불가 회색 표시 안 함)
   let cls, label;
-  if (status === 'buy')       { cls='sidecar-buy';     label='매수 사이드카 발동' + t; }
-  else if (status === 'sell') { cls='sidecar-sell';    label='매도 사이드카 발동' + t; }
-  else if (status === 'closed'){ cls='sidecar-closed'; label='장 마감'; }
-  else if (status === 'normal'){ cls='sidecar-normal'; label='정상'; }
-  else                        { cls='sidecar-unknown'; label='확인 불가'; }
+  if (status === 'buy')       { cls='sidecar-buy';  label='매수 사이드카 발동' + t; }
+  else if (status === 'sell') { cls='sidecar-sell'; label='매도 사이드카 발동' + t; }
+  else                        { cls='sidecar-normal'; label='정상'; }
   badge.classList.add(cls);
   txt.textContent = label;
 
@@ -5902,7 +5902,7 @@ function renderSidecar(p) {
   const sub = document.getElementById('sidecar-sub');
   if (sub) {
     const ev = p && p.today;
-    if (ev && ev.fired && ev.released && (status === 'normal' || status === 'closed')) {
+    if (ev && ev.fired && ev.released && status !== 'buy' && status !== 'sell') {
       const dirTxt = ev.direction === 'buy' ? '매수' : ev.direction === 'sell' ? '매도' : '';
       const mkt = ev.market === 'kosdaq' ? '코스닥 ' : ev.market === 'kospi' ? '코스피 ' : '';
       sub.textContent = `· 오늘 ${ev.time} ${mkt}${dirTxt} 사이드카 발동(해제)`;
