@@ -208,6 +208,7 @@
     <div class="add-card">
       <div class="ac-head">
         <h3>＋ 계좌 추가</h3>
+        <button type="button" class="btn-ghost" id="broker-link-open">🔗 증권사 API 연동</button>
         <button type="button" class="btn-ghost" id="asset-import-open">📄 CSV / XLS / PDF 가져오기</button>
       </div>
       <form id="acc-form" class="acc-form" autocomplete="off">
@@ -719,6 +720,69 @@
       <div class="csv-actions">
         <button type="button" class="btn-primary" id="csv-import">이 내용으로 불러오기</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- =================== 증권사 API 연동 모달 =================== -->
+<div class="modal hidden" id="broker-modal" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>🔗 증권사 API 연동</h3>
+      <button type="button" class="modal-x" id="broker-close">×</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="csv-hint">
+        토스증권·한국투자증권의 <strong>Open API 앱키/시크릿</strong>을 등록하면
+        버튼 한 번으로 보유 종목·예수금을 불러옵니다. 발급받은 키는
+        <strong>이 브라우저에만</strong> 저장되고, 동기화할 때만 서버가 증권사 API 로
+        중계 호출합니다(서버는 키·잔고를 저장하지 않음).
+      </p>
+
+      <div class="broker-warn">
+        ⚠️ <strong>보안 주의.</strong> 증권사 App Key/Secret 은 조회뿐 아니라
+        <strong>매수·매도 주문 권한</strong>까지 가질 수 있습니다. 본인 소유 기기에서만
+        등록하고, 공용 PC 에는 저장하지 마세요. 키가 유출되면 즉시 증권사 개발자센터에서
+        재발급(기존 키 무효화)하세요. 테스트는 한국투자 <strong>모의투자</strong> 키를 권장합니다.
+      </div>
+
+      <div id="broker-links" class="broker-links"></div>
+
+      <form id="broker-form" class="acc-form" autocomplete="off">
+        <div class="field">
+          <label>증권사</label>
+          <select id="broker-kind">
+            <option value="toss">토스증권</option>
+            <option value="kis">한국투자증권 (KIS)</option>
+          </select>
+        </div>
+        <div class="field hidden" id="broker-env-field">
+          <label>투자 환경</label>
+          <select id="broker-env">
+            <option value="real">실전투자</option>
+            <option value="demo">모의투자 (테스트)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label id="broker-appkey-label">App Key (Client ID)</label>
+          <input type="text" id="broker-appkey" autocomplete="off" spellcheck="false" placeholder="발급받은 App Key" />
+        </div>
+        <div class="field">
+          <label id="broker-appsecret-label">App Secret (Client Secret)</label>
+          <input type="password" id="broker-appsecret" autocomplete="off" spellcheck="false" placeholder="발급받은 App Secret" />
+        </div>
+        <div class="field hidden" id="broker-account-field">
+          <label>계좌번호 <span class="broker-help">(한국투자 · 예: 12345678-01)</span></label>
+          <input type="text" id="broker-account" autocomplete="off" spellcheck="false" placeholder="숫자 10자리 (종합계좌 8 + 상품 2)" />
+        </div>
+        <p class="csv-err" id="broker-err"></p>
+        <div class="csv-actions">
+          <button type="button" class="btn-ghost" id="broker-save">＋ 연동 저장</button>
+          <button type="button" class="btn-primary" id="broker-sync-now">지금 동기화</button>
+        </div>
+        <p class="broker-guide" id="broker-guide"></p>
+      </form>
     </div>
   </div>
 </div>

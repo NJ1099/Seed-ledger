@@ -1,52 +1,52 @@
 {
   "version": 2,
-  "updatedAt": "2026-06-01T12:35:46+09:00",
+  "updatedAt": "2026-07-13T07:33:50+09:00",
   "source": "toss-invest-ai-key-events",
   "events": [
     {
-      "id": "ev-20260601-uspmieci",
-      "date": "2026-06-01",
-      "title": "ISM 제조업 구매관리자지수 발표 (23:00 KST)",
+      "id": "ev-20260714-uscpfyeci",
+      "date": "2026-07-14",
+      "title": "근원 소비자물가지수 발표(전년 대비) (21:30 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 52.7"
+      "note": "이전 2.9 %"
     },
     {
-      "id": "ev-20260602-usjolteci",
-      "date": "2026-06-02",
-      "title": "노동시장 신규 구인건수(JOLTs) 발표 (23:00 KST)",
+      "id": "ev-20260714-uscpfeci",
+      "date": "2026-07-14",
+      "title": "근원 소비자물가지수 발표(전월 대비) (21:30 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 6.866"
+      "note": "이전 0.2 %"
     },
     {
-      "id": "ev-20260603-usnpmieci",
-      "date": "2026-06-03",
-      "title": "ISM 서비스업 구매관리자지수 발표 (23:00 KST)",
+      "id": "ev-20260714-uscpnyeci",
+      "date": "2026-07-14",
+      "title": "소비자물가지수(CPI) 발표(전년 대비) (21:30 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 53.6"
+      "note": "이전 4.2 %"
     },
     {
-      "id": "ev-20260603-usadpeci",
-      "date": "2026-06-03",
-      "title": "비농업부문 고용변화량(ADP) 발표 (21:15 KST)",
+      "id": "ev-20260714-uscpieci",
+      "date": "2026-07-14",
+      "title": "소비자물가지수(CPI) 발표(전월 대비) (21:30 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 109"
+      "note": "이전 0.5 %"
     },
     {
-      "id": "ev-20260604-usjobeci",
-      "date": "2026-06-04",
-      "title": "신규 실업수당 청구건수 (21:30 KST)",
+      "id": "ev-20260715-usppeyeci",
+      "date": "2026-07-15",
+      "title": "근원 생산자물가지수 발표(전년 대비) (21:30 KST)",
       "category": "economic",
       "importance": "high",
       "tag": "US",
-      "note": "이전 215 만 명"
+      "note": "이전 4.9 %"
     }
   ]
 }

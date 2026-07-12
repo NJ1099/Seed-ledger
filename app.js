@@ -4355,6 +4355,221 @@ async function replaceAccountFromPdf(accountId, file) {
   }
 }
 
+// ---------- 증권사 API 연동 (토스증권 · 한국투자증권) ----------
+// 앱키/시크릿은 이 브라우저 localStorage(seed:brokerLinks)에만 저장한다.
+// 보안상 LS_KEYS 에는 넣지 않으므로 텔레그램 기기 동기화 백업에도 포함되지 않는다
+// (시크릿은 이 기기를 절대 떠나지 않고, 동기화 시에만 서버 프록시로 1회성 전송).
+const BROKER_LINKS_KEY = 'seed:brokerLinks';
+
+function loadBrokerLinks() {
+  try { const a = JSON.parse(localStorage.getItem(BROKER_LINKS_KEY) || '[]'); return Array.isArray(a) ? a : []; }
+  catch { return []; }
+}
+function saveBrokerLinks(list) {
+  try { localStorage.setItem(BROKER_LINKS_KEY, JSON.stringify(list)); }
+  catch (e) { alert('연동 정보 저장 실패: ' + (e.message || e)); }
+}
+function brokerNowKST() {
+  return new Date().toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' });
+}
+function brokerLinkKey(l) {
+  return `${l.broker}:${l.env || 'real'}:${String(l.accountNo || '').replace(/\D/g, '')}:${l.appKey}`;
+}
+
+const BROKER_META = {
+  toss: {
+    label: '토스증권', needsAccount: false, needsEnv: false,
+    appkeyLabel: 'Client ID (App Key)', secretLabel: 'Client Secret (App Secret)',
+    guide: '토스증권 Open API(developers.tossinvest.com)에서 앱 등록 후 Client ID/Secret 발급 → 계좌·보유종목은 자동 조회됩니다. 토스증권 계좌 보유자만 사용 가능.',
+  },
+  kis: {
+    label: '한국투자증권', needsAccount: true, needsEnv: true,
+    appkeyLabel: 'App Key', secretLabel: 'App Secret',
+    guide: 'apiportal.koreainvestment.com → KIS Developers 신청·계좌 인증 후 App Key/Secret 발급. 계좌번호는 12345678-01 형식(숫자 10자리). 모의투자는 별도 키·신청이 필요합니다.',
+  },
+};
+
+// 증권사 API 로 받아온 계좌를 store 에 병합.
+// dedupeKey 로 기존 항목이 있으면 holdings/cashKRW 만 갱신(재동기화), 없으면 새 계좌로 생성.
+async function mergeBrokerAccounts(accounts) {
+  let created = 0, updated = 0, holdings = 0;
+  const cur = (await apiGet(API.accounts)).accounts || [];
+  for (const a of accounts) {
+    holdings += Array.isArray(a.holdings) ? a.holdings.length : 0;
+    const existing = cur.find(x => (a.dedupeKey && x.dedupeKey === a.dedupeKey) || x.id === a.id);
+    if (existing) {
+      const upd = { ...existing, holdings: a.holdings || [], manualUpdatedAt: a.manualUpdatedAt, source: a.source || existing.source };
+      // PDF 갱신과 동일: 새 결과에 예수금이 없으면 기존 stale 예수금을 제거(과대표시 방지).
+      if (a.cashKRW != null) upd.cashKRW = a.cashKRW;
+      else delete upd.cashKRW;
+      await apiPost(API.accounts, { op: 'update', account: upd });
+      updated++;
+    } else {
+      await apiPost(API.accounts, { op: 'create', account: a });
+      created++;
+    }
+  }
+  const resp = await apiGet(API.accounts);
+  state.accounts = resp.accounts || [];
+  return { created, updated, holdings };
+}
+
+function setupBrokerLink() {
+  const openBtn = document.getElementById('broker-link-open');
+  const modal = document.getElementById('broker-modal');
+  if (!openBtn || !modal) return;
+  const closeBtn = document.getElementById('broker-close');
+  const kindSel = document.getElementById('broker-kind');
+  const envField = document.getElementById('broker-env-field');
+  const envSel = document.getElementById('broker-env');
+  const acctField = document.getElementById('broker-account-field');
+  const appkeyEl = document.getElementById('broker-appkey');
+  const appkeyLabel = document.getElementById('broker-appkey-label');
+  const secretEl = document.getElementById('broker-appsecret');
+  const secretLabel = document.getElementById('broker-appsecret-label');
+  const acctEl = document.getElementById('broker-account');
+  const errEl = document.getElementById('broker-err');
+  const guideEl = document.getElementById('broker-guide');
+  const saveBtn = document.getElementById('broker-save');
+  const syncBtn = document.getElementById('broker-sync-now');
+  const listEl = document.getElementById('broker-links');
+
+  const setErr = (m) => { if (errEl) errEl.textContent = m || ''; };
+
+  function applyKind() {
+    const meta = BROKER_META[kindSel.value] || BROKER_META.toss;
+    // hidden 속성 대신 .hidden 클래스(display:none !important) 사용 —
+    // .field{display:flex} 저자 스타일이 UA 의 [hidden]{display:none} 을 덮어쓰기 때문.
+    if (envField) envField.classList.toggle('hidden', !meta.needsEnv);
+    if (acctField) acctField.classList.toggle('hidden', !meta.needsAccount);
+    if (appkeyLabel) appkeyLabel.textContent = meta.appkeyLabel;
+    if (secretLabel) secretLabel.textContent = meta.secretLabel;
+    if (guideEl) guideEl.textContent = meta.guide;
+  }
+
+  function formToLink() {
+    const meta = BROKER_META[kindSel.value] || BROKER_META.toss;
+    return {
+      broker: kindSel.value,
+      env: meta.needsEnv ? envSel.value : 'real',
+      appKey: appkeyEl.value.trim(),
+      appSecret: secretEl.value.trim(),
+      accountNo: meta.needsAccount ? acctEl.value.trim() : '',
+      lastSyncAt: '',
+    };
+  }
+  function validate(link) {
+    const meta = BROKER_META[link.broker];
+    if (!link.appKey || !link.appSecret) return 'App Key / App Secret 을 입력하세요.';
+    if (meta.needsAccount && String(link.accountNo).replace(/\D/g, '').length < 10)
+      return '계좌번호를 숫자 10자리로 입력하세요 (예: 12345678-01).';
+    return '';
+  }
+  function upsertLink(link, keepLastSync) {
+    const links = loadBrokerLinks();
+    const key = brokerLinkKey(link);
+    const idx = links.findIndex(x => brokerLinkKey(x) === key);
+    if (idx >= 0) links[idx] = { ...links[idx], ...link, lastSyncAt: keepLastSync ? links[idx].lastSyncAt : link.lastSyncAt };
+    else links.push(link);
+    saveBrokerLinks(links);
+  }
+  function clearForm() { appkeyEl.value = ''; secretEl.value = ''; acctEl.value = ''; }
+
+  async function runSync(link, btnEl) {
+    setErr('');
+    const prev = btnEl ? btnEl.textContent : '';
+    if (btnEl) { btnEl.disabled = true; btnEl.textContent = '동기화 중…'; }
+    try {
+      const r = await fetch('/api/broker-sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          broker: link.broker, appKey: link.appKey, appSecret: link.appSecret,
+          accountNo: link.accountNo || '', env: link.env || 'real',
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!j.ok) throw new Error(j.error || `동기화 실패 (HTTP ${r.status})`);
+      const accounts = Array.isArray(j.accounts) ? j.accounts : [];
+      if (!accounts.length) throw new Error('조회된 계좌가 없습니다.');
+
+      const merged = await mergeBrokerAccounts(accounts);
+
+      // 마지막 동기화 시각 기록
+      const links = loadBrokerLinks();
+      const idx = links.findIndex(x => brokerLinkKey(x) === brokerLinkKey(link));
+      if (idx >= 0) { links[idx].lastSyncAt = brokerNowKST(); saveBrokerLinks(links); }
+
+      await refreshQuotes();
+      await autoSnapshot();
+      renderAll();
+      renderList();
+      const warnMsg = (j.warnings && j.warnings.length) ? `\n\n⚠ ${j.warnings.join('\n')}` : '';
+      alert(`✅ ${BROKER_META[link.broker]?.label || link.broker} 동기화 완료 — 계좌 ${merged.created + merged.updated}건 · 종목 ${merged.holdings}건${warnMsg}`);
+    } catch (ex) {
+      setErr('동기화 실패: ' + (ex.message || ex));
+    } finally {
+      if (btnEl) { btnEl.disabled = false; btnEl.textContent = prev || '동기화'; }
+    }
+  }
+
+  function renderList() {
+    const links = loadBrokerLinks();
+    if (!links.length) { listEl.innerHTML = ''; return; }
+    listEl.innerHTML = '<div class="broker-links-title">저장된 연동 (이 브라우저에만 보관)</div>' + links.map((l, i) => {
+      const meta = BROKER_META[l.broker] || {};
+      const bits = [meta.label || l.broker];
+      if (l.env === 'demo') bits.push('모의');
+      if (l.accountNo) bits.push(l.accountNo); // esc 는 아래 join 전체에 1회만 적용(이중 이스케이프 방지)
+      const last = l.lastSyncAt ? `최근 동기화 ${esc(l.lastSyncAt)}` : '아직 동기화 안 함';
+      return `<div class="broker-link-row">
+        <div class="broker-link-info"><b>${esc(bits.join(' · '))}</b><span>${last}</span></div>
+        <div class="broker-link-btns">
+          <button type="button" class="btn-ghost btn-xs" data-act="sync" data-i="${i}">동기화</button>
+          <button type="button" class="btn-ghost btn-xs" data-act="del" data-i="${i}">삭제</button>
+        </div>
+      </div>`;
+    }).join('');
+    listEl.querySelectorAll('button[data-act]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const links = loadBrokerLinks();
+        const l = links[Number(btn.dataset.i)];
+        if (!l) return;
+        if (btn.dataset.act === 'del') {
+          if (!confirm('이 연동 정보를 이 브라우저에서 삭제할까요?\n(증권사 계좌와 이미 불러온 자산 카드는 그대로 유지됩니다)')) return;
+          links.splice(Number(btn.dataset.i), 1); saveBrokerLinks(links); renderList(); return;
+        }
+        if (btn.dataset.act === 'sync') await runSync(l, btn);
+      });
+    });
+  }
+
+  saveBtn.addEventListener('click', () => {
+    setErr('');
+    const link = formToLink();
+    const v = validate(link); if (v) { setErr(v); return; }
+    upsertLink(link, true);
+    clearForm();
+    renderList();
+    setErr('저장했습니다. 아래 목록에서 "동기화" 를 눌러 자산을 불러오세요.');
+  });
+
+  syncBtn.addEventListener('click', async () => {
+    setErr('');
+    const link = formToLink();
+    const v = validate(link); if (v) { setErr(v); return; }
+    upsertLink(link, true);
+    clearForm();
+    renderList();
+    await runSync(link, syncBtn);
+  });
+
+  kindSel.addEventListener('change', () => { applyKind(); setErr(''); });
+  openBtn.addEventListener('click', () => { applyKind(); renderList(); setErr(''); modal.classList.remove('hidden'); });
+  closeBtn.addEventListener('click', () => modal.classList.add('hidden'));
+  modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.add('hidden'); });
+}
+
 // ---------- 자산 CSV/XLS/PDF 가져오기 ----------
 const assetState = {
   rows: [],
@@ -5399,6 +5614,7 @@ async function boot() {
   setupTxForm();
   setupCsvImport();
   setupAssetImport();
+  setupBrokerLink();
   setupAssetActionBar();
   setupGraph();
   setupEvents();

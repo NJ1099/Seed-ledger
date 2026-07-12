@@ -31,6 +31,15 @@ try {
   console.warn('[pdfImport] 비활성화:', e.message);
 }
 
+// brokerSync 는 Node 내장 https 만 쓰므로 네이티브 의존이 없다(항상 로드 성공 기대).
+// 증권사 Open API(토스·한국투자) 를 무상태로 프록시해 잔고를 조회한다. 키·잔고는 저장하지 않는다.
+let syncBroker = null;
+try {
+  ({ syncBroker } = require('./brokerSync'));
+} catch (e) {
+  console.warn('[brokerSync] 비활성화:', e.message);
+}
+
 const root = __dirname;
 
 // .env 파일 직접 파싱 — zero-deps 정책상 dotenv 패키지 안 씀.
@@ -761,6 +770,67 @@ async function handleImportPdf(req, res) {
   } catch (e) {
     logLine('error', 'pdf.parse.exception', { err: String(e) });
     reply(res, 500, { ok: false, error: `서버 오류: ${e.message}` });
+  }
+}
+
+// 공개 프록시 남용 방지 — IP 단위 분당 호출 상한 (자격증명 스터핑 릴레이/아웃바운드 부하 완화).
+const _brokerSyncHits = new Map(); // ip -> [timestamps]
+function brokerSyncRateLimited(ip) {
+  const now = Date.now();
+  const windowMs = 60 * 1000;
+  const max = 20; // 분당 20회 — 정상 사용(계좌 몇 개 동기화)엔 충분.
+  const arr = (_brokerSyncHits.get(ip) || []).filter((t) => now - t < windowMs);
+  arr.push(now);
+  _brokerSyncHits.set(ip, arr);
+  if (_brokerSyncHits.size > 5000) { // 맵 비대화 방지 — 오래된 IP 청소.
+    for (const [k, v] of _brokerSyncHits) {
+      if (!v.length || now - v[v.length - 1] > windowMs) _brokerSyncHits.delete(k);
+    }
+  }
+  return arr.length > max;
+}
+
+// 증권사 Open API 무상태 프록시.
+// 브라우저가 자기 앱키/시크릿을 담아 보내면, 서버는 토스/한국투자 API 를 대신 호출해
+// 잔고를 조회하고 계좌 JSON 만 돌려준다. 키·잔고는 디스크/DB 에 저장하지 않으며,
+// 접근토큰만 brokerSync 내부 메모리에 TTL 캐시한다(재시작 시 휘발).
+async function handleBrokerSync(req, res) {
+  if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'POST only' });
+  if (!syncBroker) return reply(res, 503, { ok: false, error: '증권사 연동 모듈이 이 서버에서 비활성 상태입니다.' });
+
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || (req.socket && req.socket.remoteAddress) || 'unknown';
+  if (brokerSyncRateLimited(ip)) {
+    return reply(res, 429, { ok: false, error: '요청이 너무 잦습니다. 잠시 후 다시 시도하세요.' });
+  }
+
+  let body;
+  try {
+    const raw = await readBodyBytes(req, 16 * 1024); // 키 몇 개면 충분. 과대 요청 차단.
+    body = JSON.parse(raw.toString('utf8'));
+  } catch (e) {
+    return reply(res, 400, { ok: false, error: '요청 본문 파싱 실패(JSON) 또는 크기 초과' });
+  }
+
+  const { broker, appKey, appSecret, accountNo, env } = body || {};
+  if (!broker || !appKey || !appSecret) {
+    return reply(res, 400, { ok: false, error: 'broker · appKey · appSecret 은 필수입니다.' });
+  }
+
+  try {
+    const result = await syncBroker({ broker, appKey, appSecret, accountNo, env });
+    // 키·계좌번호·잔고는 절대 로그에 남기지 않는다 (증권사/성패/건수만).
+    logLine(result.ok ? 'info' : 'warn', 'broker.sync', {
+      broker: String(broker).slice(0, 12),
+      env: env === 'demo' ? 'demo' : 'real',
+      ok: !!result.ok,
+      accounts: (result.accounts || []).length,
+      warnings: (result.warnings || []).length,
+      error: result.ok ? undefined : String(result.error || '').slice(0, 140),
+    });
+    return reply(res, 200, result);
+  } catch (e) {
+    logLine('error', 'broker.sync.exception', { err: String(e && e.message || e).slice(0, 160) });
+    return reply(res, 500, { ok: false, error: `서버 오류: ${e.message}` });
   }
 }
 
@@ -3309,6 +3379,7 @@ const server = http.createServer(async (req, res) => {
 
     if (urlPath === '/api/quotes')        return await handleQuotes(req, res);
     if (urlPath === '/api/events')        return await handleEvents(req, res);
+    if (urlPath === '/api/broker-sync')   return await handleBrokerSync(req, res);
     if (urlPath === '/api/history')       return await handleHistory(req, res);
     if (urlPath === '/api/import-pdf')    return await handleImportPdf(req, res);
 
