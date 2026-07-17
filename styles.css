@@ -492,15 +492,6 @@ main {
   border-radius: 6px; font-size: 13px; font-family: inherit; resize: vertical;
 }
 .notice-form-actions { display: flex; gap: 6px; align-items: center; }
-/* 채널 발송 (admin 전용) */
-.notice-broadcast {
-  display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;
-  padding: 10px; background: var(--surface-2); border-radius: var(--r-md, 8px);
-}
-.notice-broadcast textarea {
-  width: 100%; padding: 8px 10px; border: 1px solid var(--border);
-  border-radius: 6px; font-size: 12.5px; font-family: inherit; resize: vertical; line-height: 1.5;
-}
 
 .notice-list { display: flex; flex-direction: column; gap: 10px; }
 .notice-empty { font-size: 13px; color: var(--ink-4); padding: 6px 0; }
@@ -518,25 +509,6 @@ main {
   white-space: pre-wrap; word-break: break-word;
 }
 .notice-item-actions { display: flex; gap: 6px; margin-top: 10px; }
-/* 공지 접기/펼치기 — 접힌 상태는 본문 한 줄 + 말줄임 */
-.notice-item.is-collapsible .notice-item-head { cursor: pointer; }
-.notice-toggle { font-size: 11px; color: var(--ink-4); margin-left: 6px; flex-shrink: 0; transition: transform 150ms ease; }
-.notice-item.is-collapsed .notice-toggle { transform: rotate(-90deg); }
-.notice-item.is-collapsed .notice-item-body {
-  margin-top: 4px;
-  display: -webkit-box; -webkit-line-clamp: 1; line-clamp: 1; -webkit-box-orient: vertical;
-  overflow: hidden; white-space: normal; text-overflow: ellipsis;
-}
-/* 공지 2개 이상 시 'view all' 로 나머지 접기 */
-.notice-more { display: none; flex-direction: column; gap: 10px; }
-.notice-more.is-open { display: flex; }
-.notice-viewall-btn {
-  align-self: flex-start;
-  background: none; border: 1px solid var(--border-soft); border-radius: 999px;
-  padding: 5px 12px; font-size: 12.5px; color: var(--ink-2); cursor: pointer;
-  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
-}
-.notice-viewall-btn:hover { background: var(--surface-2); border-color: var(--ink-5); color: var(--ink); }
 
 /* 암호화폐 심리지표 (공포·탐욕 + 김치프리미엄) */
 .crypto-ind-grid {
@@ -2337,8 +2309,6 @@ main {
   margin-bottom: 10px;
 }
 .welcome-banner-text b { color: var(--ink); font-weight: 600; }
-/* 환영문구 안내: 데스크톱은 좌측 하단 동기화, 모바일은 가운데 텔레그램 FAB */
-.welcome-sync-mobile { display: none; }
 .welcome-banner-actions { display: flex; gap: 14px; align-items: center; }
 .welcome-banner-link {
   background: none;
@@ -2671,20 +2641,6 @@ main {
   color: var(--ink-3);
   font-variant-numeric: tabular-nums;
 }
-/* 사이드카 상태 배지 — 코스피/코스닥 사이드카 발동 판정 */
-.stock-head-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-width: 0; }
-.sidecar-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; line-height: 1.2; white-space: nowrap; border: 1px solid transparent; }
-.sidecar-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex-shrink: 0; }
-.sidecar-normal  { color: #1F8A4C; background: #E9F8EF; border-color: #BFE6CD; }
-.sidecar-buy     { color: var(--up);   background: var(--up-soft);   border-color: #F7C5CC; }
-.sidecar-sell    { color: var(--down); background: var(--down-soft); border-color: #BFD8FB; }
-.sidecar-closed,
-.sidecar-unknown { color: var(--ink-3); background: #F2F4F6; border-color: var(--border-soft); }
-.sidecar-buy .sidecar-dot, .sidecar-sell .sidecar-dot { animation: sidecarPulse 1.2s ease-in-out infinite; }
-@keyframes sidecarPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
-/* 오늘 사이드카 발동 이력(현재 해제) — 배지 옆 작은 글씨 */
-.sidecar-sub { display: none; font-size: 12px; color: var(--ink-3); white-space: nowrap; }
-.sidecar-sub.is-on { display: inline; }
 
 .stock-section {
   margin-bottom: 28px;
@@ -2775,6 +2731,53 @@ main {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+
+/* 종목 검색 인라인 차트 패널 — 검색 결과 선택 시 그 자리에 차트를 그린다. */
+.stock-chart-panel {
+  margin-top: 16px;
+  max-width: 720px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px 18px;
+}
+.scp-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.scp-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+.scp-naver {
+  font-size: 12px;
+  color: var(--ink-3);
+  text-decoration: none;
+  flex-shrink: 0;
+}
+.scp-naver:hover { color: var(--accent); text-decoration: underline; }
+.scp-meta {
+  padding: 4px 0 12px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+.scp-meta .delta-up { font-weight: 700; color: var(--up); }
+.scp-meta .delta-down { font-weight: 700; color: var(--down); }
+.scp-chart-wrap {
+  position: relative;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--r-md);
+  padding: 2px;
+}
+.scp-chart-wrap canvas { display: block; }
+
 .stock-search-results {
   position: absolute;
   top: calc(100% + 6px);
@@ -3048,67 +3051,8 @@ main {
   display: inline-block;
 }
 .nps-wrap { display: block; }
-.nps-table-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  -webkit-overflow-scrolling: touch;
-}
-/* 국민연금 포트폴리오 표 — 컬럼 폭이 자산군별로 들쭉날쭉해서
-   줄바꿈을 막고 가로 스크롤로 보여 준다. 헤더는 surface-2 sticky. */
-.nps-table {
-  width: 100%;
-  font-size: 12.5px;
-  border-collapse: collapse;
-}
-.nps-table thead th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  background: var(--surface-2);
-  color: var(--ink-3);
-  font-weight: 600;
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  padding: 8px 10px;
-  text-align: left;
-  border-bottom: 1px solid var(--border);
-  white-space: nowrap;
-}
-.nps-table tbody td {
-  padding: 7px 10px;
-  border-bottom: 1px solid var(--border-soft);
-  white-space: nowrap;
-  max-width: 280px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  vertical-align: middle;
-}
-.nps-table tbody tr:last-child td { border-bottom: 0; }
-.nps-table tbody tr:hover { background: var(--surface-2); }
-.nps-table tbody td.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  color: var(--ink);
-}
-/* 첫 컬럼(보통 자산군명/종목명) 은 좌측에 고정해 가로 스크롤 시에도 컨텍스트 유지 */
-.nps-table thead th:first-child,
-.nps-table tbody td:first-child {
-  position: sticky;
-  left: 0;
-  background: var(--surface);
-  z-index: 2;
-}
-.nps-table thead th:first-child { background: var(--surface-2); z-index: 3; }
-
-@media (max-width: 768px) {
-  .nps-table { font-size: 12px; }
-  .nps-table thead th,
-  .nps-table tbody td { padding: 6px 8px; }
-  .nps-table tbody td { max-width: 180px; }
-}
+.nps-table-wrap { overflow-x: auto; }
+.nps-table { width: 100%; font-size: 13px; }
 .nps-snippet {
   display: inline-block;
   margin-top: 6px;
@@ -3359,7 +3303,7 @@ main {
 .night-head {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   margin-bottom: 8px;
 }
@@ -3368,12 +3312,6 @@ main {
   font-weight: 700;
   color: var(--ink);
   letter-spacing: -0.01em;
-}
-.night-sym {
-  font-size: 10.5px;
-  color: var(--ink-3);
-  font-family: 'JetBrains Mono', ui-monospace, monospace;
-  letter-spacing: 0.04em;
 }
 .night-price {
   font-size: 22px;
@@ -3517,9 +3455,6 @@ main {
   .movers-grid { grid-template-columns: 1fr; }
   .stock-head { flex-direction: column; align-items: flex-start; gap: 4px; }
   .idx-price { font-size: 18px; }
-  /* 환영문구: 모바일에서는 가운데 텔레그램 FAB 안내로 전환 */
-  .welcome-sync-desktop { display: none; }
-  .welcome-sync-mobile { display: inline; }
 }
 @media (max-width: 480px) {
   .index-card { padding: 12px; min-height: 80px; }
@@ -3533,84 +3468,13 @@ main {
   .mt-btn { padding: 5px 10px; font-size: 12px; }
 }
 
-/* ============ BOTTOM NAV (mobile) ============
-   ≤768px 에서만 body 하단에 고정. 5칸 grid 의 가운데 슬롯은 비워두고
-   FAB(텔레그램) 가 absolute 로 들어가 약간 떠 보이게 한다. iOS 안전영역 보정. */
-.bottom-nav { display: none; }
-
-@media (max-width: 768px) {
-  body { padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px)); }
-
-  /* 모바일에서 상단 가로 스크롤 탭(.sidenav)을 숨겨 메뉴 중복 제거.
-     상단 사이드바는 brand 만 슬림하게 남는다. */
-  .sidebar .sidenav { display: none; }
-  .sidebar { padding: 10px 16px; gap: 8px; }
-
-  .bottom-nav {
-    display: grid;
-    grid-template-columns: 1fr 1fr 72px 1fr 1fr;
-    position: fixed;
-    left: 0; right: 0; bottom: 0;
-    height: 64px;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-    background: var(--surface);
-    border-top: 1px solid var(--border);
-    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.06);
-    z-index: 80;
-  }
-  .bn-tab {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2px;
-    padding: 6px 0 0;
-    background: transparent;
-    border: 0;
-    color: var(--ink-3);
-    font-size: 11px;
-    cursor: pointer;
-    transition: color 120ms ease;
-  }
-  .bn-tab .bn-ico { font-size: 20px; line-height: 1; }
-  .bn-tab .bn-lab { font-size: 11px; letter-spacing: 0.02em; }
-  .bn-tab.active { color: var(--accent); }
-  .bn-tab:active { transform: scale(0.96); }
-
-  /* 사이드바는 모바일에서 이미 다른 미디어 쿼리로 숨겨져 있을 수 있으나,
-     혹시 보이고 있다면 bottom-nav 와 함께 떠 있어 혼란을 주므로 명시적으로 처리.
-     기존 미디어 쿼리에서 sidebar 가 표시되고 있다면 이 규칙은 무시됨. */
-  .bn-fab-slot { /* 가운데 빈 슬롯 — FAB 가 absolute 로 자리잡음 */ }
-
-  .bn-fab {
-    position: absolute;
-    left: 50%;
-    top: -22px;
-    transform: translateX(-50%);
-    width: 64px;
-    height: 64px;
-    border-radius: 50%;
-    border: 4px solid var(--bg, var(--surface));
-    background: linear-gradient(135deg, #229ED9 0%, #1E88C8 100%); /* 텔레그램 톤 */
-    color: #fff;
-    cursor: pointer;
-    box-shadow: 0 6px 18px rgba(34, 158, 217, 0.42);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 120ms ease, box-shadow 120ms ease;
-  }
-  .bn-fab .bn-fab-ico { font-size: 26px; line-height: 1; }
-  /* FAB 텔레그램 종이비행기 SVG — currentColor(흰색) */
-  .bn-fab .bn-fab-ico .tg-glyph { width: 30px; height: 30px; display: block; }
-  .bn-fab:active { transform: translateX(-50%) scale(0.94); }
-  .bn-fab.bn-fab-busy {
-    pointer-events: none;
-    opacity: 0.7;
-  }
+/* =================== 증권사 API 연동 =================== */
+.ac-head-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
 }
-
-/* ---------- 증권사 API 연동 모달 (broker) ---------- */
 .broker-warn {
   margin: 4px 0 14px;
   padding: 11px 13px;
@@ -3651,3 +3515,35 @@ main {
 .broker-link-info b { font-size: 13px; color: var(--ink); font-weight: 600; }
 .broker-link-info span { font-size: 11.5px; color: var(--ink-3); }
 .broker-link-btns { display: flex; gap: 6px; flex-shrink: 0; }
+
+/* 증권사 연동 모달은 자격증명 입력 폼이라 로그인 폼처럼 단일 열로 세운다.
+   (공용 .acc-form 은 auto-fit 다열 그리드라 필드가 흩어지고, .csv-err/.csv-actions/
+    .broker-guide 가 전체 폭을 못 잡아 글씨가 어긋났음 → 단일 열로 정렬 문제 해소.) */
+#broker-modal .modal-card { max-width: 460px; }
+#broker-form { grid-template-columns: 1fr; gap: 12px; }
+#broker-form .field { width: 100%; }
+#broker-form .csv-err,
+#broker-form .csv-actions,
+#broker-form .broker-guide { grid-column: 1 / -1; width: 100%; }
+#broker-form .csv-actions { margin-top: 4px; }
+/* 토스 허용 IP 안내 박스 — 서버 egress IP 를 강조해 복사/등록을 돕는다. */
+.broker-ip-note {
+  margin: 4px 0 10px;
+  padding: 10px 12px;
+  background: var(--accent-soft, rgba(49, 130, 246, 0.08));
+  border-left: 3px solid var(--accent, #3182F6);
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-2);
+}
+.broker-ip-note b { color: var(--ink); }
+.broker-ip-note code {
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12.5px;
+  color: var(--accent, #3182F6);
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 4px;
+  user-select: all;
+}

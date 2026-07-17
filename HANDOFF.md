@@ -2,7 +2,131 @@
 
 > 다음 세션에서 이어서 작업할 때 가장 먼저 읽어야 하는 문서.
 
-최종 업데이트: 2026-06-10 (라운드 20 — 사이드카를 네이버 속보 기반 실시간 발동/해제 판정으로 전환 + 공지 2개 이상 시 view all + 텔레그램 채널 발송(포트폴리오 소개글))
+최종 업데이트: 2026-07-17 (라운드 23 — 토스 IP 차단 진단 · 모달 정렬 · 야간선물 코드줄 제거 · 종목검색 인라인 차트)
+
+## 라운드 23: 토스 IP 차단 진단 + 모달 정렬 + 야간선물 코드줄 제거 + 종목검색 인라인 차트 (2026-07-17)
+
+사용자 4건: ① 증권사 API 연동 모달 글씨 정렬 ② 토스 "액세스 거부" 원인 규명·기능 추가 ③ 해외 야간선물 카드의 hyperliquid 종목코드 줄 제거 ④ 종목검색 시 사이트 내 차트 즉시 표시.
+
+**1. [완료] 증권사 연동 모달 정렬 (`styles.css`)** — `#broker-form` 이 공용 `.acc-form`(auto-fit 다열 그리드, 모달 720px)을 재사용해 필드가 흩어지고, 비-field 자식(`.csv-err`/`.csv-actions`/`.broker-guide`)이 전체 폭을 못 잡아 어긋났음. → `#broker-modal .modal-card{max-width:460px}` + `#broker-form{grid-template-columns:1fr}` 단일 열 스택으로 로그인 폼처럼 정렬. `.broker-ip-note` 스타일 신규.
+
+**2. [완료] 토스 "액세스 거부" = 서버 egress IP 차단 (403) (`brokerSync.js`·`server.js`·`app.js`·`index.html`)**
+- 실제 에러 문구: `토스 접근토큰 발급 실패: IP address not allowed`. **공식 문서(openapi.tossinvest.com/openapi-docs)로 확정**: 토스 Open API 는 클라이언트별 **허용 IP 관리**(설정 › Open API › 허용 IP 관리)를 두고, 목록에 없는 IP 는 **403 차단**. 우리는 서버 프록시(Render IP)로 호출하므로 **브라우저 IP 가 아닌 서버 egress IP** 를 등록해야 함. 엔드포인트(`/oauth2/token` form-urlencoded, `/api/v1/accounts`, `/api/v1/holdings` + `X-Tossinvest-Account`)는 스펙과 이미 일치 — 코드 버그 아님.
+- **신규 `GET /api/broker-egress-ip`** (`server.js`) — ipify→ifconfig→icanhazip 폴백, 6h 캐시. 로컬 실측 `210.103.44.177` 반환. 이 IP 가 곧 토스가 보는 IP.
+- **에러 분류 `classifyTossError`** (`brokerSync.js`) — 403/`IP address not allowed` → `hint:'ip_not_allowed'`, 401/`client authentication failed` → `hint:'auth'`. `tossToken`/`tossGet` 에 적용. 로컬 가짜키 실측 → `hint:'auth'` 정상.
+- **예수금(buying-power) 추가** — `syncToss` 가 계좌별 `GET /api/v1/buying-power` 호출 → `pickCashKRW`(BuyingPowerResponse 필드명 미공개라 orderable/buying-power/deposit/cash 패턴 방어 탐색) → `account.cashKRW`. 실패는 경고만.
+- **프런트 안내** (`app.js setupBrokerLink`) — 토스 선택 시 `/api/broker-egress-ip` 조회해 `#broker-ip-note` 에 서버 IP + "허용 IP 관리에 등록" 표시. `runSync` catch 가 `hint` 별 맞춤 안내(ip_not_allowed 면 서버 IP 강조). `BROKER_META.toss.guide` 문구 보강.
+- **사용자 액션(코드 밖)**: 토스 앱/WTS 설정 › Open API › 허용 IP 관리에 **Render Outbound IP** 등록(모달의 안내 IP + Render 대시보드 Outbound IP 목록). 등록 전까지 ip_not_allowed 안내가 뜨는 것이 정상.
+
+**3. [완료] 야간선물 hyperliquid 종목코드 줄 제거 (`index.html`·`styles.css`)** — 카드의 `.night-sym`(`xyz:SMSN · ADR`/`xyz:SKHX · ADR`) 스팬 2개 삭제. 가격/변동/하단 문구·부제는 유지. `app.js` 는 `.night-sym` 미참조라 로직 변경 없음. `.night-sym` CSS 제거 + `.night-head` justify flex-start.
+
+**4. [완료] 종목검색 인라인 차트 (`app.js`·`index.html`·`styles.css`)** — 기존 클릭 시 네이버 외부 이탈 → **검색창 아래 인라인 캔버스 차트**로 대체. `drawHistoryChart` 에서 공용 `drawPriceChart(canvas, points, {currency,range,height,hoverIdx,dragStart,dragEnd})` 추출(모달은 hover/drag 유지 래퍼, 인라인은 경량). `#stock-chart-panel`(범위칩 1일~5년 + 메타 + `#inline-chart`). `renderInlineStockChart`/`loadInlineHistory`/`updateInlineMeta` + `setupInlineStockChart()` boot 연결. `/api/history`(stock_kr→Yahoo .KS/.KQ, stock_us→Yahoo) 재사용 — 검색 결과 `type` 와 호환. 네이버 링크는 패널 헤더에 opt-in 유지. 로컬 실측: 005930(KRW)·AAPL(USD) 실데이터 정상.
+
+**검증**: `node -c` 3파일 OK. 로컬 4285 — egress-ip/broker-sync(auth)/history(KR·US) 실데이터 정상. 브라우저 스크린샷은 claude-in-chrome 확장이 로컬 서버(127.0.0.1) 접근 불가라 미수행(DOM ID·참조 정합성으로 교차검증). 신규 ID 7개 index.html↔app.js 일치.
+
+## 라운드 22: 증권사 Open API 자동연동 (토스증권 · 한국투자증권) (2026-07-13)
+
+사용자: "PDF도 되고 토스나 한국투자증권 등 본인들의 API를 추가하면 자신의 자산이 연동되게." → 결정 3가지: ① 토스+한투 둘 다, ② 브라우저 저장 + 무상태 프록시, ③ 주문권한 경고 표시 후 진행.
+
+**사전 조사(반증검증 워크플로우로 확정)**
+- **토스증권**: 2026년 5~6월 개인용 공식 Open API 정식 오픈. `https://openapi.tossinvest.com` — `POST /oauth2/token`(client_credentials, form-urlencoded) → `GET /api/v1/accounts`(result[].accountSeq) → `GET /api/v1/holdings`(헤더 `X-Tossinvest-Account: accountSeq`) → `result.items[]{symbol,name,marketCountry(KR|US),currency,quantity,averagePurchasePrice}`. (초기 가정 "토스 API 없음"은 **반증됨**.)
+- **한국투자(KIS)**: `POST /oauth2/tokenP`(JSON) → 국내 `GET /uapi/domestic-stock/v1/trading/inquire-balance` tr_id TTTC8434R(실전)/VTTC8434R(모의), 해외 `GET /uapi/overseas-stock/v1/trading/inquire-balance` TTTS3012R/VTTS3012R. 헤더 authorization/appkey/appsecret/tr_id/custtype=P. 실전 `:9443` / 모의 `:29443`. 토큰 TTL 24h·앱키당 1분 1회 발급 → 캐시 필수. CORS 미지원(OPTIONS→501 실증) → **서버 프록시 필수**.
+- **불가**: 마이데이터/오픈뱅킹(라이선스·자본금·이용기관 심사) → 은행 예금 자동집계는 개인 프로젝트 불가, PDF/CSV/수동 유지.
+
+**구현 (5개 파일)**
+1. **[신규] `brokerSync.js`** — 무상태 프록시 모듈. `syncBroker({broker,appKey,appSecret,accountNo,env})` → 토큰 발급→잔고 조회→ `pdfImport.js` 와 동일한 계좌 JSON({type:'brokerage',holdings:[{assetType,ticker,label,quantity,avgCost,currency}],cashKRW?,dedupeKey}) 반환. zero-dep(내장 https). 접근토큰만 `sha256(broker:env:appKey)` 키로 메모리 TTL 캐시(만료 lazy-evict, 재시작 시 휘발). 키·잔고 디스크 저장 없음.
+2. **[수정] `server.js`** — `POST /api/broker-sync` → `handleBrokerSync`. `require('./brokerSync')`. 16KB 본문 제한, 키/계좌/잔고 로그 미기록(증권사·env·성패·건수만). IP 단위 분당 20회 레이트리밋(공개 프록시 남용 방지).
+3. **[수정] `app.js`** — `🔗 증권사 API 연동` 모달(`setupBrokerLink`). 키는 `seed:brokerLinks`(localStorage)에만 저장 — **`LS_KEYS` 에 미포함 → 텔레그램 백업(snapshotForSync)에서 제외**(시크릿 기기 이탈 방지). `mergeBrokerAccounts`: dedupeKey 로 기존 계좌 있으면 holdings/cashKRW 갱신(예수금 stale 제거), 없으면 생성. PDF 가져오기와 동일한 store 심(apiPost/apiGet)·refreshQuotes·autoSnapshot·renderAll 경로.
+4. **[수정] `index.html`** — 연동 버튼 + `#broker-modal`(증권사 선택·키 입력·주문권한 경고 배너). 토스는 계좌번호/env 숨김, KIS는 표시.
+5. **[수정] `styles.css`** — `.broker-*` 스타일.
+
+**검증**
+- `node -c` 3파일 OK. 검증 분기(미지원/키누락/계좌형식) 정상.
+- **실서버 종단 검증**: PORT 4288/4289 기동 후 실제 `openapi.tossinvest.com`·`:9443` 에 가짜 키로 토큰 요청 → 토스 "Client authentication failed: client_id" / KIS "유효하지 않은 AppKey입니다." 정상 JSON 오류(500 아님). → 토큰 흐름·엔드포인트·본문형식 실증 확인. 실제 키면 잔고조회까지 동일 구조.
+- 레이트리밋 실측 20×200 / 4×429. getElementById ID 17개 index.html 일치.
+- 다차원 리뷰(정확성/보안/프론트/스펙) — 세션한도로 2개만 완주. 확정 수정 3건 반영: (H) 토스 필드 숨김이 `.field{display:flex}` > `[hidden]` 때문에 안 먹어 `.hidden` 클래스로 교체 / (M) 재동기화 cashKRW stale → else delete / (L) renderList 이중 이스케이프. + 하드닝(토큰캐시 evict, 레이트리밋).
+
+**남은 것(후보)**: KIS 해외 NASD/USD 외 거래소(홍콩·일본·NYSE 개별) 확장, 50건 초과 연속조회(CTX_AREA_FK/NK), 키움/LS증권 추가(동일 패턴), 토스 예수금(buying-power) 반영. 리뷰 반증검증 재실행(3am KST 세션 리셋 후).
+
+## 라운드 21: 공포·탐욕 지수 + 김치프리미엄 + 야간선물 김프 보정 토글 (2026-06-08)
+
+사용자: ① 탐욕지수·김치프리미엄 수치 추가 ② 해외 야간선물에 김프 On/Off 토글(김프만큼 보정/원가) ③ 공지 맨 위. 커밋 `abb9f51`.
+
+1. **[완료] `/api/crypto-indicators` (`server.js`)** — `fetchFearGreed`(alternative.me, 키 불필요) + `fetchKimchiPremium`(Upbit KRW-BTC vs 글로벌 BTC×USDKRW, 글로벌은 Binance→Yahoo BTC-USD 폴백). 3분 캐시. 로컬 검증: F&G 12(Extreme Fear), 김프 -2.61%.
+2. **[완료] 심리지표 UI (`index.html`+`app.js`+`styles.css`)** — 주식 탭 경제지표 다음 "암호화폐 심리지표" 섹션. 공포·탐욕(값+분류, 5단계 색), 김치프리미엄(부호별 빨강/파랑). `loadCryptoIndicators`/`fillCryptoIndicators`.
+3. **[완료] 야간선물 김프 보정 토글** — 섹션 타이틀에 체크박스. ON 이면 원화 환산가 ×(1+김프%), OFF 면 원가. `state.kimpApplied`/`state.kimchiPremiumPct`/`state.lastNightFutures` 로 재페치 없이 재렌더. 토글 라벨에 현재 김프% 표기. % 변동률은 markPx 기준이라 불변.
+4. **[완료] 공지 최상단 (진짜 원인 수정)** — 라운드 20 에서 DOM 최상단으로 옮겼지만 `.dashboard` 가 `grid-template-areas:"events""kpis""split"` 라 grid-area 없는 notice 가 암묵적 그리드(맨 아래)에 배치됐었음. `grid-template-areas` 최상단에 `"notice"` 추가 + `.notice-card{grid-area:notice}` (데스크톱+모바일 미디어쿼리 둘 다).
+
+**검증**: 로컬 4296 `/api/crypto-indicators` 실데이터 정상. `node -c` server/app OK.
+
+## 라운드 20: 주요 이벤트 자동 갱신 self-heal + 공지 최상단 이동 (2026-06-07)
+
+## 라운드 20: 주요 이벤트 자동 갱신 self-heal + 공지 최상단 이동 (2026-06-07)
+
+사용자: ① 공지를 맨 위로 ② 주요 이벤트가 안 떠서 자동 로딩 수정. 커밋 `926a427`.
+
+- **공지 최상단 이동 (`index.html`)** — `.notice-card` 를 `.dashboard` 첫 자식으로(그래프·KPI 위).
+- **이벤트 버그 진단** — toss `key-events` 가 "이번주"만 줌. 주말엔 전부 과거 → `refreshEvents` 가 upcoming 0건이라 갱신 스킵 → `events.json` 이 6/1 스냅샷에 **영구 동결** → 클라 표시창[오늘-2d~+14d] 밖이라 패널 빈 상태. (toss 실제 응답: 6/1~6/5 9건, 전부 과거.)
+- **`refreshEvents` 수정 (`server.js`)** — upcoming 있으면 그걸, 없으면 `sorted.slice(-EVENTS_TOP_N)`(가장 최근 일정)이라도 기록. 영구 stale 해소. 로컬 검증: `events.refresh.ok {count:5, upcoming:0}`, /api/events 6/4~6/5 정상.
+- **`handleEvents` on-demand 갱신** — `maybeRefreshEvents(updatedAt)`: 1시간 이상 stale 이면 백그라운드 refresh(in-flight·10분 가드). Render Free sleep 으로 6h 인터벌 못 돌아도 방문 시 self-heal.
+- **`daily-news.yml`** — `/api/events` 갱신 트리거 스텝 추가(무방문 시에도 일 2회 갱신).
+- **한계**: toss 가 다음주 일정을 올리기 전(주말)엔 보여줄 미래 일정이 원천적으로 없음 → 최근 과거 일정으로 폴백. 월요일 toss 갱신 시 자동으로 upcoming 표시.
+
+## 라운드 19: 공지 패널 admin/공개 + 뉴스 메시지 사이트 링크 (2026-06-07)
+
+## 라운드 19: 공지(notice) 패널 + 뉴스 사이트 링크 (2026-06-07)
+
+사용자 요청: ① 그래프 밑에 공지 패널(admin=나만 작성, 누구나 읽기) ② 뉴스 발송 시 사이트 주소 링크 항상 추가. 커밋 `0587881`.
+
+1. **[완료] 공지 백엔드 (`server.js`)** — `handleNotices` + `GET/POST/PUT/DELETE /api/notices`.
+   - GET 공개 읽기(`{notices, admin, adminEnabled, persistent}`). 쓰기는 admin 전용.
+   - admin 인증: `ADMIN_TOKEN` env + `Authorization: Bearer` / `X-Admin-Token`, `crypto.timingSafeEqual`.
+   - **영속 저장**: Upstash Redis REST(`KV_REST_API_URL`/`KV_REST_API_TOKEN`) 우선(`upstashCmd` GET/SET `seed:notices`), 미설정 시 `data/notices.json` 폴백(Render Free 휘발). `httpsPostJson` 재사용.
+   - 제목 200 / 본문 4000자 / 최대 100건. 사용자 결정: **Upstash 사용**.
+2. **[완료] 공지 프런트 (`index.html`+`app.js`+`styles.css`)** — dash-split 바로 밑 `.notice-card`. 관리자 로그인(토큰 `localStorage seedAdminToken`), 작성/수정/삭제 UI(admin 일 때만 노출). 본문은 `textContent` + `white-space:pre-wrap`(XSS 차단 + 줄바꿈 보존). boot 에 `setupNotices()`+`loadNotices()`.
+3. **[완료] 뉴스 사이트 링크 (`server.js`)** — `sendDailyNews` 메시지 하단에 `PUBLIC_SITE_URL`(기본 https://seed-ledger.onrender.com) 링크 푸터 항상 추가. 길이 한도가 푸터 보존하도록 조정.
+4. **[완료] `.env.example`** — `ADMIN_TOKEN` / `KV_REST_API_URL` / `KV_REST_API_TOKEN` / `PUBLIC_SITE_URL`.
+
+**로컬 검증(4298, ADMIN_TOKEN 주입, 파일 폴백)**: 공개 GET 빈목록·`adminEnabled:true` / 무인증 POST `401` / admin POST·목록 정상 / UTF-8 한글 정상 저장 확인(앞선 깨짐은 Windows Bash 콘솔 인코딩 artifact). `node -c` server/app OK.
+
+**남은 사용자 액션 (Render 대시보드)**:
+1. `ADMIN_TOKEN` = 충분히 긴 임의 문자열(예: `openssl rand -hex 24`) 등록 → 이게 있어야 공지 작성 가능.
+2. Upstash(무료) Redis 생성 → REST URL/TOKEN 을 `KV_REST_API_URL`/`KV_REST_API_TOKEN` 으로 등록(미설정 시 공지가 재배포/sleep 때 사라짐).
+3. 배포 후 사이트 → 공지 패널 "관리자" → 토큰 입력 → 작성 테스트.
+
+## 라운드 18: 주식 뉴스 일일 텔레그램 자동 발송 (2026-06-07)
+
+사용자 요청: 자산 포트폴리오 주식 뉴스(사이트 최신 뉴스 10건)를 제목+요약으로 매일 10시·18시에 텔레그램 발송.
+
+1. **[완료] `server.js`** — `setTimeout(bootTelegram)` 다음 블록 추가.
+   - `sendDailyNews(reason)` — `fetchStockNews(10, '')` 재사용 → 제목+출처+요약(120자) HTML 메시지로 묶어 `tgPostJson('sendMessage', { chat_id: TELEGRAM_NEWS_CHAT_ID, parse_mode:'HTML', disable_web_page_preview:true })`. 4096자 한도 가드(3900 컷).
+   - `newsPushTick()` + `setInterval(60s)` — KST 10/18시 정각 윈도우(분 0~4) + `lastNewsPushSlot` dedupe 로 1회만 발송. 드리프트/중복 흡수.
+   - `GET /api/news-push-now` — 배포 직후 수동 검증용(30초 쿨다운, 고정 채팅방만).
+2. **[완료] 봇 토큰 분리 (`43054bd`)** — 처음엔 뉴스가 동기화용 `TELEGRAM_BOT_TOKEN` 을 재사용했으나, 사용자가 **동기화봇(Jasan_Management_bot)과 뉴스봇(seed_rearbot)을 별도 운영**하길 원함 → 키가 하나라 충돌. 뉴스 전용 키 **`TELEGRAM_NEWS_BOT_TOKEN`** 신설(미설정 시 `TELEGRAM_BOT_TOKEN` 폴백). `tgSendNews()` 전용 헬퍼로 토큰 분리. `NEWS_PUSH_ENABLED = NEWS_BOT_TOKEN && NEWS_PUSH_CHAT_ID`.
+3. **[완료] `.env.example`** — `TELEGRAM_NEWS_BOT_TOKEN` + `TELEGRAM_NEWS_CHAT_ID` 항목/안내.
+4. **[완료] 배포** — `NJ1099/Seed-ledger` main 푸시 (`235840b` → `43054bd`).
+
+**로컬 라이브 검증(4299)**: 뉴스 수집 정상(`news.openapi.ok count:10`), 발송 코드 정상. 단 발송은 **"bot is not a member of the channel chat"** 로 실패 — 발송 대상이 채널인데 봇이 멤버 아님(코드 아닌 운영 이슈).
+
+**봇 구성 (확정)**:
+- `TELEGRAM_BOT_TOKEN` = `Jasan_Management_bot` (기기 동기화, **그대로 유지**).
+- `TELEGRAM_NEWS_BOT_TOKEN` = `seed_rearbot` (뉴스 발송, **신규**).
+- 프로덕션 Render 는 `TELEGRAM_BOT_TOKEN` 만 등록돼 있음(Jasan). 로컬 `.env` 는 현재 `TELEGRAM_BOT_TOKEN=seed_rearbot` 이라 정리 필요(아래).
+
+**남은 사용자 액션 (코드 완료, Render 대시보드 직접 — 사용자 선택)**:
+1. Render → Environment 에 **추가**(기존 `TELEGRAM_BOT_TOKEN`=Jasan 은 건드리지 말 것):
+   - `TELEGRAM_NEWS_BOT_TOKEN` = seed_rearbot 토큰
+   - `TELEGRAM_NEWS_CHAT_ID` = 발송 채팅방 ID → Save(재배포).
+2. **seed_rearbot 을 발송 대상 채널/그룹에 추가** (채널이면 관리자·게시권한). 안 하면 계속 Forbidden.
+3. 로컬 `.env` 정리 권장: `TELEGRAM_BOT_TOKEN`=Jasan, `TELEGRAM_NEWS_BOT_TOKEN`=seed_rearbot 로 맞추면 로컬/프로덕션 일관.
+4. 재배포 후 `https://seed-ledger.onrender.com/api/news-push-now` → `{"ok":true}` + 메시지 도착 확인.
+
+**[완료] Render Free spin-down 대응 — GitHub Actions cron (`e6395cf`)**:
+- 15분 무접속 시 sleep → in-process 1분 틱이 정각에 안 깨어나는 문제. 외부 트리거로 해결.
+- `.github/workflows/daily-news.yml` — cron `0 1 * * *`(KST 10:00) / `0 9 * * *`(KST 18:00, UTC 기준). cold start 대비 `healthz` 선요청 + curl 재시도. `workflow_dispatch` 수동 실행 지원.
+- `/api/news-push-now?scheduled=1` — KST 시각 slot 기반 중복 방지(in-process 틱과 겹쳐도 1회만). 파라미터 없으면 수동(30초 쿨다운).
+- **검증 완료(2026-06-07)**: `gh workflow run` 수동 실행 → healthz ok → 트리거 `{"ok":true}` HTTP 200, 실제 발송 성공. 워크플로 `active`(id 290787871).
+- 엔드포인트는 공개 상태(시크릿 가드 없음). 고정 채팅방으로만 발송 + slot/쿨다운으로 남용 제한. 더 잠그려면 `NEWS_PUSH_SECRET` 류 가드 추가 후보.
 
 > ⚠️ **배포 repo 주의**: 이 프로젝트(`E:\AI\Seed-ledger-main`)는 `E:\AI` 모노repo(→ `NJ1099/AI`)의 하위 폴더지만, **Render 배포는 별개 repo `https://github.com/NJ1099/Seed-ledger` 로만** 반영된다. 배포하려면 `E:\seed-ledger-sync`(NJ1099/Seed-ledger 클론)에 변경 파일 복사 후 `git push origin HEAD:main`. `NJ1099/AI` 로 푸시하면 백업만 되고 배포 안 됨.
 
@@ -30,138 +154,6 @@ Render 에 공개 배포되어 누구나 브라우저 localStorage 로 개인 �
 - **PDF 임포트** — 메모리에서만 처리. 디스크에 저장 안 됨.
 
 ## 최근 라운드에서 한 일
-
-### 라운드 20: 사이드카 = 네이버 속보 기반 실시간 발동/해제 판정 + 공지 view all (2026-06-10)
-
-라운드 19 의 사이드카는 **현물 지수(^KS11/^KQ11) 등락률 ±5%/±6% 근사**였는데, 사용자 보고로 한계가 드러남: "오늘 매도 사이드카 13:16 에 됐고 지금은 풀린 것 같은데 실시간 반영해줘." 실제 사이드카는 KOSPI200/KOSDAQ150 **선물** 기준이라 현물은 6%까지 안 빠지는 경우가 많아(베이시스 차이) 실제 발동을 놓침. 조사 결과 공개 JSON 피드는 없고, 발동 즉시 보도되는 **네이버 뉴스 속보**가 유일한 실시간 소스 → 이미 연동된 네이버 뉴스 OpenAPI 재사용해 전환. (연구 에이전트로 2026-06-10 13:16:25 코스피 매도 사이드카(코스피200 선물 -5.02%)→5분 뒤 자동해제 실제 사례 뉴스 확인.)
-
-1. **[완료] 사이드카 뉴스 기반 실시간 판정 (`server.js`)**
-   - `handleSidecar` 전면 재작성. 판정 기준을 현물 등락률 → **네이버 뉴스 파싱**으로 변경.
-   - 신규 `fetchSidecarNewsEvents(today)` — `fetchNaverOpenApiNews('사이드카', 30)` 결과 title 파싱: `해제` → release / `발동|효력정지` → trigger, `매도`→sell·`매수`→buy(없으면 급락/급등 추정), `코스닥`→kosdaq·`코스피/유가증권`→kospi, `publishedAt`(ISO) → `isoToKstParts` 로 KST 변환 후 **오늘 이벤트만** 채택.
-   - 상태 머신: 오늘 최신 trigger 기준, 발동 후 해제기사 존재 OR 5분(+버퍼 `SIDECAR_WINDOW_MIN`=6분) 경과 시 released. `active` 면 status=buy/sell + time=발동시각, 아니면 marketOpen?normal:closed. 뉴스 자체 미수신(키 미설정)만 unknown.
-   - `_sidecarLatch` 메모리 래치(뉴스 일시 누락 대비, KST 날짜 바뀌면 리셋). 30초 캐시 유지. 현물 등락률(`fetchYahoo` 병렬)은 **툴팁 보조**로만 payload 에 포함.
-   - payload 확장: `{ status, time, active, today:{fired,direction,market,time,released}, kospi, kosdaq, marketOpen, source:'naver-news', note }`. 예외 시 200+unknown graceful 유지.
-
-2. **[완료] 발동 이력 표기 (`app.js` `renderSidecar` + `index.html` + `styles.css`)**
-   - 배지 옆 `#sidecar-sub` 신설. 현재 해제됐지만 **오늘 발동했던 경우**(status normal/closed + today.released) "· 오늘 13:16 코스피 매도 사이드카 발동(해제)" 작은 회색 글씨. `.sidecar-sub.is-on` 토글.
-   - 색상 매핑 유지(매수=빨강/매도=파랑/정상=초록). 툴팁 문구를 "네이버 속보 기반 …" 으로 갱신.
-   - **방향-색상**: 매도 사이드카(선물 급락)=하락=파랑, 매수 사이드카(선물 급등)=상승=빨강 (한국 관례 + 사용자 지정 일치).
-
-3. **[완료] 공지 2개 이상 시 view all (`app.js` `renderNotices` + `styles.css`)**
-   - `renderNotices` 가 카드를 배열로 모은 뒤, **첫 공지는 항상 표시 + 2개 이상이면 나머지를 `.notice-more`(기본 숨김) 에 넣고 `.notice-viewall-btn`** ("전체 공지 보기 (N개 더) ▾" ↔ "공지 접기 ▴")로 토글. 라운드 19 의 항목별 본문 접기(`is-collapsible`)와 독립적으로 공존(리스트 레벨 + 항목 레벨 2단).
-
-4. **[완료] 텔레그램 채널 발송 기능 (`server.js` + `index.html` + `app.js` + `styles.css`)** — 사용자 요청 "포트폴리오 소개글을 봇으로 보내줘" 처리.
-   - 신규 `POST /api/broadcast` — **admin 전용**(공지 `ADMIN_TOKEN` 재사용, `isAdminReq`). 뉴스 봇(`tgSendNews`)으로 임의 텍스트를 고정 채널(`NEWS_PUSH_CHAT_ID`)에 발송. parse_mode 화이트리스트(HTML/Markdown/MarkdownV2), 4096자 제한, GET 405, 미인증 401, 토큰/채널 미설정 503.
-   - 공지 패널에 admin 전용 "📢 채널 발송" 버튼 + 패널(textarea + "포트폴리오 소개글 채우기" + "발송"). `seedAdminToken`(Bearer)로 POST. **회사 프록시 cert 이슈 없이 라이브 사이트 브라우저에서 클릭 발송** — 제가 직접 텔레그램 발송이 불가(로컬 TLS 차단)해서 택한 방식. 재사용 가능한 1회성 공지/홍보 발송 도구.
-   - `app.js` 에 포트폴리오 소개글 상수 `PORTFOLIO_POST`(rearcarcoding 채널 #6 형식: 헤더+구분선+섹션별 ✅ 주요 기능+링크+해시태그) 내장. "채우기" 클릭 시 textarea 에 로드.
-   - **발송 절차(사용자)**: 대시보드 공지 패널 → "관리자" 로그인(ADMIN_TOKEN) → "📢 채널 발송" → "포트폴리오 소개글 채우기" → "발송". 단, Render 에 `TELEGRAM_NEWS_CHAT_ID`(채널 chat_id) + `ADMIN_TOKEN` 등록돼 있어야 함(뉴스봇 동작 중이면 이미 설정됨).
-
-**검증** (이 PC = D:\Claude\seed-public):
-- `node -c server.js` / `node -c app.js` syntax OK.
-- 로컬 서버(4292) `GET /api/sidecar` → `{status:"normal", active:false, today:null, source:"naver-news", marketOpen:true}` (로컬은 회사 프록시 TLS 로 네이버/야후 차단 → 뉴스 빈 결과 → normal graceful). 홈페이지 HTTP 200 + `id="sidecar-sub"` 마크업 확인.
-- `POST /api/broadcast`(무인증) → `admin-disabled`(로컬 ADMIN_TOKEN 미설정), GET → 405. 홈페이지에 `id="notice-broadcast"`/`broadcast-send-btn` 마크업 확인.
-- **Render 배포 후 사용자 확인 필요**: (1) 주식 탭 배지가 오늘 13:16 코스피 매도 발동을 잡아, 발동 5분 내 접속 시 파랑 "매도 사이드카 발동 (13:16)", 이후 초록 "정상 · 오늘 13:16 코스피 매도 사이드카 발동(해제)" (2) 공지 2개 이상 시 "전체 공지 보기" 버튼으로 접힘/펼침.
-
-**[라운드 20-fix] "확인 불가" 버그 수정 + 탐지 정밀화 (배포 직후 사용자 보고 "정상인데 왜 확인 불가?")**
-원인: 사이드카 탐지가 네이버 OpenAPI 단일 소스에만 의존했는데 **Render 에 NAVER_CLIENT_ID/SECRET 미설정**(뉴스 탭은 폴백 체인으로 동작) → `fetchNaverOpenApiNews` null → status 'unknown'("확인 불가") 고정. 추가로 pubDate 기반 시각이 부정확(전망/리캡 기사가 잡혀 09:10·15:50 등 오탐).
-1. **키 없는 폴백 추가** — `fetchSidecarNewsEvents` 가 네이버 OpenAPI(키 필요) 빈 결과/null 이면 **Google News RSS(`fetchGoogleNewsRss('사이드카',30)`, 키 불필요)** 로 폴백.
-2. **기본값 unknown → normal/closed** — 발동 미검출 시 항상 정상(장중)/장마감. 사이드카는 극히 드물어 "양성 발동 포착 시에만 buy/sell, 그 외 normal" 이 올바른 기본값. "확인 불가" 는 사실상 사라짐(하드 예외 catch 에서만).
-3. **속보-gated + 최초 트리거** — 트리거는 제목에 **"속보"** 표시가 있는 실제 속보만 채택(전망·분석·리캡 pubDate 오탐 방지) + 설명기사(조건/뜻/이란/가능성/우려/전망/임박 등) 제외. 그중 **가장 이른** 기사 시각을 사용(사이드카 1일 1회 → 최초 속보가 실제 발동에 근접). 2026-06-10 검증: today.time=**13:17**(실제 13:16과 1분차), direction=sell, market=kospi, released=true 정확.
-   - active 판정은 최초 트리거 후 6분 이내 + 해제기사 없을 때만 → 마감 리캡이 가짜 active 못 만듦.
-- 검증: 로컬 4296 `GET /api/sidecar` → `{status:"closed", today:{direction:"sell",market:"kospi",time:"13:17",released:true}}` (Google RSS 가 로컬에서도 동작). `node -c` OK.
-- 잔여: today.time 은 최초 **속보 발행** 시각이라 실제 발동과 1~2분 오차 가능(뉴스 기반 한계, 정확 시각은 KRX/증권사 구조화 피드 필요). 뉴스 지연으로 발동 직후 수 분은 active 못 잡을 수 있음(6분 윈도우+60초 폴링으로 완화).
-4. **배지 색상 통일 (`app.js` `renderSidecar`)** — 사용자 스펙 "사이드카 발동 안되면 정상 초록" 에 맞춰 normal/closed/unknown 을 **모두 초록 "정상"** 으로 렌더(장마감 회색/확인불가 회색 제거). 발동 중(buy/sell)일 때만 빨강/파랑. 오늘 발동 이력 sub 노트는 발동 중이 아닐 때 항상 표시. (서버 status 값은 normal/closed/buy/sell 유지하되 클라이언트가 비활성은 전부 정상으로 표시.)
-
-**[세션 마무리] 사용자용 업데이트 공지 발송 초안** — 채널 발송(📢 채널 발송 UI 에 붙여넣기). 이번 라운드 19~20 의 사용자 체감 변경만 정리:
-```
-🔔 종잣돈 업데이트 안내
-"이번 주 새로워진 점"
-━━━━━━━━━━━━━━
-
-📊 주식 탭 — 사이드카 발동 실시간 표시
-"코스피·코스닥 사이드카를 한눈에"
-· 평상시 초록 "정상"
-· 매수 사이드카 빨강 / 매도 사이드카 파랑 + 발동 시각
-· 속보 기반으로 발동/해제 자동 반영
-
-📢 공지 더 깔끔하게
-· 긴 공지는 한 줄 + 클릭하면 펼치기
-· 공지가 많으면 "전체 공지 보기"로 정리
-
-📱 모바일 사용성 개선
-· 첫 화면 안내를 모바일에 맞게 정리
-· 하단 가운데 버튼을 텔레그램 아이콘으로 — 누르면 기기 동기화
-
-👉 지금 확인: https://seed-ledger.onrender.com
-
-#종잣돈 #업데이트 #자산관리 #주식
-```
-(발송: 대시보드 공지 패널 → 관리자 로그인 → 📢 채널 발송 → 위 텍스트 붙여넣기 → 발송. "채널 발송" 기능 자체는 admin 전용 dev 도구라 공지에는 미포함.)
-
-### 라운드 19: 공지 접기/펼치기 · 모바일 환영문구 분기 + 텔레그램 FAB 아이콘 · 주식탭 사이드카 상태 배지 (2026-06-10)
-
-사용자가 한 메시지에 3개 개선 요청 + 후속(사이드카는 코스피·코스닥만). **에이전트팀(Workflow) 으로 파일별 분담 빌드업** — 세 기능이 모두 index.html/app.js/styles.css 를 건드려, 기능별이 아닌 **파일별로 에이전트 1명씩**(server.js / index.html / app.js / styles.css) 배정하고 공유 계약(ID·클래스·함수명·API 형태)을 줘서 병렬 충돌 없이 구현. 연구(사이드카 데이터 소스)·검증(node -c + 교차 계약) 에이전트 동반.
-
-1. **[완료] 공지 접기/펼치기 (`app.js` `renderNotices` + `styles.css`)**
-   - 본문(`n.body`) 있는 `.notice-item` 에 `is-collapsible is-collapsed` 클래스 + 헤드에 `▾` `.notice-toggle` 셰브론. head 클릭 시 `is-collapsed` 토글(접힘 시 셰브론 -90° 회전).
-   - 접힘 상태 CSS: `.notice-item.is-collapsed .notice-item-body` 를 `-webkit-line-clamp:1` + `white-space:normal` + `text-overflow:ellipsis` 로 한 줄 말줄임(…). 펼치면 기존 `pre-wrap` 전체 표시.
-   - 본문은 기존대로 `textContent`(XSS 안전), 관리자 수정/삭제 버튼은 head 가 아닌 카드 하단 `.notice-item-actions` 라 클릭 토글과 충돌 없음.
-
-2. **[완료] 모바일 환영문구 분기 + FAB 텔레그램 아이콘 (`index.html` + `styles.css`)**
-   - 환영 배너 동기화 안내를 `.welcome-sync-desktop`("좌측 하단 ☁ 기기 동기화") / `.welcome-sync-mobile`("화면 가운데 텔레그램 버튼을 누르면 연동") 두 span 으로 분기. 데스크톱 기본 desktop span, `@media(max-width:768px)` 에서만 mobile span 으로 전환. **웹사이트(데스크톱) 표시는 기존 그대로.**
-   - 하단탭 가운데 FAB 의 비행기 이모지(`✈`)를 텔레그램 종이비행기 **인라인 SVG**(`.tg-glyph`, viewBox 0 0 448 512, `fill:currentColor`→흰색)로 교체. 좌측 사이드바 푸터의 `pb-ico ✈`(데스크톱)는 의도적으로 그대로 둠.
-
-3. **[완료] 주식탭 사이드카 상태 배지 (`server.js` + `index.html` + `app.js` + `styles.css`)**
-   - 신규 `GET /api/sidecar` — **코스피·코스닥만** 판정(해외지수 제외). `fetchYahoo(['^KS11','^KQ11'])` 등락률 기준, 임계치 KOSPI |%|≥5 · KOSDAQ |%|≥6, 등락률>0 → `buy`(매수, 빨강) / <0 → `sell`(매도, 파랑). 둘 다 후보면 |%| 큰 쪽 방향. `status ∈ normal|buy|sell|closed|unknown`.
-   - 발동 시각 추적: 모듈 스코프 `_sidecarDay`(KST 날짜 바뀌면 리셋, 오늘 첫 발동 `HH:MM` 기록) → 응답 `time`. 30초 TTL `_sidecarCache`. 장중 판정은 `nowKST()` 문자열 파싱(평일 09:00~15:30). 데이터 없으면/예외 시 200 + `status:'unknown'` graceful(throw 로 500 안 냄).
-   - 배지 UI: `.stock-head` 의 제목을 `.stock-head-left` 로 감싸고 옆에 `#sidecar-badge`(점 + `#sidecar-text`). `app.js` `loadSidecar`/`renderSidecar` — 정상=초록 "정상", 매수=빨강 "매수 사이드카 발동 (HH:MM)", 매도=파랑 "매도 사이드카 발동 (HH:MM)", 장마감=회색, unknown=회색 "확인 불가". buy/sell 시 점 펄스 애니메이션. title 에 KOSPI/KOSDAQ 실시간 등락률.
-   - 배선: `renderStock()` 초기 + 5분 폴링 + **사이드카 전용 60초 틱**(`state.sidecarTimer`, `stopStockRefresh`에서 정리).
-   - **데이터 정직성**: 실제 사이드카는 KOSPI200/KOSDAQ150 **선물** ±5%/±6% 1분 지속 기준이지만, 무료로 안정적인 선물 등락률 피드 확보가 어려워 **현물 지수 등락률로 근사**. 배지 title·payload `note` 에 "현물 기준 근사 — 실제는 선물 기준" 명시. 현물 5%+ 급변은 극히 드물고 발생 시 실제 사이드카와 거의 항상 동반 → 흔한 경우(초록 "정상")는 항상 정확, 오발동 없음.
-
-**검증** (이 PC = D:\Claude\seed-public):
-- `node -c server.js` / `node -c app.js` 양쪽 syntax OK. `styles.css` 중괄호 781/781 균형.
-- 로컬 서버(4291) 부팅 후 `GET /api/sidecar` → 유효 JSON `{status:"unknown", marketOpen:true, ...}` (회사 프록시 self-signed cert 로 Yahoo 차단 → graceful unknown 정상 동작 확인). 홈페이지 HTTP 200 + `id="sidecar-badge"`/`tg-glyph`/`welcome-sync-mobile` 마크업 존재 확인.
-- **Render 배포 후 사용자 확인 필요**: (1) 주식 탭 제목 옆 배지가 장중 초록 "정상" + KOSPI/KOSDAQ 실시간 등락률 title (2) 공지 한 줄 말줄임 + 클릭 시 펼침 (3) 모바일에서 환영문구가 "가운데 텔레그램 버튼" 안내로 바뀌고 FAB 가 텔레그램 종이비행기 아이콘으로 표시 (4) 데스크톱은 기존 그대로.
-
-**알려진 후속 / 데이터 소스 메모** (연구 에이전트 회수):
-- 선물 기반 정밀 판정 후보: **KOSCOM Open API**(openapi 별도 신청) 또는 야후 `^KS200`(KOSPI200 선물 지수, 지연시세). KOSDAQ150 선물 심볼(`^KQ150`?)은 공개 출처 미확인. 네이버 선물 polling 엔드포인트도 미문서화 — 다음 라운드에서 선물 직접 피드로 정밀화 가능.
-- 사이드카 실제 규칙 보강 여지: 장 마감 40분 전(14:50) 이후 발동 불가 · 1일 1회 제한 등은 현 근사에 미반영(필요 시 추가).
-
-### 라운드 18: 모바일 하단 탭바 + 텔레그램 FAB · NPS 표 콤팩트 · 뉴스 최신순 안전망 · 뉴스봇 09:30/18:00 (2026-06-09)
-
-사용자가 한 메시지에 4개 개선 요청. 모두 작업 + 커밋.
-
-1. **[완료] 모바일 하단 탭바 + 가운데 텔레그램 FAB (`index.html` + `styles.css` + `app.js`)**
-   - body 끝에 `<nav class="bottom-nav">` 5칸 grid (대시보드 · 주식 · [FAB 빈칸] · 소비 · 그래프). 기존 `.tab` 클래스를 공유해 `setupTabs()` 의 클릭 핸들러가 자연스럽게 active 토글 + panel 전환을 양쪽(사이드바·하단)에 동기화.
-   - 가운데 텔레그램 FAB(`.bn-fab`): 64×64 원형, 텔레그램 톤 `linear-gradient(135deg, #229ED9 → #1E88C8)`, top:-22px 로 약간 떠 보이게. ✈ 아이콘.
-   - FAB 클릭 → `takeSnapshot()` (자산>0 일 때만, alert 없이 silent skip) → `openSyncModal()` 순차 실행. 더블 클릭 방지용 `.bn-fab-busy` 클래스 가드.
-   - ≤768px 미디어쿼리에서만 표시. body padding-bottom 64px + `env(safe-area-inset-bottom)` (iOS 홈 indicator 회피).
-   - 메뉴 중복 제거: 모바일에서 상단 가로 스크롤 `.sidenav` 숨김 (사용자 보고 "옆으로 밀어야 보이던데" 해결).
-
-2. **[완료] 국민연금 기금 포트폴리오 표 콤팩트 리디자인 (`styles.css`)**
-   - `.nps-table` 셀에 `white-space: nowrap` 으로 줄바꿈 차단 + `max-width: 280px` (모바일 180px) + `overflow: hidden; text-overflow: ellipsis` 로 긴 문자열은 말줄임. 컨테이너는 `overflow-x: auto` 로 가로 스크롤 폴백.
-   - 헤더 `position: sticky; top: 0` + 첫 컬럼 `position: sticky; left: 0` 로 가로 스크롤 중에도 컨텍스트 유지.
-   - 폰트 13→12.5px, 패딩 12/14 → 7/10px 로 정보 밀도 향상.
-
-3. **[완료] 뉴스 목록 최신순 정렬 안전망 (`server.js` + `app.js`)**
-   - 신규 헬퍼 `sortNewsByPublishedDesc` (서버) + 동일 로직 클라 `fillNews` 에 인라인. Date.parse 가능한 항목은 desc, 실패 항목은 안정 정렬로 원본 순서 유지.
-   - 1차 OpenAPI(`sort=date`) 는 이미 최신순이지만, 폴백 경로(2~4차: `api.stock.naver.com`/`m.stock`/EUC-KR HTML/Google News RSS) 는 정렬 보장 안 됨 → 모든 분기 `return` 직전에 sortNewsByPublishedDesc 통과.
-
-4. **[완료] 텔레그램 뉴스봇 발송 시각 KST 09:30 / 18:00 (`server.js` + `.github/workflows/daily-news.yml` + `.env.example`)**
-   - `NEWS_PUSH_HOURS_KST = [10, 18]` → `NEWS_PUSH_SLOTS_KST = [{hour:9,minute:30},{hour:18,minute:0}]` 객체 배열로 변경. 분 단위 slot 지원.
-   - `currentNewsSlot(parts)` 헬퍼 + `slotKey(date, slot)` 로 dedupe 키 형식 `YYYY-MM-DD:HH:MM` 변경. 윈도우는 slot.minute ~ slot.minute+5 미만.
-   - `newsPushTick` 과 `handleNewsPushNow?scheduled=1` 양쪽 동일 slot 매칭. 외부 cron 지연 대비: `handleNewsPushNow` 는 윈도우 밖이어도 같은 시각 slot 이 있으면 그 키로 dedupe.
-   - GitHub Actions cron: `0 1 * * *` → `30 0 * * *` (KST 09:30), `0 9 * * *` 유지 (KST 18:00).
-   - `.env.example` 주석 두 곳 09:30 으로 동기화.
-   - 메시지 헤더 표기 `${hh}:00` → `${hh}:${mm}` (분 단위까지 노출).
-
-**검증**: `node -c server.js / app.js` syntax OK. 로컬 회사 프록시 TLS 차단으로 직접 호출은 여전히 불가 — Render 배포 후 모바일 실기기/Chrome DevTools 모바일 모드에서 (1) 하단 탭바 + FAB 표시 (2) FAB 누르면 스냅샷+동기화 모달 (3) NPS 표 가로 스크롤 + sticky 헤더 (4) 텔레그램 뉴스가 한국시간 09:30 / 18:00 도착 확인 필요.
-
-**알려진 후속**:
-- 사이드바를 모바일에서 brand 만 남기고 슬림하게 했는데, brand 줄 자체는 그대로 보임. 만약 사용자가 상단까지 완전히 비워달라고 하면 다음 라운드에서 사이드바 모바일 hidden 추가.
-- 뉴스봇이 받은 시각이 15:00 / 22:00 이었다는 사용자 보고의 정확한 원인은 미상 (코드와 yml 은 KST 10/18 로 정확히 설정되어 있었음). GitHub Actions 큐 지연이 5시간이나 발생하는 건 드물어서 cron 잘못 해석 + 첫 발송 실패 후 retry 가능성도 있음. 새 시각으로 며칠 동작 확인 후 결정.
-
----
 
 ### 라운드 17: 연기금·외국인 순매수/순매도 상위 종목 (judal 스타일) (2026-06-06)
 

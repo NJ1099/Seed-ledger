@@ -75,9 +75,7 @@
         <div class="welcome-banner-title">환영합니다</div>
         <div class="welcome-banner-text">
           입력하신 자산 데이터는 <b>이 브라우저에만 저장</b>되고 서버로 가지 않습니다.
-          다른 PC 에서도 같은 데이터를 보시려면
-          <span class="welcome-sync-desktop">좌측 하단 <b>☁ 기기 동기화</b> 로 텔레그램을 연동해주세요.</span>
-          <span class="welcome-sync-mobile">화면 <b>가운데 텔레그램 버튼</b>을 누르면 연동됩니다.</span>
+          다른 PC 에서도 같은 데이터를 보시려면 좌측 하단 <b>☁ 기기 동기화</b> 로 텔레그램을 연동해주세요.
         </div>
         <div class="welcome-banner-actions">
           <button type="button" class="welcome-banner-link" id="welcome-open-privacy">자세히 보기 →</button>
@@ -95,7 +93,6 @@
           📢 공지
           <span class="notice-admin-actions">
             <button type="button" class="btn-ghost btn-xs notice-write-btn hidden" id="notice-write-btn">＋ 작성</button>
-            <button type="button" class="btn-ghost btn-xs notice-broadcast-btn hidden" id="notice-broadcast-btn">📢 채널 발송</button>
             <button type="button" class="btn-ghost btn-xs" id="notice-admin-btn">관리자</button>
           </span>
         </div>
@@ -116,16 +113,6 @@
             <button type="button" class="btn-primary btn-xs" id="notice-save-btn">등록</button>
             <button type="button" class="btn-ghost btn-xs" id="notice-cancel-btn">취소</button>
             <span class="notice-form-msg" id="notice-form-msg"></span>
-          </div>
-        </div>
-
-        <!-- 채널 발송 (admin 전용) — 텔레그램 뉴스 봇으로 고정 채널에 발송 -->
-        <div class="notice-broadcast hidden" id="notice-broadcast">
-          <textarea id="broadcast-text" rows="8" placeholder="채널로 보낼 메시지 (텔레그램 뉴스 봇 → 고정 채널)" maxlength="4096"></textarea>
-          <div class="notice-form-actions">
-            <button type="button" class="btn-ghost btn-xs" id="broadcast-fill-btn">포트폴리오 소개글 채우기</button>
-            <button type="button" class="btn-primary btn-xs" id="broadcast-send-btn">발송</button>
-            <span class="notice-form-msg" id="broadcast-msg"></span>
           </div>
         </div>
 
@@ -208,8 +195,10 @@
     <div class="add-card">
       <div class="ac-head">
         <h3>＋ 계좌 추가</h3>
-        <button type="button" class="btn-ghost" id="broker-link-open">🔗 증권사 API 연동</button>
-        <button type="button" class="btn-ghost" id="asset-import-open">📄 CSV / XLS / PDF 가져오기</button>
+        <div class="ac-head-actions">
+          <button type="button" class="btn-ghost" id="broker-link-open">🔗 증권사 API 연동</button>
+          <button type="button" class="btn-ghost" id="asset-import-open">📄 CSV / XLS / PDF 가져오기</button>
+        </div>
       </div>
       <form id="acc-form" class="acc-form" autocomplete="off">
         <div class="field">
@@ -504,14 +493,7 @@
   <!-- =================== 주식 탭 =================== -->
   <section class="panel hidden" id="panel-stock">
     <header class="stock-head">
-      <div class="stock-head-left">
-        <h2 class="stock-title">주식 대시보드</h2>
-        <span class="sidecar-badge sidecar-unknown" id="sidecar-badge" title="KOSPI·KOSDAQ 지수 급변동 기준 사이드카(프로그램매매 일시정지) 발동 현황">
-          <span class="sidecar-dot" aria-hidden="true"></span>
-          <span class="sidecar-text" id="sidecar-text">확인 중…</span>
-        </span>
-        <span class="sidecar-sub" id="sidecar-sub"></span>
-      </div>
+      <h2 class="stock-title">주식 대시보드</h2>
       <div class="stock-updated muted small" id="stock-updated-at">—</div>
     </header>
 
@@ -562,7 +544,6 @@
            href="https://app.hyperliquid.xyz/trade/xyz:SAMSUNG" target="_blank" rel="noopener noreferrer">
           <div class="night-head">
             <span class="night-name">삼성전자</span>
-            <span class="night-sym">xyz:SMSN · ADR</span>
           </div>
           <div class="night-price tnum">—</div>
           <div class="night-change">—</div>
@@ -572,7 +553,6 @@
            href="https://app.hyperliquid.xyz/trade/xyz:SKHYNIX" target="_blank" rel="noopener noreferrer">
           <div class="night-head">
             <span class="night-name">SK하이닉스</span>
-            <span class="night-sym">xyz:SKHX · ADR</span>
           </div>
           <div class="night-price tnum">—</div>
           <div class="night-change">—</div>
@@ -587,6 +567,24 @@
       <div class="stock-search">
         <input id="stock-search-input" type="search" placeholder="종목명 또는 코드 (예: 삼성전자, 005930, AAPL)" autocomplete="off" />
         <div class="stock-search-results" id="stock-search-results" hidden></div>
+      </div>
+      <!-- 검색 결과 선택 시 이 자리에 차트를 인라인으로 렌더 (외부 이탈 없음) -->
+      <div class="stock-chart-panel hidden" id="stock-chart-panel">
+        <div class="scp-head">
+          <div class="scp-title" id="scp-title">—</div>
+          <a class="scp-naver" id="scp-naver" href="#" target="_blank" rel="noopener noreferrer">네이버 증권에서 보기 →</a>
+        </div>
+        <div class="chart-ranges" id="scp-ranges">
+          <button class="chip" data-range="1d">1일</button>
+          <button class="chip" data-range="1w">1주</button>
+          <button class="chip active" data-range="1mo">1개월</button>
+          <button class="chip" data-range="3mo">3개월</button>
+          <button class="chip" data-range="6mo">6개월</button>
+          <button class="chip" data-range="1y">1년</button>
+          <button class="chip" data-range="5y">5년</button>
+        </div>
+        <div class="scp-meta" id="scp-meta">—</div>
+        <div class="scp-chart-wrap"><canvas id="inline-chart"></canvas></div>
       </div>
     </section>
 
@@ -724,6 +722,49 @@
   </div>
 </div>
 
+<!-- =================== 자산 CSV/XLS/PDF 가져오기 모달 =================== -->
+<div class="modal hidden" id="asset-modal" role="dialog" aria-modal="true">
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>자산 가져오기 (CSV / XLS / XLSX / PDF)</h3>
+      <button type="button" class="modal-x" id="asset-close">×</button>
+    </div>
+
+    <div id="asset-stage-file" class="modal-body">
+      <p class="csv-hint">
+        증권사의 <strong>보유종목</strong>, 거래소의 <strong>보유 코인</strong>,
+        은행의 <strong>계좌 잔액 목록</strong> 내보내기 파일을 그대로 올리면
+        자산 목록에 자동으로 추가됩니다. <em>CSV · XLS · XLSX · PDF</em> 지원
+        (PDF 는 표 구조가 단순한 경우에 한해 자동 인식).
+      </p>
+      <div class="field">
+        <label>기관 선택</label>
+        <select id="asset-preset"></select>
+      </div>
+      <div class="field">
+        <label>파일</label>
+        <input type="file" id="asset-file" accept=".csv,.xls,.xlsx,.pdf,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf" />
+      </div>
+      <div class="field">
+        <label>비밀번호 (필요 시)</label>
+        <input type="password" id="asset-password" autocomplete="off" placeholder="암호 걸린 PDF/엑셀은 비밀번호 입력" />
+      </div>
+      <p class="csv-err" id="asset-err"></p>
+    </div>
+
+    <div id="asset-stage-preview" class="modal-body hidden">
+      <div class="csv-mapbox" id="asset-mapping"></div>
+      <div class="csv-summary" id="asset-count"></div>
+      <div class="csv-tablewrap">
+        <table class="csv-table" id="asset-preview"></table>
+      </div>
+      <div class="csv-actions">
+        <button type="button" class="btn-primary" id="asset-import">이 내용으로 불러오기</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- =================== 증권사 API 연동 모달 =================== -->
 <div class="modal hidden" id="broker-modal" role="dialog" aria-modal="true">
   <div class="modal-card">
@@ -776,6 +817,7 @@
           <label>계좌번호 <span class="broker-help">(한국투자 · 예: 12345678-01)</span></label>
           <input type="text" id="broker-account" autocomplete="off" spellcheck="false" placeholder="숫자 10자리 (종합계좌 8 + 상품 2)" />
         </div>
+        <div id="broker-ip-note" class="broker-ip-note hidden"></div>
         <p class="csv-err" id="broker-err"></p>
         <div class="csv-actions">
           <button type="button" class="btn-ghost" id="broker-save">＋ 연동 저장</button>
@@ -783,49 +825,6 @@
         </div>
         <p class="broker-guide" id="broker-guide"></p>
       </form>
-    </div>
-  </div>
-</div>
-
-<!-- =================== 자산 CSV/XLS/PDF 가져오기 모달 =================== -->
-<div class="modal hidden" id="asset-modal" role="dialog" aria-modal="true">
-  <div class="modal-card">
-    <div class="modal-head">
-      <h3>자산 가져오기 (CSV / XLS / XLSX / PDF)</h3>
-      <button type="button" class="modal-x" id="asset-close">×</button>
-    </div>
-
-    <div id="asset-stage-file" class="modal-body">
-      <p class="csv-hint">
-        증권사의 <strong>보유종목</strong>, 거래소의 <strong>보유 코인</strong>,
-        은행의 <strong>계좌 잔액 목록</strong> 내보내기 파일을 그대로 올리면
-        자산 목록에 자동으로 추가됩니다. <em>CSV · XLS · XLSX · PDF</em> 지원
-        (PDF 는 표 구조가 단순한 경우에 한해 자동 인식).
-      </p>
-      <div class="field">
-        <label>기관 선택</label>
-        <select id="asset-preset"></select>
-      </div>
-      <div class="field">
-        <label>파일</label>
-        <input type="file" id="asset-file" accept=".csv,.xls,.xlsx,.pdf,text/csv,text/plain,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/pdf" />
-      </div>
-      <div class="field">
-        <label>비밀번호 (필요 시)</label>
-        <input type="password" id="asset-password" autocomplete="off" placeholder="암호 걸린 PDF/엑셀은 비밀번호 입력" />
-      </div>
-      <p class="csv-err" id="asset-err"></p>
-    </div>
-
-    <div id="asset-stage-preview" class="modal-body hidden">
-      <div class="csv-mapbox" id="asset-mapping"></div>
-      <div class="csv-summary" id="asset-count"></div>
-      <div class="csv-tablewrap">
-        <table class="csv-table" id="asset-preview"></table>
-      </div>
-      <div class="csv-actions">
-        <button type="button" class="btn-primary" id="asset-import">이 내용으로 불러오기</button>
-      </div>
     </div>
   </div>
 </div>
@@ -1022,32 +1021,6 @@
     </div>
   </div>
 </div>
-
-<!-- 모바일 하단 탭바 (≤768px 에서만 표시) -->
-<nav class="bottom-nav" id="bottom-nav" aria-label="모바일 하단 메뉴">
-  <button class="bn-tab tab" data-tab="assets" aria-label="대시보드">
-    <span class="bn-ico">📊</span>
-    <span class="bn-lab">대시보드</span>
-  </button>
-  <button class="bn-tab tab" data-tab="stock" aria-label="주식">
-    <span class="bn-ico">📰</span>
-    <span class="bn-lab">주식</span>
-  </button>
-  <!-- 가운데 빈 슬롯 (FAB 가 absolute 로 들어감) -->
-  <div class="bn-fab-slot" aria-hidden="true"></div>
-  <button class="bn-tab tab" data-tab="spend" aria-label="소비">
-    <span class="bn-ico">💳</span>
-    <span class="bn-lab">소비</span>
-  </button>
-  <button class="bn-tab tab" data-tab="graph" aria-label="그래프">
-    <span class="bn-ico">📈</span>
-    <span class="bn-lab">그래프</span>
-  </button>
-  <!-- 가운데 텔레그램 FAB — 누르면 자산 스냅샷 + 텔레그램 동기화 모달 -->
-  <button type="button" class="bn-fab" id="bn-fab" title="자산 스냅샷 저장 + 텔레그램 동기화" aria-label="텔레그램 동기화">
-    <span class="bn-fab-ico" aria-hidden="true"><svg class="tg-glyph" viewBox="0 0 448 512" aria-hidden="true"><path fill="currentColor" d="M446.7 98.6l-67.6 318.8c-5.1 22.5-18.4 28.1-37.3 17.5l-103-75.9-49.7 47.8c-5.5 5.5-10.1 10.1-20.7 10.1l7.4-104.9 190.9-172.5c8.3-7.4-1.8-11.5-12.9-4.1L117.8 284 16.2 252.2c-22.1-6.9-22.5-22.1 4.6-32.7L418.2 66.4c18.4-6.8 34.5 4.4 28.5 32.2z"/></svg></span>
-  </button>
-</nav>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="/app.js" defer></script>

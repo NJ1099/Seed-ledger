@@ -834,6 +834,31 @@ async function handleBrokerSync(req, res) {
   }
 }
 
+// 서버가 외부(토스 등)로 나갈 때의 공인 IP. 토스 "허용 IP 관리" 에 등록할 IP 를 사용자에게
+// 알려주기 위한 진단 엔드포인트. 이 IP 가 곧 토스가 보는 IP(동일 서버·NAT)라 정확하다.
+let __egressIpCache = null; // { ip, source, ts }
+async function handleBrokerEgressIp(req, res) {
+  const now = Date.now();
+  if (__egressIpCache && (now - __egressIpCache.ts) < 6 * 60 * 60 * 1000) {
+    return reply(res, 200, { ok: true, ip: __egressIpCache.ip, source: __egressIpCache.source, cached: true });
+  }
+  const tries = [
+    { url: 'https://api.ipify.org?format=json', pick: (b) => { try { return JSON.parse(b).ip; } catch { return null; } } },
+    { url: 'https://ifconfig.me/ip',            pick: (b) => (b || '').trim() || null },
+    { url: 'https://ipv4.icanhazip.com',        pick: (b) => (b || '').trim() || null },
+  ];
+  for (const t of tries) {
+    const r = await httpsGet(t.url, { timeoutMs: 5000, headers: { 'Accept': 'text/plain, application/json' } });
+    if (!r.ok) continue;
+    const ip = t.pick(r.body);
+    if (ip && /^[0-9a-fA-F:.]{3,45}$/.test(ip)) {
+      __egressIpCache = { ip, source: new URL(t.url).hostname, ts: now };
+      return reply(res, 200, { ok: true, ip, source: __egressIpCache.source });
+    }
+  }
+  return reply(res, 200, { ok: false, error: '서버 외부 IP를 확인하지 못했습니다. Render 대시보드의 Outbound IP 목록을 참고하세요.' });
+}
+
 async function handleEvents(req, res) {
   if (req.method !== 'GET') {
     return reply(res, 403, { ok: false, error: 'public deployment: events are read-only' });
@@ -942,166 +967,6 @@ async function handleIndices(req, res) {
     if (entry) return reply(res, 200, { ok: true, ...entry.payload, cached: true, stale: true });
   }
   reply(res, 200, { ok: true, ...payload });
-}
-
-// ---------- 사이드카 (코스피·코스닥 사이드카 발동/해제 실시간 추적) ----------
-// 실제 사이드카는 KOSPI200/KOSDAQ150 선물 ±5%/±6% 가 1분 지속될 때 발동 → 5분 후 자동해제.
-// 공개 JSON 피드가 없어, 발동 즉시 보도되는 네이버 뉴스(연합/머투 등 "[속보] … 매도 사이드카 발동")를
-// 파싱해 실시간 판정한다. 현물 지수(^KS11/^KQ11) 등락률은 베이시스 차이로 실제 발동을 놓치므로
-// 판정 기준이 아니라 보조(툴팁 컨텍스트)로만 사용한다.
-let _sidecarCache = { ts: 0, payload: null };
-let _sidecarLatch = { date: null, trigger: null };   // 뉴스 일시 누락 대비 메모리 래치
-const SIDECAR_WINDOW_MIN = 6;                          // 발동 후 active 로 보는 시간(5분 + 버퍼)
-
-const SIDECAR_NOTE = '네이버 속보 기반 코스피·코스닥 사이드카 발동/해제 실시간 판정 (현물 등락률은 참고용)';
-
-// ISO(UTC) 문자열 → KST { date:'YYYY-MM-DD', hhmm:'HH:MM', timeMin }
-function isoToKstParts(iso) {
-  if (!iso) return null;
-  let d;
-  try { d = new Date(iso); } catch { return null; }
-  if (isNaN(d.getTime())) return null;
-  const s = d.toLocaleString('sv', { timeZone: 'Asia/Seoul' }); // 'YYYY-MM-DD HH:MM:SS'
-  const hh = parseInt(s.slice(11, 13), 10);
-  const mm = parseInt(s.slice(14, 16), 10);
-  if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
-  return { date: s.slice(0, 10), hhmm: `${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`, timeMin: hh * 60 + mm };
-}
-
-// 네이버 뉴스에서 오늘(KST) 코스피·코스닥 사이드카 발동/해제 이벤트 추출.
-// 1차 네이버 OpenAPI(키 필요) → 키 없거나 빈 결과면 2차 Google News RSS(키 불필요)로 폴백.
-async function fetchSidecarNewsEvents(todayKST) {
-  let items = null;
-  let available = false;
-  // 1차: 네이버 OpenAPI (NAVER_CLIENT_ID/SECRET 있을 때만 non-null)
-  try { items = await fetchNaverOpenApiNews('사이드카', 30); } catch { items = null; }
-  if (items != null) available = true;
-  // 2차: 키 미설정/빈 결과 → Google News RSS (키 불필요)
-  if (!items || !items.length) {
-    try {
-      const g = await fetchGoogleNewsRss('사이드카', 30);
-      if (Array.isArray(g)) { items = g; available = true; }
-    } catch {}
-  }
-  if (!items || !items.length) return { available, events: [] };
-  const events = [];
-  for (const it of items) {
-    const title = String(it.title || '');
-    if (!/사이드카/.test(title)) continue;
-    // 설명/개념 기사 제외 (오탐 방지): "사이드카 뜻/조건/이란/…"
-    if (/조건|뜻|이란|무엇|설명|개념|차이|역사|용어|가능성|우려|전망|임박/.test(title)) continue;
-    const isRelease = /해제/.test(title);
-    // 발동은 '속보' 표시가 있는 실제 속보만 채택 — 전망/분석/리캡 기사의 pubDate 오탐 방지.
-    // (실제 사이드카 속보는 다수 매체가 [속보]로 동시 보도하므로 누락 위험 낮음)
-    const isTrigger = !isRelease && /발동|효력\s*정지/.test(title) && /속보/.test(title);
-    if (!isTrigger && !isRelease) continue;
-    // 방향: 매도=하락(sell) · 매수=상승(buy). 없으면 급락/급등으로 추정.
-    let direction = null;
-    if (/매도/.test(title)) direction = 'sell';
-    else if (/매수/.test(title)) direction = 'buy';
-    else if (/급락|폭락/.test(title)) direction = 'sell';
-    else if (/급등|폭등|급반등/.test(title)) direction = 'buy';
-    // 시장
-    let market = null;
-    if (/코스닥|KOSDAQ/i.test(title)) market = 'kosdaq';
-    else if (/코스피|유가증권|KOSPI/i.test(title)) market = 'kospi';
-    const tm = isoToKstParts(it.publishedAt);
-    if (!tm || tm.date !== todayKST) continue;   // 오늘 이벤트만
-    events.push({ type: isRelease ? 'release' : 'trigger', direction, market, hhmm: tm.hhmm, timeMin: tm.timeMin });
-  }
-  return { available: true, events };
-}
-
-async function handleSidecar(req, res) {
-  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
-
-  // 30초 TTL 모듈 캐시
-  const now = Date.now();
-  if (_sidecarCache.payload && (now - _sidecarCache.ts) < 30_000) {
-    return reply(res, 200, { ..._sidecarCache.payload, cached: true });
-  }
-
-  // graceful: 절대 throw 로 500 내지 않는다.
-  try {
-    const nowStr = nowKST();              // 'YYYY-MM-DDTHH:MM:SS+09:00'
-    const today = nowStr.slice(0, 10);    // 'YYYY-MM-DD'
-    const hh = parseInt(nowStr.slice(11, 13), 10);
-    const mm = parseInt(nowStr.slice(14, 16), 10);
-    const nowMin = hh * 60 + mm;
-
-    // 요일 계산 (KST 날짜 기준) — 0=일 ~ 6=토. 장중: 평일 09:00 ~ 15:30
-    const dow = new Date(today + 'T00:00:00Z').getUTCDay();
-    const marketOpen = dow >= 1 && dow <= 5 && nowMin >= (9 * 60) && nowMin <= (15 * 60 + 30);
-
-    if (_sidecarLatch.date !== today) _sidecarLatch = { date: today, trigger: null };
-
-    // 뉴스(판정 기준) + 현물 등락률(툴팁 보조) 병렬 — 둘 다 best-effort.
-    const [newsRes, spot] = await Promise.all([
-      fetchSidecarNewsEvents(today),
-      (async () => { try { return await fetchYahoo(['^KS11', '^KQ11']); } catch { return {}; } })(),
-    ]);
-    const ks = spot['^KS11'];
-    const kq = spot['^KQ11'];
-    const calcPct = (y) => (!y || y.price == null || y.previousClose == null || y.previousClose === 0)
-      ? null : ((y.price - y.previousClose) / y.previousClose) * 100;
-    const kospiPct = calcPct(ks);
-    const kosdaqPct = calcPct(kq);
-
-    // 오늘 '최초' 발동 이벤트 — 사이드카는 1일 1회라, 가장 이른 속보가 실제 발동 시각에 가장 근접.
-    // (최신 기사를 쓰면 마감 후 리캡 기사의 pubDate 가 잡혀 시각이 틀리고 가짜 active 가 생김)
-    const triggers = newsRes.events.filter(e => e.type === 'trigger' && e.direction);
-    const releases = newsRes.events.filter(e => e.type === 'release');
-    let firstTrigger = null;
-    for (const t of triggers) if (!firstTrigger || t.timeMin < firstTrigger.timeMin) firstTrigger = t;
-    // 메모리 래치 병합 (뉴스가 잠깐 비어도 발동 사실 유지) — 더 이른 발동을 보존.
-    if (firstTrigger && (!_sidecarLatch.trigger || firstTrigger.timeMin < _sidecarLatch.trigger.timeMin)) {
-      _sidecarLatch.trigger = firstTrigger;
-    }
-    const effTrigger = _sidecarLatch.trigger || firstTrigger;
-
-    let status, time = null, active = false, today_ = null;
-
-    if (effTrigger) {
-      // 해제: 발동 이후 해제 기사 존재 OR 5분(+버퍼) 경과
-      const hasLaterRelease = releases.some(r => r.timeMin >= effTrigger.timeMin);
-      const elapsed = nowMin - effTrigger.timeMin;
-      const released = hasLaterRelease || elapsed > SIDECAR_WINDOW_MIN || elapsed < 0;
-      active = !released;
-      today_ = { fired: true, direction: effTrigger.direction, market: effTrigger.market, time: effTrigger.hhmm, released };
-      if (active) { status = effTrigger.direction; time = effTrigger.hhmm; }
-      else { status = marketOpen ? 'normal' : 'closed'; }
-    } else {
-      // 발동 이벤트 미검출 → 정상(장중) / 장마감.
-      // 뉴스 소스를 전혀 못 받아도 사이드카는 극히 드문 이벤트라 'normal' 이 올바른 기본값
-      // (양성 발동을 포착했을 때만 buy/sell 로 뒤집는다). 'unknown' 으로 "확인 불가" 표시하지 않음.
-      status = marketOpen ? 'normal' : 'closed';
-    }
-
-    const payload = {
-      ok: true,
-      status,
-      time,
-      active,
-      today: today_,
-      kospi: { changePct: kospiPct, price: ks && ks.price != null ? ks.price : null },
-      kosdaq: { changePct: kosdaqPct, price: kq && kq.price != null ? kq.price : null },
-      marketOpen,
-      source: 'naver-news',
-      note: SIDECAR_NOTE,
-      ts: nowKST(),
-    };
-    _sidecarCache = { ts: now, payload };
-    logLine('info', 'sidecar.ok', { status, active, trig: effTrigger ? effTrigger.hhmm : null, kospiPct, kosdaqPct });
-    return reply(res, 200, payload);
-  } catch (e) {
-    // 실패해도 200 + unknown 으로 graceful 반환
-    logLine('warn', 'sidecar.fail', { err: String(e) });
-    return reply(res, 200, {
-      ok: true, status: 'unknown', time: null, active: false, today: null,
-      kospi: { changePct: null, price: null }, kosdaq: { changePct: null, price: null },
-      marketOpen: false, source: 'naver-news', note: SIDECAR_NOTE, ts: nowKST(),
-    });
-  }
 }
 
 // 시장별 거래소 코드 — stock.naver.com 페이지가 사용하는 API 와 동일한 식별자.
@@ -1834,26 +1699,13 @@ async function fetchGoogleNewsRss(query, limit) {
   }
 }
 
-// publishedAt 기준 desc 정렬 (파싱 실패 항목은 원본 순서 유지). 폴백 경로(HTML/RSS)
-// 가 정렬을 보장하지 않을 수 있어 호출부에서 항상 한 번 통과시킨다.
-function sortNewsByPublishedDesc(items) {
-  if (!Array.isArray(items) || items.length < 2) return items;
-  return items
-    .map((it, idx) => {
-      const t = it && it.publishedAt ? Date.parse(it.publishedAt) : NaN;
-      return { it, idx, t: Number.isFinite(t) ? t : -Infinity };
-    })
-    .sort((a, b) => (b.t - a.t) || (a.idx - b.idx))
-    .map(x => x.it);
-}
-
 async function fetchStockNews(limit, query) {
   // 네이버 검색 API 전용 — 사용자 명시 선호 (라운드 12-bis).
   // 키 있을 때는 OpenAPI 결과만 사용한다 (빈 응답이어도 다른 매체로 폴백하지 않음).
   // 다른 매체가 섞여 들어오는 걸 막기 위함.
   if (process.env.NAVER_CLIENT_ID && process.env.NAVER_CLIENT_SECRET) {
     const out = await fetchNaverOpenApiNews(query, limit);
-    return sortNewsByPublishedDesc(Array.isArray(out) ? out : []);
+    return Array.isArray(out) ? out : [];
   }
 
   // 키 미설정 시에만 폴백 체인 활성화.
@@ -1874,7 +1726,7 @@ async function fetchStockNews(limit, query) {
       const items = j?.newsList || j?.items || j?.result?.list || j?.news || j?.list || [];
       if (Array.isArray(items) && items.length) {
         const out = items.slice(0, limit).map(normalizeNewsItem).filter(Boolean);
-        if (out.length) return sortNewsByPublishedDesc(out);
+        if (out.length) return out;
       }
     } catch (e) {
       logLine('warn', 'news.parse.stock', { url, err: String(e) });
@@ -1890,7 +1742,7 @@ async function fetchStockNews(limit, query) {
       const items = j?.items || j?.newsList || j?.result || j?.news || [];
       if (Array.isArray(items) && items.length) {
         const out = items.slice(0, limit).map(normalizeNewsItem).filter(Boolean);
-        if (out.length) return sortNewsByPublishedDesc(out);
+        if (out.length) return out;
       }
     } catch (e) {
       logLine('warn', 'news.parse.m', { err: String(e) });
@@ -1924,7 +1776,7 @@ async function fetchStockNews(limit, query) {
           image: null,
         });
       }
-      if (items.length) return sortNewsByPublishedDesc(items);
+      if (items.length) return items;
     } catch (e) {
       logLine('warn', 'news.parse.html', { err: String(e) });
     }
@@ -1933,7 +1785,7 @@ async function fetchStockNews(limit, query) {
   // 4차 (최종): Google News RSS — 키 불필요, 매우 안정적인 폴백.
   // 1-3차가 모두 빈 응답이거나 차단되는 환경(Render 등)에서도 동작.
   const gout = await fetchGoogleNewsRss(query, limit);
-  if (gout && gout.length) return sortNewsByPublishedDesc(gout);
+  if (gout && gout.length) return gout;
 
   return [];
 }
@@ -3379,9 +3231,10 @@ const server = http.createServer(async (req, res) => {
 
     if (urlPath === '/api/quotes')        return await handleQuotes(req, res);
     if (urlPath === '/api/events')        return await handleEvents(req, res);
-    if (urlPath === '/api/broker-sync')   return await handleBrokerSync(req, res);
     if (urlPath === '/api/history')       return await handleHistory(req, res);
     if (urlPath === '/api/import-pdf')    return await handleImportPdf(req, res);
+    if (urlPath === '/api/broker-sync')   return await handleBrokerSync(req, res);
+    if (urlPath === '/api/broker-egress-ip') return await handleBrokerEgressIp(req, res);
 
     // 주식 탭
     if (urlPath === '/api/indices')       return await handleIndices(req, res);
@@ -3395,14 +3248,12 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/krx-investor-flows') return await handleKrxInvestorFlows(req, res);
     if (urlPath === '/api/nps-portfolio') return await handleNpsPortfolio(req, res);
     if (urlPath === '/api/night-futures') return await handleNightFutures(req, res);
-    if (urlPath === '/api/sidecar')       return await handleSidecar(req, res);
     if (urlPath === '/api/crypto-indicators') return await handleCryptoIndicators(req, res);
     if (urlPath === '/api/config-status') return await handleConfigStatus(req, res);
     if (urlPath === '/api/krx-auth-check') return await handleKrxAuthCheck(req, res);
 
     // 공지 (admin 작성 / 누구나 읽기)
     if (urlPath === '/api/notices')       return await handleNotices(req, res);
-    if (urlPath === '/api/broadcast')     return await handleBroadcast(req, res);
 
     // 기기 간 동기화 (텔레그램 봇 기반)
     if (urlPath === '/api/sync/status')      return await handleSyncStatus(req, res);
@@ -3923,7 +3774,7 @@ async function bootTelegram() {
 }
 setTimeout(bootTelegram, 2000);
 
-// ---------- 일일 주식 뉴스 푸시 (매일 09:30 / 18:00 KST) ----------
+// ---------- 일일 주식 뉴스 푸시 (매일 10:00 / 18:00 KST) ----------
 // 자산 포트폴리오 주식 뉴스(사이트에 표시되는 최신 뉴스)를 제목+요약으로 정리해
 // 텔레그램 채팅방(TELEGRAM_NEWS_CHAT_ID)으로 하루 두 번 자동 발송한다.
 //
@@ -3935,14 +3786,9 @@ const NEWS_PUSH_CHAT_ID = (process.env.TELEGRAM_NEWS_CHAT_ID || '').trim();
 // 뉴스 메시지 하단에 항상 붙이는 사이트 주소. env 로 재정의 가능.
 const PUBLIC_SITE_URL = (process.env.PUBLIC_SITE_URL || 'https://seed-ledger.onrender.com').trim();
 const NEWS_PUSH_ENABLED = !!(NEWS_BOT_TOKEN && NEWS_PUSH_CHAT_ID);
-// 발송 시각 (KST). { hour, minute } 객체 배열로 분 단위까지 지정.
-const NEWS_PUSH_SLOTS_KST = [
-  { hour: 9, minute: 30 },
-  { hour: 18, minute: 0 },
-];
-const NEWS_PUSH_WINDOW_MIN = 5;         // slot 분 ±N분 윈도우 안에서 1회 발송
+const NEWS_PUSH_HOURS_KST = [10, 18];   // 발송 시각 (KST 정각)
 const NEWS_PUSH_COUNT = 10;             // 발송할 뉴스 건수
-let lastNewsPushSlot = '';              // 중복 발송 방지 키 (YYYY-MM-DD:HH:MM)
+let lastNewsPushSlot = '';              // 중복 발송 방지 키 (YYYY-MM-DD:HH)
 let lastManualNewsPush = 0;             // 수동 트리거 쿨다운용 타임스탬프
 
 // HTML parse_mode 용 최소 escape (텔레그램은 & < > 만 escape 하면 됨).
@@ -4004,11 +3850,10 @@ async function sendDailyNews(reason) {
     return false;
   }
 
-  const { date, hour, minute } = kstClockParts();
+  const { date, hour } = kstClockParts();
   const hh = String(hour).padStart(2, '0');
-  const mm = String(minute).padStart(2, '0');
   const header =
-    `📈 <b>오늘의 주식 뉴스</b> · ${date} ${hh}:${mm}\n` +
+    `📈 <b>오늘의 주식 뉴스</b> · ${date} ${hh}:00\n` +
     `자산 포트폴리오 관련 최신 뉴스 ${Math.min(news.length, NEWS_PUSH_COUNT)}건`;
 
   const items = news.slice(0, NEWS_PUSH_COUNT).map((n, i) => {
@@ -4040,7 +3885,7 @@ async function sendDailyNews(reason) {
       parse_mode: 'HTML',
       disable_web_page_preview: true,
     });
-    logLine('info', 'newspush.sent', { count: items.length, reason, slot: `${date}:${hh}:${mm}` });
+    logLine('info', 'newspush.sent', { count: items.length, reason, slot: `${date}:${hour}` });
     return true;
   } catch (e) {
     logLine('error', 'newspush.send.fail', { err: String(e) });
@@ -4048,34 +3893,16 @@ async function sendDailyNews(reason) {
   }
 }
 
-// 현재 KST 시각에 해당하는 발송 slot(`{hour,minute}`) 을 찾아 반환. 윈도우 밖이면 null.
-// 윈도우: slot.minute 이상 slot.minute+NEWS_PUSH_WINDOW_MIN 미만 (같은 시각 hour 안에서만 매칭).
-function currentNewsSlot(parts) {
-  for (const slot of NEWS_PUSH_SLOTS_KST) {
-    if (parts.hour !== slot.hour) continue;
-    if (parts.minute < slot.minute) continue;
-    if (parts.minute >= slot.minute + NEWS_PUSH_WINDOW_MIN) continue;
-    return slot;
-  }
-  return null;
-}
-
-function slotKey(date, slot) {
-  const hh = String(slot.hour).padStart(2, '0');
-  const mm = String(slot.minute).padStart(2, '0');
-  return `${date}:${hh}:${mm}`;
-}
-
-// 1분 주기 틱 — KST 09:30 / 18:00 윈도우 안에서 1회만 발송.
+// 1분 주기 틱 — KST 10:00 / 18:00 정시(분 0~4 윈도우)에 1회만 발송.
 // 윈도우 + slot dedupe 로 setInterval 드리프트/중복을 흡수한다.
 function newsPushTick() {
   if (!NEWS_PUSH_ENABLED) return;
-  const parts = kstClockParts();
-  const slot = currentNewsSlot(parts);
-  if (!slot) return;
-  const key = slotKey(parts.date, slot);
-  if (key === lastNewsPushSlot) return;
-  lastNewsPushSlot = key;   // slot 선점 (GitHub Actions HTTP 트리거와 중복 발송 방지)
+  const { date, hour, minute } = kstClockParts();
+  if (!NEWS_PUSH_HOURS_KST.includes(hour)) return;
+  if (minute >= 5) return;
+  const slot = `${date}:${hour}`;
+  if (slot === lastNewsPushSlot) return;
+  lastNewsPushSlot = slot;   // slot 선점 (GitHub Actions HTTP 트리거와 중복 발송 방지)
   sendDailyNews('scheduled')
     .then((ok) => { if (!ok) lastNewsPushSlot = ''; })  // 실패 시 해제 → 다음 트리거 재시도
     .catch((e) => { lastNewsPushSlot = ''; logLine('error', 'newspush.tick.fail', { err: String(e) }); });
@@ -4083,7 +3910,7 @@ function newsPushTick() {
 
 if (NEWS_PUSH_ENABLED) {
   setInterval(newsPushTick, 60_000);
-  logLine('info', 'newspush.enabled', { slotsKst: NEWS_PUSH_SLOTS_KST, count: NEWS_PUSH_COUNT });
+  logLine('info', 'newspush.enabled', { hoursKst: NEWS_PUSH_HOURS_KST, count: NEWS_PUSH_COUNT });
 } else {
   logLine('info', 'newspush.disabled', {
     reason: !NEWS_BOT_TOKEN ? 'no-token' : 'no-chat-id',
@@ -4102,20 +3929,15 @@ async function handleNewsPushNow(req, res) {
 
   const url = new URL(req.url, 'http://x');
   if (url.searchParams.get('scheduled') === '1') {
-    const parts = kstClockParts();
-    // 외부 cron 은 약간의 지연을 가질 수 있으므로 윈도우를 벗어나도
-    // "가장 가까운 같은 시각 slot" 이 있으면 그 slot 키로 dedupe + 발송.
-    const matched = currentNewsSlot(parts)
-      || NEWS_PUSH_SLOTS_KST.find((s) => s.hour === parts.hour)
-      || null;
-    const key = matched ? slotKey(parts.date, matched) : `${parts.date}:${parts.hour}:adhoc`;
-    if (key === lastNewsPushSlot) {
-      return reply(res, 200, { ok: true, skipped: 'already-sent', slot: key });
+    const { date, hour } = kstClockParts();
+    const slot = `${date}:${hour}`;
+    if (slot === lastNewsPushSlot) {
+      return reply(res, 200, { ok: true, skipped: 'already-sent', slot });
     }
-    lastNewsPushSlot = key;   // slot 선점 (in-process 틱과 중복 방지)
+    lastNewsPushSlot = slot;   // slot 선점 (in-process 틱과 중복 방지)
     const sent = await sendDailyNews('scheduled-http');
     if (!sent) lastNewsPushSlot = '';   // 실패 시 해제 → 다음 트리거 재시도
-    return reply(res, sent ? 200 : 502, { ok: sent, slot: key });
+    return reply(res, sent ? 200 : 502, { ok: sent, slot });
   }
 
   const now = Date.now();
@@ -4125,43 +3947,6 @@ async function handleNewsPushNow(req, res) {
   lastManualNewsPush = now;
   const sent = await sendDailyNews('manual');
   return reply(res, sent ? 200 : 502, { ok: sent });
-}
-
-// POST /api/broadcast — admin 전용. 뉴스 봇으로 임의 텍스트를 고정 채널(NEWS_PUSH_CHAT_ID)에 발송.
-// 공지 admin 토큰(ADMIN_TOKEN)으로 인증. 포트폴리오 소개글 등 1회성 공지/홍보 발송용.
-async function handleBroadcast(req, res) {
-  if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'POST only' });
-  if (!ADMIN_TOKEN) return reply(res, 503, { ok: false, error: 'admin-disabled', hint: 'ADMIN_TOKEN 미설정' });
-  if (!isAdminReq(req)) return reply(res, 401, { ok: false, error: 'unauthorized' });
-  if (!NEWS_BOT_TOKEN) return reply(res, 503, { ok: false, error: 'no-token', hint: 'TELEGRAM_NEWS_BOT_TOKEN/TELEGRAM_BOT_TOKEN 미설정' });
-  if (!NEWS_PUSH_CHAT_ID) return reply(res, 503, { ok: false, error: 'no-chat-id', hint: 'TELEGRAM_NEWS_CHAT_ID 미설정' });
-
-  let body;
-  try { body = JSON.parse((await readBody(req, 64 * 1024)) || '{}'); }
-  catch { return reply(res, 400, { ok: false, error: 'bad-json' }); }
-
-  const text = String(body.text == null ? '' : body.text).replace(/\r\n/g, '\n').trim();
-  if (!text) return reply(res, 400, { ok: false, error: 'empty-text' });
-  if (text.length > 4096) return reply(res, 400, { ok: false, error: 'too-long', hint: '텔레그램 4096자 제한' });
-
-  // parse_mode 화이트리스트. 기본 plain. 'HTML' | 'Markdown' | 'MarkdownV2' 허용.
-  const pm = String(body.parse_mode || '').trim();
-  const parseMode = ['HTML', 'Markdown', 'MarkdownV2'].includes(pm) ? pm : null;
-  const payload = {
-    chat_id: NEWS_PUSH_CHAT_ID,
-    text,
-    disable_web_page_preview: body.disable_web_page_preview === true, // 기본: 링크 미리보기 표시
-  };
-  if (parseMode) payload.parse_mode = parseMode;
-
-  try {
-    const result = await tgSendNews('sendMessage', payload);
-    logLine('info', 'broadcast.sent', { len: text.length, mid: result && result.message_id });
-    return reply(res, 200, { ok: true, message_id: result && result.message_id, chat: NEWS_PUSH_CHAT_ID });
-  } catch (e) {
-    logLine('error', 'broadcast.fail', { err: String(e) });
-    return reply(res, 502, { ok: false, error: 'send-failed', detail: String((e && e.message) || e) });
-  }
 }
 
 // ---------- 공지(notice) ----------

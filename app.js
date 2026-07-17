@@ -28,7 +28,6 @@ const state = {
   txPageShown: 30,       // 리스트 표시 개수 (더보기로 +30 씩 증가)
   stockMarket: 'kr',          // 주식 탭 시장 토글
   stockRefreshTimer: null,    // 주식 탭 5분 폴링 타이머
-  sidecarTimer: null,        // 사이드카 배지 폴링 타이머
   stockSearchDebounce: null,  // 종목 검색 디바운스 핸들
   pensionDays: 30,            // 국민연금 매수/매도 표 조회 기간 (일)
   flowsDays: 30,              // 연기금·외국인 순매수/순매도 조회 기간 (일)
@@ -48,8 +47,6 @@ const API = {
   events: '/api/events',
   history: '/api/history',
   notices: '/api/notices',
-  sidecar: '/api/sidecar',
-  broadcast: '/api/broadcast',
 };
 
 // ---------- 유틸 ----------
@@ -3545,6 +3542,7 @@ function setupTabs() {
   });
   $('#snap-btn').addEventListener('click', takeSnapshot);
   setupStockSearch();
+  setupInlineStockChart();
   setupMarketToggle();
 }
 
@@ -3590,9 +3588,6 @@ function renderNotices() {
   if (!list) return;
   const writeBtn = document.getElementById('notice-write-btn');
   if (writeBtn) writeBtn.classList.toggle('hidden', !noticeState.admin);
-  const bcBtn = document.getElementById('notice-broadcast-btn');
-  if (bcBtn) bcBtn.classList.toggle('hidden', !noticeState.admin);
-  if (!noticeState.admin) { const bp = document.getElementById('notice-broadcast'); if (bp) bp.classList.add('hidden'); }
 
   const items = noticeState.notices;
   if (!items.length) {
@@ -3604,7 +3599,6 @@ function renderNotices() {
     return;
   }
   list.innerHTML = '';
-  const cards = [];
   for (const n of items) {
     const card = document.createElement('div');
     card.className = 'notice-item';
@@ -3619,17 +3613,6 @@ function renderNotices() {
     date.textContent = fmtNoticeDate(n.ts);
     head.appendChild(title);
     head.appendChild(date);
-
-    if (n.body) {
-      // 본문 있는 항목은 접기/펼치기 가능. 기본 접힘.
-      card.className = 'notice-item is-collapsible is-collapsed';
-      const toggle = document.createElement('span');
-      toggle.className = 'notice-toggle';
-      toggle.textContent = '▾';
-      toggle.setAttribute('aria-hidden', 'true');
-      head.appendChild(toggle);
-      head.addEventListener('click', () => card.classList.toggle('is-collapsed'));
-    }
     card.appendChild(head);
 
     if (n.body) {
@@ -3652,27 +3635,7 @@ function renderNotices() {
       actions.appendChild(del);
       card.appendChild(actions);
     }
-    cards.push(card);
-  }
-
-  // 첫 공지는 항상 표시. 2개 이상이면 나머지는 'view all' 로 접는다.
-  list.appendChild(cards[0]);
-  if (cards.length >= 2) {
-    const more = document.createElement('div');
-    more.className = 'notice-more';
-    for (let i = 1; i < cards.length; i++) more.appendChild(cards[i]);
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'notice-viewall-btn';
-    const rest = cards.length - 1;
-    const sync = () => {
-      const open = more.classList.contains('is-open');
-      btn.textContent = open ? '공지 접기 ▴' : `전체 공지 보기 (${rest}개 더) ▾`;
-    };
-    sync();
-    btn.addEventListener('click', () => { more.classList.toggle('is-open'); sync(); });
-    list.appendChild(more);
-    list.appendChild(btn);
+    list.appendChild(card);
   }
 }
 
@@ -3762,70 +3725,6 @@ function setupNotices() {
   });
   document.getElementById('notice-save-btn').addEventListener('click', saveNotice);
   document.getElementById('notice-cancel-btn').addEventListener('click', cancelNoticeForm);
-
-  // 채널 발송 (admin 전용)
-  const bcBtn = document.getElementById('notice-broadcast-btn');
-  const bcPanel = document.getElementById('notice-broadcast');
-  if (bcBtn && bcPanel) {
-    bcBtn.addEventListener('click', () => bcPanel.classList.toggle('hidden'));
-    const fillBtn = document.getElementById('broadcast-fill-btn');
-    if (fillBtn) fillBtn.addEventListener('click', () => {
-      const ta = document.getElementById('broadcast-text');
-      if (ta) ta.value = PORTFOLIO_POST;
-    });
-    const sendBtn = document.getElementById('broadcast-send-btn');
-    if (sendBtn) sendBtn.addEventListener('click', sendBroadcast);
-  }
-}
-
-// 채널 발송용 포트폴리오 소개글 (텔레그램 plain text — 이모지/구분선/줄바꿈 그대로 렌더).
-const PORTFOLIO_POST = `🌱 종잣돈 — 내 자산 포트폴리오를 한눈에
-"흩어진 현금·예적금·주식·코인·부동산을 한 화면에서"
-━━━━━━━━━━━━━━
-
-💰 자산 대시보드
-"입력만 하면 실시간 시세로 자동 평가"
-보유 주식·코인을 업비트·네이버·야후 시세로 자동 계산해 총자산·평가손익을 실시간 표시.
-✅ 주요 기능
-· 자산 구성 도넛 + 투자 포트폴리오 비중·손익
-· 최근 30일 총자산 추이 그래프
-· 소비 추적 & 월 지출 자동 집계
-
-📊 주식 탭 — 시장을 한 페이지에
-"경제지표부터 수급·사이드카까지"
-✅ 주요 기능
-· 8대 경제지표 · 공포·탐욕 지수 · 김치프리미엄
-· 연기금·외국인 순매수/순매도 상위 종목
-· 코스피·코스닥 사이드카 발동 실시간 배지
-· 삼성·SK하이닉스 야간선물(Hyperliquid)
-
-🔒 프라이버시 우선
-"데이터는 내 브라우저에만"
-회원가입 없이 바로 사용. 자산 데이터는 서버에 저장하지 않고 브라우저(localStorage)에만 보관. 텔레그램 2단계 인증으로 기기 간 동기화는 선택.
-
-👉 지금 바로: https://seed-ledger.onrender.com
-
-#종잣돈 #자산관리 #포트폴리오 #주식 #코인 #핀테크 #무료`;
-
-async function sendBroadcast() {
-  const ta = document.getElementById('broadcast-text');
-  const msg = document.getElementById('broadcast-msg');
-  const text = ((ta && ta.value) || '').trim();
-  if (!text) { if (msg) msg.textContent = '내용을 입력하세요.'; return; }
-  if (!confirm('이 메시지를 텔레그램 채널로 발송할까요?')) return;
-  if (msg) msg.textContent = '발송 중…';
-  try {
-    const r = await fetch(API.broadcast, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getAdminToken() },
-      body: JSON.stringify({ text, disable_web_page_preview: false }),
-    });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
-    if (msg) msg.textContent = '발송 완료 (message #' + (j.message_id || '?') + ')';
-  } catch (e) {
-    if (msg) msg.textContent = '발송 실패: ' + e.message;
-  }
 }
 
 // ---------- CSV 가져오기 ----------
@@ -4380,7 +4279,7 @@ const BROKER_META = {
   toss: {
     label: '토스증권', needsAccount: false, needsEnv: false,
     appkeyLabel: 'Client ID (App Key)', secretLabel: 'Client Secret (App Secret)',
-    guide: '토스증권 Open API(developers.tossinvest.com)에서 앱 등록 후 Client ID/Secret 발급 → 계좌·보유종목은 자동 조회됩니다. 토스증권 계좌 보유자만 사용 가능.',
+    guide: '토스증권 Open API(developers.tossinvest.com)에서 앱 등록 후 Client ID/Secret 발급 → 계좌·보유종목·예수금이 자동 조회됩니다. 토스증권 계좌 보유자만 사용 가능. ⚠ 실전 연동은 토스 "허용 IP 관리"에 아래 서버 IP 등록이 필수입니다.',
   },
   kis: {
     label: '한국투자증권', needsAccount: true, needsEnv: true,
@@ -4430,11 +4329,37 @@ function setupBrokerLink() {
   const acctEl = document.getElementById('broker-account');
   const errEl = document.getElementById('broker-err');
   const guideEl = document.getElementById('broker-guide');
+  const ipNoteEl = document.getElementById('broker-ip-note');
   const saveBtn = document.getElementById('broker-save');
   const syncBtn = document.getElementById('broker-sync-now');
   const listEl = document.getElementById('broker-links');
 
   const setErr = (m) => { if (errEl) errEl.textContent = m || ''; };
+
+  // 서버가 토스로 나갈 때의 공인 IP — 토스 "허용 IP 관리" 등록 안내용. 1회 조회 후 캐시.
+  let egressIpCache = null;
+  async function loadEgressIp() {
+    if (egressIpCache) return egressIpCache;
+    try {
+      const r = await fetch('/api/broker-egress-ip').then(x => x.json()).catch(() => null);
+      if (r && r.ok && r.ip) { egressIpCache = r.ip; return r.ip; }
+    } catch { /* noop */ }
+    return null;
+  }
+  async function refreshIpNote() {
+    if (!ipNoteEl) return;
+    if (kindSel.value !== 'toss') { ipNoteEl.classList.add('hidden'); return; }
+    ipNoteEl.classList.remove('hidden');
+    ipNoteEl.innerHTML = '토스 실전 연동은 <b>허용 IP 등록</b>이 필수예요. 서버 IP 확인 중…';
+    const ip = await loadEgressIp();
+    if (ip) {
+      ipNoteEl.innerHTML = `이 서버가 토스에 접속하는 IP: <code>${esc(ip)}</code><br>` +
+        `토스증권 앱/WTS <b>설정 › Open API › 허용 IP 관리</b>에 이 IP를 등록해야 실전 연동이 됩니다.` +
+        `<br><span class="muted small">Render 배포 시 Render 대시보드의 Outbound IP 목록도 함께 등록하세요.</span>`;
+    } else {
+      ipNoteEl.innerHTML = '토스 실전 연동은 <b>허용 IP 등록</b>이 필수예요. 서버 IP는 Render 대시보드의 <b>Outbound IP</b> 목록을 확인해 토스 허용 IP 관리에 등록하세요.';
+    }
+  }
 
   function applyKind() {
     const meta = BROKER_META[kindSel.value] || BROKER_META.toss;
@@ -4445,6 +4370,7 @@ function setupBrokerLink() {
     if (appkeyLabel) appkeyLabel.textContent = meta.appkeyLabel;
     if (secretLabel) secretLabel.textContent = meta.secretLabel;
     if (guideEl) guideEl.textContent = meta.guide;
+    refreshIpNote(); // 토스면 서버 IP 안내 표시, 그 외엔 숨김 (fire-and-forget)
   }
 
   function formToLink() {
@@ -4489,7 +4415,7 @@ function setupBrokerLink() {
         }),
       });
       const j = await r.json().catch(() => ({}));
-      if (!j.ok) throw new Error(j.error || `동기화 실패 (HTTP ${r.status})`);
+      if (!j.ok) { const e = new Error(j.error || `동기화 실패 (HTTP ${r.status})`); e.hint = j.hint; throw e; }
       const accounts = Array.isArray(j.accounts) ? j.accounts : [];
       if (!accounts.length) throw new Error('조회된 계좌가 없습니다.');
 
@@ -4507,7 +4433,15 @@ function setupBrokerLink() {
       const warnMsg = (j.warnings && j.warnings.length) ? `\n\n⚠ ${j.warnings.join('\n')}` : '';
       alert(`✅ ${BROKER_META[link.broker]?.label || link.broker} 동기화 완료 — 계좌 ${merged.created + merged.updated}건 · 종목 ${merged.holdings}건${warnMsg}`);
     } catch (ex) {
-      setErr('동기화 실패: ' + (ex.message || ex));
+      if (ex.hint === 'ip_not_allowed') {
+        const ip = await loadEgressIp();
+        setErr(`동기화 실패: 토스가 서버 IP를 차단했습니다(403). 서버 IP ${ip ? `(${ip}) ` : ''}를 토스증권 설정 › Open API › 허용 IP 관리에 등록한 뒤 다시 시도하세요.`);
+        refreshIpNote();
+      } else if (ex.hint === 'auth') {
+        setErr('동기화 실패: ' + (ex.message || ex) + ' — Client ID/Secret을 확인하거나 재발급하세요.');
+      } else {
+        setErr('동기화 실패: ' + (ex.message || ex));
+      }
     } finally {
       if (btnEl) { btnEl.disabled = false; btnEl.textContent = prev || '동기화'; }
     }
@@ -5614,8 +5548,8 @@ async function boot() {
   setupTxForm();
   setupCsvImport();
   setupAssetImport();
-  setupBrokerLink();
   setupAssetActionBar();
+  setupBrokerLink();
   setupGraph();
   setupEvents();
   setupHistoryChart();
@@ -5642,33 +5576,10 @@ async function boot() {
   renderTickerStrip();
   schedulePolling();
   setupSync();
-  setupBottomNav();
   setupPrivacyModal();
   setupWelcomeBanner();
   setupNotices();
   loadNotices();
-}
-
-// 모바일 하단 탭바 — 중앙 텔레그램 FAB 는 자산 스냅샷 + 동기화 모달 한 번에.
-// .tab 클래스를 공유하므로 좌/우 탭 버튼들은 setupTabs() 의 기존 핸들러가 자동 처리.
-function setupBottomNav() {
-  const fab = document.getElementById('bn-fab');
-  if (!fab || fab.dataset.wired === '1') return;
-  fab.dataset.wired = '1';
-  fab.addEventListener('click', async () => {
-    if (fab.classList.contains('bn-fab-busy')) return;
-    fab.classList.add('bn-fab-busy');
-    try {
-      // 자산이 비어있을 땐 takeSnapshot 의 alert 을 띄우지 않고 조용히 건너뛴다.
-      // (FAB UX 가 두 단계 → 자산 없음 alert 만 떠 버리면 sync 모달이 뒤따라 와 혼란).
-      if (Number(state.totalKRW) > 0) {
-        try { await takeSnapshot(); } catch (e) { console.warn('[bottom-nav] snapshot failed', e); }
-      }
-    } finally {
-      fab.classList.remove('bn-fab-busy');
-      openSyncModal();
-    }
-  });
 }
 
 // ---------- 종목 Historical 차트 모달 ----------
@@ -5767,12 +5678,17 @@ function updateChartMeta() {
   metaEl.innerHTML = `현재 ${fmtPrice(last)} · 기간 시작 ${fmtPrice(first)} · <span class="${cls}">${change >= 0 ? '+' : ''}${fmtPrice(change)} (${change >= 0 ? '+' : ''}${pct.toFixed(2)}%)</span> · ${p.length}개 포인트`;
 }
 
-function drawHistoryChart() {
-  const canvas = document.getElementById('history-chart');
+// 공용 선형 가격 차트 렌더러 — 모달(hover/drag)과 종목검색 인라인 패널이 공유한다.
+// opts: { currency, range, height, hoverIdx, dragStart, dragEnd }
+function drawPriceChart(canvas, points, opts = {}) {
   if (!canvas) return;
+  const {
+    currency = 'USD', range = '1mo', height = 340,
+    hoverIdx = -1, dragStart = -1, dragEnd = -1,
+  } = opts;
   const wrap = canvas.parentElement;
-  const W = wrap.clientWidth - 4;
-  const H = 340;
+  const W = ((wrap && wrap.clientWidth) || canvas.clientWidth || 600) - 4;
+  const H = height;
   const dpr = window.devicePixelRatio || 1;
   canvas.style.width = W + 'px';
   canvas.style.height = H + 'px';
@@ -5782,7 +5698,7 @@ function drawHistoryChart() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
 
-  const pts = chartState.points;
+  const pts = points || [];
   if (!pts.length) {
     ctx.fillStyle = '#94a3b8';
     ctx.font = '13px system-ui, -apple-system, sans-serif';
@@ -5815,7 +5731,7 @@ function drawHistoryChart() {
   ctx.font = '10px system-ui, -apple-system, sans-serif';
   ctx.textAlign = 'right';
   ctx.lineWidth = 1;
-  const isUSD = chartState.currency === 'USD';
+  const isUSD = currency === 'USD';
   for (let i = 0; i <= 4; i++) {
     const v = lo + ((hi - lo) * i / 4);
     const y = yAt(v);
@@ -5828,9 +5744,9 @@ function drawHistoryChart() {
   }
 
   // 드래그 선택 영역 (파란 반투명)
-  if (chartState.dragStart >= 0 && chartState.dragEnd >= 0 && chartState.dragStart !== chartState.dragEnd) {
-    const a = Math.min(chartState.dragStart, chartState.dragEnd);
-    const b = Math.max(chartState.dragStart, chartState.dragEnd);
+  if (dragStart >= 0 && dragEnd >= 0 && dragStart !== dragEnd) {
+    const a = Math.min(dragStart, dragEnd);
+    const b = Math.max(dragStart, dragEnd);
     ctx.fillStyle = 'rgba(49, 130, 246, 0.14)';
     ctx.fillRect(xAt(pts[a].t), padT, xAt(pts[b].t) - xAt(pts[a].t), chartH);
   }
@@ -5865,12 +5781,12 @@ function drawHistoryChart() {
   ctx.textAlign = 'center';
   ctx.fillStyle = '#94a3b8';
   const numLabels = 5;
-  const shortRange = chartState.range === '1d' || chartState.range === '1w';
+  const shortRange = range === '1d' || range === '1w';
   for (let i = 0; i < numLabels; i++) {
     const t = tMin + (tSpan * i / (numLabels - 1));
     const d = new Date(t);
     let label;
-    if (chartState.range === '1d') {
+    if (range === '1d') {
       label = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
     } else if (shortRange) {
       label = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}시`;
@@ -5881,8 +5797,8 @@ function drawHistoryChart() {
   }
 
   // Hover crosshair + point
-  if (chartState.hoverIdx >= 0 && chartState.hoverIdx < pts.length) {
-    const p = pts[chartState.hoverIdx];
+  if (hoverIdx >= 0 && hoverIdx < pts.length) {
+    const p = pts[hoverIdx];
     const x = xAt(p.t), y = yAt(p.c);
     ctx.strokeStyle = 'rgba(100, 116, 139, 0.5)';
     ctx.setLineDash([3, 3]);
@@ -5899,6 +5815,18 @@ function drawHistoryChart() {
     ctx.lineWidth = 2;
     ctx.stroke();
   }
+}
+
+// 모달 차트 = 공용 렌더러 + chartState (hover/drag 유지).
+function drawHistoryChart() {
+  drawPriceChart(document.getElementById('history-chart'), chartState.points, {
+    currency: chartState.currency,
+    range: chartState.range,
+    height: 340,
+    hoverIdx: chartState.hoverIdx,
+    dragStart: chartState.dragStart,
+    dragEnd: chartState.dragEnd,
+  });
 }
 
 function onChartMove(e) {
@@ -6007,7 +5935,6 @@ function renderStock() {
   // API 병렬 호출
   setupKimpToggle();
   loadIndices();
-  loadSidecar();
   loadCryptoIndicators();
   loadNightFutures();
   loadMovers();
@@ -6023,12 +5950,9 @@ function renderStock() {
   if (el) el.textContent = `${nowKSTDisplay()} 갱신`;
   // 5분 폴링 (연기금은 24h TTL, hyperliquid 는 30s TTL — 같이 호출해도 캐시가 흡수)
   stopStockRefresh();
-  // 사이드카 전용 60초 틱 (발동 시각 빠른 반영)
-  state.sidecarTimer = setInterval(() => { if (state.tab === 'stock') loadSidecar(); }, 60 * 1000);
   state.stockRefreshTimer = setInterval(() => {
     if (state.tab === 'stock') {
       loadIndices();
-      loadSidecar();
       loadCryptoIndicators();
       loadNightFutures();
       loadMovers();
@@ -6042,10 +5966,6 @@ function stopStockRefresh() {
   if (state.stockRefreshTimer) {
     clearInterval(state.stockRefreshTimer);
     state.stockRefreshTimer = null;
-  }
-  if (state.sidecarTimer) {
-    clearInterval(state.sidecarTimer);
-    state.sidecarTimer = null;
   }
   stopFlowsTicker();
 }
@@ -6090,49 +6010,6 @@ function fillIndicesGrid(indices) {
       </div>`;
   }).join('');
   grid.innerHTML = html;
-}
-
-// ============ 사이드카 발동 배지 (코스피·코스닥) ============
-
-async function loadSidecar() {
-  try { const r = await stockApiGet('/api/sidecar'); if (r && r.ok) renderSidecar(r); else renderSidecar({ status: 'unknown' }); }
-  catch (e) { console.warn('[stock] sidecar fetch failed', e); renderSidecar({ status: 'unknown' }); }
-}
-function renderSidecar(p) {
-  const badge = document.getElementById('sidecar-badge');
-  const txt = document.getElementById('sidecar-text');
-  if (!badge || !txt) return;
-  const status = (p && p.status) || 'unknown';
-  badge.classList.remove('sidecar-normal','sidecar-buy','sidecar-sell','sidecar-closed','sidecar-unknown');
-  const t = p && p.time ? ` (${p.time})` : '';
-  // 사용자 스펙: 사이드카 발동 중이 아니면 무조건 초록 "정상".
-  // (normal/closed/unknown 모두 '정상' 으로 통일 — 장마감/확인불가 회색 표시 안 함)
-  let cls, label;
-  if (status === 'buy')       { cls='sidecar-buy';  label='매수 사이드카 발동' + t; }
-  else if (status === 'sell') { cls='sidecar-sell'; label='매도 사이드카 발동' + t; }
-  else                        { cls='sidecar-normal'; label='정상'; }
-  badge.classList.add(cls);
-  txt.textContent = label;
-
-  // 오늘 발동 이력 — 현재는 해제됐지만 오늘 발동했던 경우 작은 글씨로 표기.
-  const sub = document.getElementById('sidecar-sub');
-  if (sub) {
-    const ev = p && p.today;
-    if (ev && ev.fired && ev.released && status !== 'buy' && status !== 'sell') {
-      const dirTxt = ev.direction === 'buy' ? '매수' : ev.direction === 'sell' ? '매도' : '';
-      const mkt = ev.market === 'kosdaq' ? '코스닥 ' : ev.market === 'kospi' ? '코스피 ' : '';
-      sub.textContent = `· 오늘 ${ev.time} ${mkt}${dirTxt} 사이드카 발동(해제)`;
-      sub.classList.add('is-on');
-    } else {
-      sub.textContent = '';
-      sub.classList.remove('is-on');
-    }
-  }
-
-  // 툴팁: 실시간 등락률 + 출처
-  const k = p && p.kospi && p.kospi.changePct!=null ? p.kospi.changePct.toFixed(2)+'%' : '—';
-  const q = p && p.kosdaq && p.kosdaq.changePct!=null ? p.kosdaq.changePct.toFixed(2)+'%' : '—';
-  badge.title = `KOSPI ${k} · KOSDAQ ${q} — 네이버 속보 기반 코스피·코스닥 사이드카 발동/해제 실시간 판정`;
 }
 
 // ============ 야간선물 (Hyperliquid HIP-3 RWA perp) ============
@@ -6437,18 +6314,18 @@ function setupStockSearch() {
       out.hidden = true;
     }
   });
-  // 결과 클릭 → 네이버 증권 종목 페이지 새 탭으로 이동.
+  // 결과 클릭 → 사이트 내 인라인 차트로 표시 (외부 이탈 없음. 네이버는 패널 헤더 링크로 opt-in).
   out.addEventListener('click', (ev) => {
     const item = ev.target.closest('.search-result-item');
     if (!item) return;
+    ev.preventDefault();
     const code = item.getAttribute('data-code');
     const name = item.getAttribute('data-name');
     const market = item.getAttribute('data-market');
     const type = item.getAttribute('data-type');
-    const url = safeHttpUrl(buildNaverStockUrl({ code, name, market, type }));
-    if (!url) return;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    renderInlineStockChart({ type, code, name, market });
     out.hidden = true;
+    if (name) input.value = name;
   });
 }
 
@@ -6537,6 +6414,92 @@ function cssEsc(s) {
   return String(s || '').replace(/["\\]/g, '\\$&');
 }
 
+// ---------- 종목 검색 인라인 차트 ----------
+// 검색 결과를 고르면 검색창 아래에 그 종목의 가격 차트를 즉시 렌더한다.
+// /api/history + 공용 drawPriceChart 를 재사용(모달과 동일 데이터 경로). 모달 chartState 와는 분리.
+const inlineChart = { type: null, code: null, name: null, market: null, range: '1mo', points: [], currency: 'KRW' };
+
+function setupInlineStockChart() {
+  const ranges = document.getElementById('scp-ranges');
+  if (!ranges) return;
+  ranges.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-range]');
+    if (!b) return;
+    $$('#scp-ranges .chip').forEach(c => c.classList.remove('active'));
+    b.classList.add('active');
+    inlineChart.range = b.getAttribute('data-range');
+    loadInlineHistory();
+  });
+  // 뷰포트 폭 변화 시 현재 종목 차트만 재렌더(반응형).
+  window.addEventListener('resize', () => {
+    const panel = document.getElementById('stock-chart-panel');
+    if (panel && !panel.classList.contains('hidden') && inlineChart.points.length) {
+      drawPriceChart(document.getElementById('inline-chart'), inlineChart.points, {
+        currency: inlineChart.currency, range: inlineChart.range, height: 260,
+      });
+    }
+  });
+}
+
+function renderInlineStockChart({ type, code, name, market }) {
+  if (!type || !code) return;
+  inlineChart.type = type;
+  inlineChart.code = code;
+  inlineChart.name = name || code;
+  inlineChart.market = market || '';
+  inlineChart.range = '1mo';
+  inlineChart.points = [];
+  const panel = document.getElementById('stock-chart-panel');
+  const titleEl = document.getElementById('scp-title');
+  const naverEl = document.getElementById('scp-naver');
+  if (titleEl) titleEl.textContent = `${inlineChart.name} · ${code}`;
+  if (naverEl) {
+    const url = safeHttpUrl(buildNaverStockUrl({ code, name, market, type }));
+    if (url) { naverEl.href = url; naverEl.style.display = ''; }
+    else naverEl.style.display = 'none';
+  }
+  $$('#scp-ranges .chip').forEach(c => c.classList.toggle('active', c.getAttribute('data-range') === '1mo'));
+  if (panel) panel.classList.remove('hidden');
+  loadInlineHistory();
+}
+
+async function loadInlineHistory() {
+  const metaEl = document.getElementById('scp-meta');
+  const canvas = document.getElementById('inline-chart');
+  const { type, code, range } = inlineChart;
+  if (!type || !code) return;
+  if (metaEl) metaEl.textContent = '로딩중…';
+  try {
+    const r = await apiGet(`${API.history}?type=${encodeURIComponent(type)}&ticker=${encodeURIComponent(code)}&range=${range}`);
+    if (!r.ok) {
+      inlineChart.points = [];
+      if (metaEl) metaEl.textContent = '데이터 없음: ' + (r.error || '알 수 없음');
+      drawPriceChart(canvas, [], { currency: 'KRW', range, height: 260 });
+      return;
+    }
+    inlineChart.points = r.points || [];
+    inlineChart.currency = r.currency || 'KRW';
+    updateInlineMeta();
+    drawPriceChart(canvas, inlineChart.points, { currency: inlineChart.currency, range, height: 260 });
+  } catch (e) {
+    if (metaEl) metaEl.textContent = '오류: ' + e.message;
+  }
+}
+
+function updateInlineMeta() {
+  const p = inlineChart.points;
+  const metaEl = document.getElementById('scp-meta');
+  if (!metaEl) return;
+  if (!p.length) { metaEl.textContent = '—'; return; }
+  const first = p[0].c, last = p[p.length - 1].c;
+  const change = last - first;
+  const pct = first !== 0 ? (change / first) * 100 : 0;
+  const isUSD = inlineChart.currency === 'USD';
+  const fmtPrice = (v) => isUSD ? '$' + v.toFixed(2) : '₩' + Math.round(v).toLocaleString('ko-KR');
+  const cls = change >= 0 ? 'delta-up' : 'delta-down';
+  metaEl.innerHTML = `현재 ${fmtPrice(last)} · 기간 시작 ${fmtPrice(first)} · <span class="${cls}">${change >= 0 ? '+' : ''}${fmtPrice(change)} (${change >= 0 ? '+' : ''}${pct.toFixed(2)}%)</span>`;
+}
+
 async function loadNews() {
   const el = $('#news-list');
   if (!el) return;
@@ -6568,19 +6531,8 @@ function fillNews(news) {
     el.innerHTML = '<div class="news-empty muted small">뉴스를 불러올 수 없습니다.</div>';
     return;
   }
-  // 최신순 안전망 — 서버 폴백 경로(EUC-KR HTML / RSS) 가 정렬을 보장하지 않을 수 있어
-  // publishedAt 을 파싱 가능한 항목은 desc 로 다시 정렬한다. 파싱 실패한 항목은
-  // 같은 원본 순서를 유지하도록 인덱스 tiebreaker 사용 (Array.sort 는 stable 하지만
-  // 동률 처리 명시).
-  const sorted = news
-    .map((it, idx) => {
-      const t = it && it.publishedAt ? Date.parse(it.publishedAt) : NaN;
-      return { it, idx, t: Number.isFinite(t) ? t : -Infinity };
-    })
-    .sort((a, b) => (b.t - a.t) || (a.idx - b.idx))
-    .map(x => x.it);
   // 제목 + 매체명 + 시간만. 요약은 표시하지 않는다.
-  el.innerHTML = sorted.map(it => {
+  el.innerHTML = news.map(it => {
     const href = safeHttpUrl(it.url);
     if (!href) return '';
     const ago = stockTimeAgo(it.publishedAt);

@@ -81,6 +81,44 @@ function setCachedToken(k, token, ttlSec) {
 // ============================================================
 const TOSS_BASE = 'https://openapi.tossinvest.com';
 
+// 토스 오류를 원인별로 분류해 프런트가 맞춤 안내를 띄우게 한다.
+//  - 403 / "IP address not allowed" → 서버 egress IP 가 허용 IP 목록에 없음
+//  - 401 / "client authentication failed" 등 → Client ID/Secret 문제
+function classifyTossError(err, status, raw, msg) {
+  const s = `${raw || ''} ${msg || ''}`.toLowerCase();
+  if (status === 403 || /ip\s*address\s*not\s*allowed|not\s*allowed.*ip|허용.*ip|ip.*허용|forbidden/.test(s)) {
+    err.hint = 'ip_not_allowed';
+    err.message = '토스가 이 서버 IP를 차단했습니다(403). 토스증권 앱/WTS의 설정 > Open API > 허용 IP 관리에 이 서버 IP를 등록한 뒤 다시 시도하세요.';
+  } else if (status === 401 || /client authentication failed|invalid[_-]?client|invalid[_-]?token|expired[_-]?token|unauthorized|인증\s*실패/.test(s)) {
+    err.hint = 'auth';
+    err.message = '토스 인증 실패: Client ID/Secret 을 다시 확인하거나 개발자센터에서 재발급하세요.';
+  }
+  return err;
+}
+
+// buying-power 응답에서 예수금(KRW)으로 볼 만한 숫자 필드를 방어적으로 추출한다.
+// (공식 문서가 BuyingPowerResponse 필드명을 공개하지 않아, 이름 패턴으로 탐색.)
+function pickCashKRW(bp) {
+  if (!bp || typeof bp !== 'object') return null;
+  const flat = {};
+  const collect = (obj, depth) => {
+    if (!obj || typeof obj !== 'object' || depth > 2) return;
+    for (const [k, v] of Object.entries(obj)) {
+      if (v && typeof v === 'object') collect(v, depth + 1);
+      else flat[k] = v;
+    }
+  };
+  collect(bp, 0);
+  const re = /(orderable|buying.?power|deposit|available|cash)/i;
+  let best = null;
+  for (const [k, v] of Object.entries(flat)) {
+    if (!re.test(k)) continue;
+    const n = parseNum(v);
+    if (isFinite(n) && n >= 0 && n < 1e13) { if (best == null || n > best) best = n; }
+  }
+  return best != null ? Math.round(best) : null;
+}
+
 async function tossToken(appKey, appSecret) {
   const k = cacheKey('toss', 'real', appKey);
   const cached = getCachedToken(k);
@@ -93,8 +131,11 @@ async function tossToken(appKey, appSecret) {
   });
   const j = jsonOrNull(r.text);
   if (r.status !== 200 || !j || !j.access_token) {
-    const msg = (j && (j.error_description || j.error || j.message)) || `HTTP ${r.status}`;
-    throw new Error(`토스 접근토큰 발급 실패: ${msg}`);
+    const raw = String(r.text || '');
+    const msg = (j && (j.error_description || j.error || j.message)) || raw.slice(0, 160) || `HTTP ${r.status}`;
+    const err = new Error(`토스 접근토큰 발급 실패: ${msg}`);
+    classifyTossError(err, r.status, raw, msg);
+    throw err;
   }
   setCachedToken(k, j.access_token, (j.expires_in || 600) - 60);
   return j.access_token;
@@ -106,8 +147,11 @@ async function tossGet(path, token, accountSeq) {
   const r = await httpsRequest(`${TOSS_BASE}${path}`, { headers });
   const j = jsonOrNull(r.text);
   if (r.status !== 200 || !j) {
-    const msg = (j && j.error && (j.error.message || j.error.code)) || `HTTP ${r.status}`;
-    throw new Error(msg);
+    const raw = String(r.text || '');
+    const msg = (j && j.error && (j.error.message || j.error.code)) || raw.slice(0, 160) || `HTTP ${r.status}`;
+    const err = new Error(msg);
+    classifyTossError(err, r.status, raw, msg);
+    throw err;
   }
   return j.result;
 }
@@ -148,7 +192,7 @@ async function syncToss(appKey, appSecret) {
     totalHoldings += holdings.length;
 
     const digits = String(accountNo).replace(/\D/g, '') || String(seq);
-    accounts.push({
+    const acc = {
       id: `acc-brokerage-toss-api_${digits}`,
       type: 'brokerage',
       label: `토스증권 ${accountNo}`,
@@ -159,7 +203,16 @@ async function syncToss(appKey, appSecret) {
       source: 'api_toss',
       dedupeKey: `asset:brokerage:toss-api:${digits}`,
       holdings,
-    });
+    };
+    // 예수금(매수가능금액) — 실패해도 종목 조회에는 영향 없음(경고만).
+    try {
+      const bp = await tossGet('/api/v1/buying-power', token, seq);
+      const cash = pickCashKRW(bp);
+      if (cash != null && cash > 0) acc.cashKRW = cash;
+    } catch (e) {
+      warnings.push(`계좌 ${accountNo} 예수금 조회 실패: ${e.message}`);
+    }
+    accounts.push(acc);
   }
   return { accounts, warnings, meta: { accounts: accounts.length, holdings: totalHoldings } };
 }
