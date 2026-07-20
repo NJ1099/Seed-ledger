@@ -20,6 +20,7 @@
     <nav class="sidenav">
       <button class="tab active" data-tab="assets"><span class="tab-ico">📊</span>대시보드</button>
       <button class="tab" data-tab="stock"><span class="tab-ico">📰</span>주식</button>
+      <button class="tab" data-tab="calendar"><span class="tab-ico">🗓</span>주식 캘린더</button>
       <button class="tab" data-tab="spend"><span class="tab-ico">💳</span>소비</button>
       <button class="tab" data-tab="graph"><span class="tab-ico">📈</span>그래프</button>
     </nav>
@@ -75,7 +76,9 @@
         <div class="welcome-banner-title">환영합니다</div>
         <div class="welcome-banner-text">
           입력하신 자산 데이터는 <b>이 브라우저에만 저장</b>되고 서버로 가지 않습니다.
-          다른 PC 에서도 같은 데이터를 보시려면 좌측 하단 <b>☁ 기기 동기화</b> 로 텔레그램을 연동해주세요.
+          다른 PC 에서도 같은 데이터를 보시려면
+          <span class="welcome-sync-desktop">좌측 하단 <b>☁ 기기 동기화</b> 로 텔레그램을 연동해주세요.</span>
+          <span class="welcome-sync-mobile">화면 <b>가운데 텔레그램 버튼</b>을 누르면 연동됩니다.</span>
         </div>
         <div class="welcome-banner-actions">
           <button type="button" class="welcome-banner-link" id="welcome-open-privacy">자세히 보기 →</button>
@@ -93,6 +96,7 @@
           📢 공지
           <span class="notice-admin-actions">
             <button type="button" class="btn-ghost btn-xs notice-write-btn hidden" id="notice-write-btn">＋ 작성</button>
+            <button type="button" class="btn-ghost btn-xs notice-broadcast-btn hidden" id="notice-broadcast-btn">📢 채널 발송</button>
             <button type="button" class="btn-ghost btn-xs" id="notice-admin-btn">관리자</button>
           </span>
         </div>
@@ -113,6 +117,16 @@
             <button type="button" class="btn-primary btn-xs" id="notice-save-btn">등록</button>
             <button type="button" class="btn-ghost btn-xs" id="notice-cancel-btn">취소</button>
             <span class="notice-form-msg" id="notice-form-msg"></span>
+          </div>
+        </div>
+
+        <!-- 채널 발송 (admin 전용) — 텔레그램 뉴스 봇으로 고정 채널에 발송 -->
+        <div class="notice-broadcast hidden" id="notice-broadcast">
+          <textarea id="broadcast-text" rows="8" placeholder="채널로 보낼 메시지 (텔레그램 뉴스 봇 → 고정 채널)" maxlength="4096"></textarea>
+          <div class="notice-form-actions">
+            <button type="button" class="btn-ghost btn-xs" id="broadcast-fill-btn">포트폴리오 소개글 채우기</button>
+            <button type="button" class="btn-primary btn-xs" id="broadcast-send-btn">발송</button>
+            <span class="notice-form-msg" id="broadcast-msg"></span>
           </div>
         </div>
 
@@ -493,7 +507,14 @@
   <!-- =================== 주식 탭 =================== -->
   <section class="panel hidden" id="panel-stock">
     <header class="stock-head">
-      <h2 class="stock-title">주식 대시보드</h2>
+      <div class="stock-head-left">
+        <h2 class="stock-title">주식 대시보드</h2>
+        <span class="sidecar-badge sidecar-unknown" id="sidecar-badge" title="KOSPI·KOSDAQ 지수 급변동 기준 사이드카(프로그램매매 일시정지) 발동 현황">
+          <span class="sidecar-dot" aria-hidden="true"></span>
+          <span class="sidecar-text" id="sidecar-text">확인 중…</span>
+        </span>
+        <span class="sidecar-sub" id="sidecar-sub"></span>
+      </div>
       <div class="stock-updated muted small" id="stock-updated-at">—</div>
     </header>
 
@@ -676,6 +697,64 @@
         <div class="news-empty muted small">뉴스를 불러오는 중…</div>
       </div>
     </section>
+  </section>
+
+  <!-- =================== 주식 캘린더 =================== -->
+  <section class="panel hidden" id="panel-calendar">
+    <header class="stock-head">
+      <h2 class="stock-title">주식 캘린더</h2>
+      <div class="stock-updated muted small" id="mc-updated-at">—</div>
+    </header>
+
+    <!-- 오늘 요약 스트립 -->
+    <div class="mc-hero">
+      <p class="mc-lede">
+        FOMC부터 엔비디아 실적까지, 미국·한국 증시의 주요 일정을 <strong>한국시간</strong> 달력에 담았습니다.
+        날짜를 누르면 그날의 일정과 “왜 중요한지”를 볼 수 있어요.
+      </p>
+      <div class="mc-hours" id="mc-hours"><span class="muted small">불러오는 중…</span></div>
+    </div>
+
+    <!-- 1) 월간 달력 -->
+    <section class="stock-section">
+      <div class="mc-card">
+        <div class="mc-cal-head">
+          <button type="button" class="mc-navbtn" id="mc-prev" title="이전 달" aria-label="이전 달">‹</button>
+          <span class="mc-month-title tnum" id="mc-title">—</span>
+          <div class="mc-head-right">
+            <button type="button" class="mc-todaybtn" id="mc-today-btn" title="오늘로 이동">오늘</button>
+            <button type="button" class="mc-navbtn" id="mc-next" title="다음 달" aria-label="다음 달">›</button>
+          </div>
+        </div>
+        <div class="mc-dow"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+        <div class="mc-grid" id="mc-grid"></div>
+        <div class="mc-legend" id="mc-legend"></div>
+      </div>
+      <div id="mc-daypanel"></div>
+    </section>
+
+    <!-- 2) 이달의 핵심 -->
+    <section class="stock-section">
+      <div class="section-title" id="mc-key-title">이달의 핵심 일정</div>
+      <p class="mc-sub">중요도 ★★★ 일정만 모았습니다. 이 날짜만 챙겨도 이번 달 준비는 끝.</p>
+      <div id="mc-keylist"></div>
+    </section>
+
+    <!-- 3) 기간 전체 아코디언 -->
+    <section class="stock-section">
+      <div class="section-title" id="mc-months-title">전체 기간 한눈에</div>
+      <p class="mc-sub">월별 핵심 일정(★★★)을 펼쳐서 확인하세요.</p>
+      <div id="mc-months"></div>
+    </section>
+
+    <!-- 4) 초보 가이드 -->
+    <section class="stock-section">
+      <div class="section-title">이게 왜 중요할까? — 초보 가이드</div>
+      <p class="mc-sub">캘린더에 자주 나오는 지표를 “뭐야 → 왜 중요해 → 이렇게 읽어요” 순서로 정리했습니다.</p>
+      <div id="mc-guides"></div>
+    </section>
+
+    <p class="mc-disclaimer" id="mc-disclaimer">—</p>
   </section>
     </main>
   </div>
@@ -1021,6 +1100,36 @@
     </div>
   </div>
 </div>
+
+<!-- 모바일 하단 탭바 (≤768px 에서만 표시) -->
+<nav class="bottom-nav" id="bottom-nav" aria-label="모바일 하단 메뉴">
+  <button class="bn-tab tab active" data-tab="assets" aria-label="대시보드">
+    <span class="bn-ico">📊</span>
+    <span class="bn-lab">대시보드</span>
+  </button>
+  <button class="bn-tab tab" data-tab="stock" aria-label="주식">
+    <span class="bn-ico">📰</span>
+    <span class="bn-lab">주식</span>
+  </button>
+  <button class="bn-tab tab" data-tab="calendar" aria-label="주식 캘린더">
+    <span class="bn-ico">🗓</span>
+    <span class="bn-lab">캘린더</span>
+  </button>
+  <!-- 가운데 빈 슬롯 (FAB 가 absolute 로 들어감) -->
+  <div class="bn-fab-slot" aria-hidden="true"></div>
+  <button class="bn-tab tab" data-tab="spend" aria-label="소비">
+    <span class="bn-ico">💳</span>
+    <span class="bn-lab">소비</span>
+  </button>
+  <button class="bn-tab tab" data-tab="graph" aria-label="그래프">
+    <span class="bn-ico">📈</span>
+    <span class="bn-lab">그래프</span>
+  </button>
+  <!-- 가운데 텔레그램 FAB — 누르면 자산 스냅샷 + 텔레그램 동기화 모달 -->
+  <button type="button" class="bn-fab" id="bn-fab" title="자산 스냅샷 저장 + 텔레그램 동기화" aria-label="텔레그램 동기화">
+    <span class="bn-fab-ico" aria-hidden="true"><svg class="tg-glyph" viewBox="0 0 448 512" aria-hidden="true"><path fill="currentColor" d="M446.7 98.6l-67.6 318.8c-5.1 22.5-18.4 28.1-37.3 17.5l-103-75.9-49.7 47.8c-5.5 5.5-10.1 10.1-20.7 10.1l7.4-104.9 190.9-172.5c8.3-7.4-1.8-11.5-12.9-4.1L117.8 284 16.2 252.2c-22.1-6.9-22.5-22.1 4.6-32.7L418.2 66.4c18.4-6.8 34.5 4.4 28.5 32.2z"/></svg></span>
+  </button>
+</nav>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="/app.js" defer></script>

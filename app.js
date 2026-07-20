@@ -28,6 +28,7 @@ const state = {
   txPageShown: 30,       // 리스트 표시 개수 (더보기로 +30 씩 증가)
   stockMarket: 'kr',          // 주식 탭 시장 토글
   stockRefreshTimer: null,    // 주식 탭 5분 폴링 타이머
+  sidecarTimer: null,        // 사이드카 배지 폴링 타이머
   stockSearchDebounce: null,  // 종목 검색 디바운스 핸들
   pensionDays: 30,            // 국민연금 매수/매도 표 조회 기간 (일)
   flowsDays: 30,              // 연기금·외국인 순매수/순매도 조회 기간 (일)
@@ -47,6 +48,9 @@ const API = {
   events: '/api/events',
   history: '/api/history',
   notices: '/api/notices',
+  marketCalendar: '/api/market-calendar',
+  sidecar: '/api/sidecar',
+  broadcast: '/api/broadcast',
 };
 
 // ---------- 유틸 ----------
@@ -3531,11 +3535,14 @@ function setupTabs() {
     t.addEventListener('click', () => {
       const name = t.getAttribute('data-tab');
       state.tab = name;
-      $$('.tab').forEach(x => x.classList.toggle('active', x === t));
+      // 사이드바 탭과 모바일 하단 탭바에 같은 data-tab 버튼이 둘 있으므로
+      // 클릭한 엘리먼트가 아니라 data-tab 값으로 활성 표시를 맞춘다.
+      $$('.tab').forEach(x => x.classList.toggle('active', x.getAttribute('data-tab') === name));
       $$('.panel').forEach(p => p.classList.add('hidden'));
       $('#panel-' + name).classList.remove('hidden');
       if (name === 'spend') renderSpend();
       if (name === 'graph') renderGraph();
+      if (name === 'calendar') renderMarketCalendar();
       if (name === 'stock') renderStock();
       else stopStockRefresh();
     });
@@ -3588,6 +3595,9 @@ function renderNotices() {
   if (!list) return;
   const writeBtn = document.getElementById('notice-write-btn');
   if (writeBtn) writeBtn.classList.toggle('hidden', !noticeState.admin);
+  const bcBtn = document.getElementById('notice-broadcast-btn');
+  if (bcBtn) bcBtn.classList.toggle('hidden', !noticeState.admin);
+  if (!noticeState.admin) { const bp = document.getElementById('notice-broadcast'); if (bp) bp.classList.add('hidden'); }
 
   const items = noticeState.notices;
   if (!items.length) {
@@ -3599,6 +3609,7 @@ function renderNotices() {
     return;
   }
   list.innerHTML = '';
+  const cards = [];
   for (const n of items) {
     const card = document.createElement('div');
     card.className = 'notice-item';
@@ -3613,6 +3624,17 @@ function renderNotices() {
     date.textContent = fmtNoticeDate(n.ts);
     head.appendChild(title);
     head.appendChild(date);
+
+    if (n.body) {
+      // 본문 있는 항목은 접기/펼치기 가능. 기본 접힘.
+      card.className = 'notice-item is-collapsible is-collapsed';
+      const toggle = document.createElement('span');
+      toggle.className = 'notice-toggle';
+      toggle.textContent = '▾';
+      toggle.setAttribute('aria-hidden', 'true');
+      head.appendChild(toggle);
+      head.addEventListener('click', () => card.classList.toggle('is-collapsed'));
+    }
     card.appendChild(head);
 
     if (n.body) {
@@ -3635,7 +3657,27 @@ function renderNotices() {
       actions.appendChild(del);
       card.appendChild(actions);
     }
-    list.appendChild(card);
+    cards.push(card);
+  }
+
+  // 첫 공지는 항상 표시. 2개 이상이면 나머지는 'view all' 로 접는다.
+  list.appendChild(cards[0]);
+  if (cards.length >= 2) {
+    const more = document.createElement('div');
+    more.className = 'notice-more';
+    for (let i = 1; i < cards.length; i++) more.appendChild(cards[i]);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'notice-viewall-btn';
+    const rest = cards.length - 1;
+    const sync = () => {
+      const open = more.classList.contains('is-open');
+      btn.textContent = open ? '공지 접기 ▴' : `전체 공지 보기 (${rest}개 더) ▾`;
+    };
+    sync();
+    btn.addEventListener('click', () => { more.classList.toggle('is-open'); sync(); });
+    list.appendChild(more);
+    list.appendChild(btn);
   }
 }
 
@@ -3725,6 +3767,70 @@ function setupNotices() {
   });
   document.getElementById('notice-save-btn').addEventListener('click', saveNotice);
   document.getElementById('notice-cancel-btn').addEventListener('click', cancelNoticeForm);
+
+  // 채널 발송 (admin 전용)
+  const bcBtn = document.getElementById('notice-broadcast-btn');
+  const bcPanel = document.getElementById('notice-broadcast');
+  if (bcBtn && bcPanel) {
+    bcBtn.addEventListener('click', () => bcPanel.classList.toggle('hidden'));
+    const fillBtn = document.getElementById('broadcast-fill-btn');
+    if (fillBtn) fillBtn.addEventListener('click', () => {
+      const ta = document.getElementById('broadcast-text');
+      if (ta) ta.value = PORTFOLIO_POST;
+    });
+    const sendBtn = document.getElementById('broadcast-send-btn');
+    if (sendBtn) sendBtn.addEventListener('click', sendBroadcast);
+  }
+}
+
+// 채널 발송용 포트폴리오 소개글 (텔레그램 plain text — 이모지/구분선/줄바꿈 그대로 렌더).
+const PORTFOLIO_POST = `🌱 종잣돈 — 내 자산 포트폴리오를 한눈에
+"흩어진 현금·예적금·주식·코인·부동산을 한 화면에서"
+━━━━━━━━━━━━━━
+
+💰 자산 대시보드
+"입력만 하면 실시간 시세로 자동 평가"
+보유 주식·코인을 업비트·네이버·야후 시세로 자동 계산해 총자산·평가손익을 실시간 표시.
+✅ 주요 기능
+· 자산 구성 도넛 + 투자 포트폴리오 비중·손익
+· 최근 30일 총자산 추이 그래프
+· 소비 추적 & 월 지출 자동 집계
+
+📊 주식 탭 — 시장을 한 페이지에
+"경제지표부터 수급·사이드카까지"
+✅ 주요 기능
+· 8대 경제지표 · 공포·탐욕 지수 · 김치프리미엄
+· 연기금·외국인 순매수/순매도 상위 종목
+· 코스피·코스닥 사이드카 발동 실시간 배지
+· 삼성·SK하이닉스 야간선물(Hyperliquid)
+
+🔒 프라이버시 우선
+"데이터는 내 브라우저에만"
+회원가입 없이 바로 사용. 자산 데이터는 서버에 저장하지 않고 브라우저(localStorage)에만 보관. 텔레그램 2단계 인증으로 기기 간 동기화는 선택.
+
+👉 지금 바로: https://seed-ledger.onrender.com
+
+#종잣돈 #자산관리 #포트폴리오 #주식 #코인 #핀테크 #무료`;
+
+async function sendBroadcast() {
+  const ta = document.getElementById('broadcast-text');
+  const msg = document.getElementById('broadcast-msg');
+  const text = ((ta && ta.value) || '').trim();
+  if (!text) { if (msg) msg.textContent = '내용을 입력하세요.'; return; }
+  if (!confirm('이 메시지를 텔레그램 채널로 발송할까요?')) return;
+  if (msg) msg.textContent = '발송 중…';
+  try {
+    const r = await fetch(API.broadcast, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + getAdminToken() },
+      body: JSON.stringify({ text, disable_web_page_preview: false }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    if (msg) msg.textContent = '발송 완료 (message #' + (j.message_id || '?') + ')';
+  } catch (e) {
+    if (msg) msg.textContent = '발송 실패: ' + e.message;
+  }
 }
 
 // ---------- CSV 가져오기 ----------
@@ -5576,10 +5682,33 @@ async function boot() {
   renderTickerStrip();
   schedulePolling();
   setupSync();
+  setupBottomNav();
   setupPrivacyModal();
   setupWelcomeBanner();
   setupNotices();
   loadNotices();
+}
+
+// 모바일 하단 탭바 — 중앙 텔레그램 FAB 는 자산 스냅샷 + 동기화 모달 한 번에.
+// .tab 클래스를 공유하므로 좌/우 탭 버튼들은 setupTabs() 의 기존 핸들러가 자동 처리.
+function setupBottomNav() {
+  const fab = document.getElementById('bn-fab');
+  if (!fab || fab.dataset.wired === '1') return;
+  fab.dataset.wired = '1';
+  fab.addEventListener('click', async () => {
+    if (fab.classList.contains('bn-fab-busy')) return;
+    fab.classList.add('bn-fab-busy');
+    try {
+      // 자산이 비어있을 땐 takeSnapshot 의 alert 을 띄우지 않고 조용히 건너뛴다.
+      // (FAB UX 가 두 단계 → 자산 없음 alert 만 떠 버리면 sync 모달이 뒤따라 와 혼란).
+      if (Number(state.totalKRW) > 0) {
+        try { await takeSnapshot(); } catch (e) { console.warn('[bottom-nav] snapshot failed', e); }
+      }
+    } finally {
+      fab.classList.remove('bn-fab-busy');
+      openSyncModal();
+    }
+  });
 }
 
 // ---------- 종목 Historical 차트 모달 ----------
@@ -5935,6 +6064,7 @@ function renderStock() {
   // API 병렬 호출
   setupKimpToggle();
   loadIndices();
+  loadSidecar();
   loadCryptoIndicators();
   loadNightFutures();
   loadMovers();
@@ -5950,9 +6080,12 @@ function renderStock() {
   if (el) el.textContent = `${nowKSTDisplay()} 갱신`;
   // 5분 폴링 (연기금은 24h TTL, hyperliquid 는 30s TTL — 같이 호출해도 캐시가 흡수)
   stopStockRefresh();
+  // 사이드카 전용 60초 틱 (발동 시각 빠른 반영)
+  state.sidecarTimer = setInterval(() => { if (state.tab === 'stock') loadSidecar(); }, 60 * 1000);
   state.stockRefreshTimer = setInterval(() => {
     if (state.tab === 'stock') {
       loadIndices();
+      loadSidecar();
       loadCryptoIndicators();
       loadNightFutures();
       loadMovers();
@@ -5966,6 +6099,10 @@ function stopStockRefresh() {
   if (state.stockRefreshTimer) {
     clearInterval(state.stockRefreshTimer);
     state.stockRefreshTimer = null;
+  }
+  if (state.sidecarTimer) {
+    clearInterval(state.sidecarTimer);
+    state.sidecarTimer = null;
   }
   stopFlowsTicker();
 }
@@ -6010,6 +6147,49 @@ function fillIndicesGrid(indices) {
       </div>`;
   }).join('');
   grid.innerHTML = html;
+}
+
+// ============ 사이드카 발동 배지 (코스피·코스닥) ============
+
+async function loadSidecar() {
+  try { const r = await stockApiGet('/api/sidecar'); if (r && r.ok) renderSidecar(r); else renderSidecar({ status: 'unknown' }); }
+  catch (e) { console.warn('[stock] sidecar fetch failed', e); renderSidecar({ status: 'unknown' }); }
+}
+function renderSidecar(p) {
+  const badge = document.getElementById('sidecar-badge');
+  const txt = document.getElementById('sidecar-text');
+  if (!badge || !txt) return;
+  const status = (p && p.status) || 'unknown';
+  badge.classList.remove('sidecar-normal','sidecar-buy','sidecar-sell','sidecar-closed','sidecar-unknown');
+  const t = p && p.time ? ` (${p.time})` : '';
+  // 사용자 스펙: 사이드카 발동 중이 아니면 무조건 초록 "정상".
+  // (normal/closed/unknown 모두 '정상' 으로 통일 — 장마감/확인불가 회색 표시 안 함)
+  let cls, label;
+  if (status === 'buy')       { cls='sidecar-buy';  label='매수 사이드카 발동' + t; }
+  else if (status === 'sell') { cls='sidecar-sell'; label='매도 사이드카 발동' + t; }
+  else                        { cls='sidecar-normal'; label='정상'; }
+  badge.classList.add(cls);
+  txt.textContent = label;
+
+  // 오늘 발동 이력 — 현재는 해제됐지만 오늘 발동했던 경우 작은 글씨로 표기.
+  const sub = document.getElementById('sidecar-sub');
+  if (sub) {
+    const ev = p && p.today;
+    if (ev && ev.fired && ev.released && status !== 'buy' && status !== 'sell') {
+      const dirTxt = ev.direction === 'buy' ? '매수' : ev.direction === 'sell' ? '매도' : '';
+      const mkt = ev.market === 'kosdaq' ? '코스닥 ' : ev.market === 'kospi' ? '코스피 ' : '';
+      sub.textContent = `· 오늘 ${ev.time} ${mkt}${dirTxt} 사이드카 발동(해제)`;
+      sub.classList.add('is-on');
+    } else {
+      sub.textContent = '';
+      sub.classList.remove('is-on');
+    }
+  }
+
+  // 툴팁: 실시간 등락률 + 출처
+  const k = p && p.kospi && p.kospi.changePct!=null ? p.kospi.changePct.toFixed(2)+'%' : '—';
+  const q = p && p.kosdaq && p.kosdaq.changePct!=null ? p.kosdaq.changePct.toFixed(2)+'%' : '—';
+  badge.title = `KOSPI ${k} · KOSDAQ ${q} — 네이버 속보 기반 코스피·코스닥 사이드카 발동/해제 실시간 판정`;
 }
 
 // ============ 야간선물 (Hyperliquid HIP-3 RWA perp) ============
@@ -6531,8 +6711,19 @@ function fillNews(news) {
     el.innerHTML = '<div class="news-empty muted small">뉴스를 불러올 수 없습니다.</div>';
     return;
   }
+  // 최신순 안전망 — 서버 폴백 경로(EUC-KR HTML / RSS) 가 정렬을 보장하지 않을 수 있어
+  // publishedAt 을 파싱 가능한 항목은 desc 로 다시 정렬한다. 파싱 실패한 항목은
+  // 같은 원본 순서를 유지하도록 인덱스 tiebreaker 사용 (Array.sort 는 stable 하지만
+  // 동률 처리 명시).
+  const sorted = news
+    .map((it, idx) => {
+      const t = it && it.publishedAt ? Date.parse(it.publishedAt) : NaN;
+      return { it, idx, t: Number.isFinite(t) ? t : -Infinity };
+    })
+    .sort((a, b) => (b.t - a.t) || (a.idx - b.idx))
+    .map(x => x.it);
   // 제목 + 매체명 + 시간만. 요약은 표시하지 않는다.
-  el.innerHTML = news.map(it => {
+  el.innerHTML = sorted.map(it => {
     const href = safeHttpUrl(it.url);
     if (!href) return '';
     const ago = stockTimeAgo(it.publishedAt);
@@ -7209,6 +7400,365 @@ function renderPensionDonut(holdings) {
       row.appendChild(nm);
       row.appendChild(rt);
       legend.appendChild(row);
+    });
+  }
+}
+
+// ============================================================
+// 주식 캘린더 (market calendar · mc-)
+// 서버의 /api/market-calendar 큐레이션 일정을 월간 달력으로 표시.
+// 모든 날짜·시각은 한국시간(KST) 기준으로 저장·표시한다.
+// ============================================================
+const mcState = {
+  loaded: false,
+  loading: false,
+  bound: false,
+  events: [],       // [{ id, date, time, title, cat, imp, impact, desc, usNote, est }]
+  guides: [],
+  months: [],       // 데이터에 존재하는 'YYYY-MM' 오름차순
+  monthIdx: 0,      // months 배열 내 현재 위치
+  selected: null,   // 'YYYY-MM-DD'
+  meta: null,       // { updatedAt, disclaimer, dstEndDate, marketHours }
+};
+
+const MC_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
+// 카테고리별 점 색상 — 라이트 테마 대비 확보용 고정값
+const MC_CAT_COLOR = {
+  '연준':     '#7E5BEF',
+  '경제지표': '#FF8A3D',
+  '실적':     '#3182F6',
+  '휴장':     '#B0B8C1',
+  '기타':     '#0AC17B',
+};
+
+function mcPad(n) { return String(n).padStart(2, '0'); }
+function mcParseYMD(s) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(s || ''));
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+function mcKoreanDate(ymd) {
+  const d = mcParseYMD(ymd);
+  if (!d) return String(ymd || '');
+  return `${d.getMonth() + 1}월 ${d.getDate()}일(${MC_WEEKDAYS[d.getDay()]})`;
+}
+function mcEventsOn(ymd) {
+  return mcState.events.filter(e => e.date === ymd).sort((a, b) => b.imp - a.imp);
+}
+// 해당 연도의 n번째 특정 요일 날짜를 YYYY-MM-DD 로 돌려준다 (일요일 기준).
+function mcNthSundayYMD(year, monthIdx, nth) {
+  const first = new Date(Date.UTC(year, monthIdx, 1));
+  const day = 1 + ((7 - first.getUTCDay()) % 7) + 7 * (nth - 1);
+  return `${year}-${mcPad(monthIdx + 1)}-${mcPad(day)}`;
+}
+// 미국 서머타임은 3월 둘째 일요일에 시작해 11월 첫째 일요일에 끝난다
+// (Energy Policy Act of 2005). 서머타임 기간에는 한국시간 기준 개장/마감이
+// 1시간씩 이르다. 연도별로 산출하므로 해가 바뀌어도 계속 맞는다.
+function mcMarketHours(ymd) {
+  const year = Number(String(ymd).slice(0, 4));
+  const dstStart = mcNthSundayYMD(year, 2, 2);   // 3월 둘째 일요일
+  const dstEnd = mcNthSundayYMD(year, 10, 1);    // 11월 첫째 일요일
+  // 시작일은 새벽 2시에 DST 진입이라 당일부터 적용, 종료일은 새벽 2시에 해제라 당일 제외.
+  return (ymd >= dstStart && ymd < dstEnd)
+    ? { open: '밤 10:30', close: '새벽 5:00', dst: true }
+    : { open: '밤 11:30', close: '새벽 6:00', dst: false };
+}
+
+async function loadMarketCalendar() {
+  if (mcState.loading) return;
+  mcState.loading = true;
+  try {
+    const r = await fetch(API.marketCalendar);
+    const j = await r.json();
+    if (!j || !j.ok) throw new Error((j && j.error) || 'load failed');
+
+    const evs = Array.isArray(j.events) ? j.events : [];
+    mcState.events = evs
+      .filter(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && e.title)
+      .map(e => ({
+        id: String(e.id || ''),
+        date: e.date,
+        time: String(e.time || ''),
+        title: String(e.title),
+        cat: MC_CAT_COLOR[e.cat] ? e.cat : '기타',
+        imp: Math.min(3, Math.max(1, Number(e.imp) || 1)),
+        impact: String(e.impact || ''),
+        desc: String(e.desc || ''),
+        usNote: String(e.usNote || ''),
+        est: !!e.est,
+      }));
+    mcState.guides = Array.isArray(j.guides) ? j.guides : [];
+    mcState.meta = {
+      updatedAt: j.updatedAt || '',
+      disclaimer: j.disclaimer || '',
+      dstEndDate: j.dstEndDate || '',
+    };
+
+    // 데이터에 실제로 존재하는 달만 탐색 대상으로 삼는다 (하드코딩된 연/월 범위 제거).
+    mcState.months = Array.from(new Set(mcState.events.map(e => e.date.slice(0, 7)))).sort();
+    mcState.loaded = true;
+  } catch (e) {
+    mcState.loaded = false;
+    const grid = $('#mc-grid');
+    if (grid) grid.innerHTML = '';
+    const day = $('#mc-daypanel');
+    if (day) day.innerHTML = `<div class="mc-empty">일정을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.<br><span class="muted small">${esc(e.message)}</span></div>`;
+  } finally {
+    mcState.loading = false;
+  }
+}
+
+function renderMarketCalendar() {
+  mcBindOnce();
+  // 이미 그려둔 상태면 통째로 다시 그리지 않는다 — 보던 달·선택 날짜·아코디언 펼침이 초기화되므로.
+  // 자정을 넘겼을 수 있는 "오늘" 스트립만 갱신한다.
+  if (mcState.loaded) { mcRenderHours(); return; }
+  const grid = $('#mc-grid');
+  if (grid) grid.innerHTML = '<div class="mc-empty" style="grid-column:1/-1;border:none">일정을 불러오는 중…</div>';
+  loadMarketCalendar().then(() => { if (mcState.loaded) mcRenderAll(); });
+}
+
+// 오늘이 포함된 달을 기본으로 열되, 데이터 범위를 벗어나면 가장 가까운 달로.
+function mcPickInitialMonth() {
+  if (!mcState.months.length) return 0;
+  const todayMonth = todayKST().slice(0, 7);
+  const exact = mcState.months.indexOf(todayMonth);
+  if (exact >= 0) return exact;
+  const after = mcState.months.findIndex(m => m > todayMonth);
+  return after >= 0 ? after : mcState.months.length - 1;
+}
+
+function mcRenderAll() {
+  if (!mcState.months.length) return;
+  mcState.monthIdx = mcPickInitialMonth();
+  const today = todayKST();
+  mcState.selected = mcState.months[mcState.monthIdx] === today.slice(0, 7) ? today : null;
+  mcRenderHours();
+  mcRenderMonth();
+  mcRenderMonths();
+  mcRenderGuides();
+  mcRenderMeta();
+}
+
+// 달 이동/날짜 선택 후 부분 갱신
+function mcRenderMonth() {
+  mcRenderGrid();
+  mcRenderDay();
+  mcRenderKey();
+}
+
+function mcRenderHours() {
+  const el = $('#mc-hours');
+  if (!el) return;
+  const today = todayKST();
+  const d = mcParseYMD(today);
+  const h = mcMarketHours(today);
+  const cnt = mcEventsOn(today).length;
+  el.innerHTML =
+    `<span><b class="tnum">${d ? `${d.getMonth() + 1}월 ${d.getDate()}일 (${MC_WEEKDAYS[d.getDay()]})` : today}</b></span>`
+    + `<span>미국 정규장 <b class="tnum">${h.open} ~ ${h.close}</b> ${h.dst ? '(서머타임)' : '(서머타임 해제)'}</span>`
+    + `<span>오늘 일정 <b class="mc-hl tnum">${cnt}건</b></span>`;
+}
+
+function mcStarsHtml(n) {
+  return `<span class="mc-stars tnum" aria-label="중요도 ${n}/3"><span class="on">${'★'.repeat(n)}</span><span class="off">${'★'.repeat(3 - n)}</span></span>`;
+}
+function mcImpactHtml(im) {
+  if (!im) return '';
+  const cls = im === '높음' ? 'mc-b-high' : im === '중간' ? 'mc-b-mid' : 'mc-b-low';
+  return `<span class="mc-badge ${cls}">영향도 ${esc(im)}</span>`;
+}
+function mcEvCard(e, hl) {
+  return `<div class="mc-ev${hl ? ' is-hl' : ''}">`
+    + `<div class="mc-when"><div class="mc-dt">${esc(mcKoreanDate(e.date))}</div>`
+    + (e.time ? `<div class="mc-tm">${esc(e.time)}</div>` : '')
+    + `</div>`
+    + `<div class="mc-body"><div class="mc-name">${esc(e.title)}`
+    + (e.est ? ' <span class="mc-badge mc-b-est">예상</span>' : '')
+    + `</div>`
+    + `<div class="mc-badges">${mcStarsHtml(e.imp)}${mcImpactHtml(e.impact)}<span class="mc-badge mc-b-cat">${esc(e.cat)}</span></div>`
+    + (e.desc ? `<p class="mc-desc">${esc(e.desc)}</p>` : '')
+    + (e.usNote ? `<p class="mc-us">${esc(e.usNote)}</p>` : '')
+    + `</div></div>`;
+}
+
+function mcRenderGrid() {
+  const grid = $('#mc-grid');
+  const titleEl = $('#mc-title');
+  if (!grid || !mcState.months.length) return;
+
+  const ym = mcState.months[mcState.monthIdx];
+  const [y, m] = ym.split('-').map(Number);
+  if (titleEl) titleEl.textContent = `${y}년 ${m}월`;
+  const prev = $('#mc-prev'); if (prev) prev.disabled = mcState.monthIdx <= 0;
+  const next = $('#mc-next'); if (next) next.disabled = mcState.monthIdx >= mcState.months.length - 1;
+
+  const today = todayKST();
+  const offset = new Date(y, m - 1, 1).getDay();
+  const days = new Date(y, m, 0).getDate();
+
+  let html = '';
+  for (let i = 0; i < offset; i++) html += '<div class="mc-cell is-empty"></div>';
+  for (let d = 1; d <= days; d++) {
+    const ymd = `${y}-${mcPad(m)}-${mcPad(d)}`;
+    const evs = mcEventsOn(ymd);
+    const isKey = evs.some(e => e.imp === 3);
+    const cls = 'mc-cell' + (evs.length ? ' has-ev' : '') + (mcState.selected === ymd ? ' is-sel' : '');
+    const dcls = 'mc-d' + (today === ymd ? ' is-today' : isKey ? ' is-key' : '');
+    const dots = evs.slice(0, 4).map(e => `<i style="background:${MC_CAT_COLOR[e.cat]}"></i>`).join('');
+    let peek = '';
+    if (evs.length) {
+      const t = evs[0].title;
+      const short = t.length > 13 ? t.slice(0, 12) + '…' : t;
+      peek = `<span class="mc-peek">${esc(short)}${evs.length > 1 ? ` +${evs.length - 1}` : ''}</span>`;
+    }
+    html += `<button type="button" class="${cls}" data-mc-ymd="${ymd}">`
+      + `<span class="${dcls}">${d}</span>`
+      + (dots ? `<span class="mc-dots">${dots}</span>` : '')
+      + peek + '</button>';
+  }
+  grid.innerHTML = html;
+
+  const legend = $('#mc-legend');
+  if (legend) {
+    legend.innerHTML = Object.entries(MC_CAT_COLOR)
+      .map(([c, col]) => `<span><i style="background:${col}"></i>${esc(c)}</span>`).join('')
+      + '<span class="mc-hint">날짜를 누르면 아래에 상세 일정이 표시됩니다</span>';
+  }
+}
+
+function mcRenderDay() {
+  const panel = $('#mc-daypanel');
+  if (!panel) return;
+  if (!mcState.selected) { panel.innerHTML = ''; return; }
+  const evs = mcEventsOn(mcState.selected);
+  const isToday = todayKST() === mcState.selected;
+  let html = `<p class="mc-daytitle">${esc(mcKoreanDate(mcState.selected))} 일정 <span class="mc-cnt tnum">(${evs.length}건)</span>`
+    + (isToday ? '<span class="mc-todaybadge">오늘</span>' : '') + '</p>';
+  html += evs.length
+    ? evs.map(e => mcEvCard(e, e.imp === 3)).join('')
+    : '<div class="mc-empty">이날은 등록된 주요 일정이 없습니다.</div>';
+  panel.innerHTML = html;
+}
+
+function mcRenderKey() {
+  const box = $('#mc-keylist');
+  const title = $('#mc-key-title');
+  if (!box || !mcState.months.length) return;
+  const ym = mcState.months[mcState.monthIdx];
+  const m = Number(ym.split('-')[1]);
+  if (title) title.textContent = `${m}월의 핵심 일정`;
+  const evs = mcState.events
+    .filter(e => e.date.slice(0, 7) === ym && e.imp === 3)
+    .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0);
+  box.innerHTML = evs.length
+    ? evs.map(e => mcEvCard(e, true)).join('')
+    : '<div class="mc-empty">이 달에는 ★★★ 일정이 없습니다.</div>';
+}
+
+function mcRenderMonths() {
+  const box = $('#mc-months');
+  if (!box) return;
+  const byMonth = new Map();
+  mcState.events
+    .filter(e => e.imp === 3)
+    .sort((a, b) => a.date < b.date ? -1 : a.date > b.date ? 1 : 0)
+    .forEach(e => {
+      const ym = e.date.slice(0, 7);
+      if (!byMonth.has(ym)) byMonth.set(ym, []);
+      byMonth.get(ym).push(e);
+    });
+
+  const title = $('#mc-months-title');
+  if (title && mcState.months.length) {
+    const first = mcState.months[0].split('-');
+    const last = mcState.months[mcState.months.length - 1].split('-');
+    title.textContent = `${first[0]}년 ${Number(first[1])}월 ~ ${Number(last[1])}월 한눈에`;
+  }
+
+  box.innerHTML = Array.from(byMonth.entries()).map(([ym, evs]) => {
+    const m = Number(ym.split('-')[1]);
+    const items = evs.map(e =>
+      `<li><span class="mc-ld">${esc(mcKoreanDate(e.date))}</span>`
+      + `<span class="mc-lt">${esc(e.time)}</span>`
+      + `<span class="mc-ln">${esc(e.title)}</span>`
+      + (e.est ? ' <span class="mc-badge mc-b-est">예상</span>' : '') + '</li>'
+    ).join('');
+    return `<div class="mc-acc" data-mc-acc="${ym}">`
+      + `<button type="button"><span><span class="mc-mn">${m}월</span>`
+      + `<span class="mc-mc">핵심 일정 ${evs.length}건</span></span>`
+      + `<span class="mc-plus">＋</span></button><ul>${items}</ul></div>`;
+  }).join('') || '<div class="mc-empty">표시할 일정이 없습니다.</div>';
+}
+
+function mcRenderGuides() {
+  const box = $('#mc-guides');
+  if (!box) return;
+  box.innerHTML = mcState.guides.map(g =>
+    '<div class="mc-gcard">'
+    + `<h4>${esc(g.title || '')}</h4>`
+    + (g.what ? `<p class="mc-lbl">뭐야?</p><p class="mc-t">${esc(g.what)}</p>` : '')
+    + (g.why ? `<p class="mc-lbl">왜 중요해?</p><p class="mc-t">${esc(g.why)}</p>` : '')
+    + (Array.isArray(g.read) && g.read.length
+        ? `<p class="mc-lbl">이렇게 읽어요</p><ul>${g.read.map(r => `<li>${esc(r)}</li>`).join('')}</ul>`
+        : '')
+    + '</div>'
+  ).join('') || '';
+}
+
+function mcRenderMeta() {
+  const up = $('#mc-updated-at');
+  if (up && mcState.meta) {
+    up.textContent = mcState.meta.updatedAt ? `${mcState.meta.updatedAt.slice(0, 10)} 기준` : '—';
+  }
+  const dis = $('#mc-disclaimer');
+  if (dis) dis.textContent = (mcState.meta && mcState.meta.disclaimer) || '';
+}
+
+// 이벤트 위임 — 그리드/아코디언이 재렌더돼도 리스너를 다시 붙이지 않는다.
+function mcBindOnce() {
+  if (mcState.bound) return;
+  mcState.bound = true;
+
+  const grid = $('#mc-grid');
+  if (grid) {
+    grid.addEventListener('click', (ev) => {
+      const cell = ev.target.closest('[data-mc-ymd]');
+      if (!cell) return;
+      mcState.selected = cell.getAttribute('data-mc-ymd');
+      mcRenderGrid();
+      mcRenderDay();
+    });
+  }
+
+  const months = $('#mc-months');
+  if (months) {
+    months.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('.mc-acc > button');
+      if (!btn) return;
+      btn.parentElement.classList.toggle('is-open');
+    });
+  }
+
+  const step = (delta) => {
+    const nextIdx = mcState.monthIdx + delta;
+    if (nextIdx < 0 || nextIdx >= mcState.months.length) return;
+    mcState.monthIdx = nextIdx;
+    const today = todayKST();
+    mcState.selected = mcState.months[nextIdx] === today.slice(0, 7) ? today : null;
+    mcRenderMonth();
+  };
+  const prev = $('#mc-prev'); if (prev) prev.addEventListener('click', () => step(-1));
+  const next = $('#mc-next'); if (next) next.addEventListener('click', () => step(1));
+
+  const todayBtn = $('#mc-today-btn');
+  if (todayBtn) {
+    todayBtn.addEventListener('click', () => {
+      if (!mcState.months.length) return;
+      mcState.monthIdx = mcPickInitialMonth();
+      const today = todayKST();
+      mcState.selected = mcState.months[mcState.monthIdx] === today.slice(0, 7) ? today : null;
+      mcRenderMonth();
     });
   }
 }

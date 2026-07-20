@@ -2,7 +2,68 @@
 
 > 다음 세션에서 이어서 작업할 때 가장 먼저 읽어야 하는 문서.
 
-최종 업데이트: 2026-07-17 (라운드 23 — 토스 IP 차단 진단 · 모달 정렬 · 야간선물 코드줄 제거 · 종목검색 인라인 차트)
+최종 업데이트: 2026-07-20 (라운드 25 — 라운드 23 배포 때 유실된 기능 복원 + 캘린더 탭 모바일 연결)
+
+## ⚠️ 배포 절차 (라운드 25 에서 사고가 났던 지점 — 반드시 읽을 것)
+
+배포는 `NJ1099/Seed-ledger` **only** (Render 가 이 repo 만 본다). 모노repo `NJ1099/AI` 로만 푸시하면 프로덕션에 반영되지 않는다. 로컬 클론은 `E:\seed-ledger-sync`.
+
+**하지만 "모노repo 파일을 배포 repo 로 복사" 를 그냥 하면 안 된다.** 라운드 23 이 정확히 그렇게 해서, 배포 repo 에만 있던 6/10 세션 작업(커밋 6개)이 통째로 덮어써졌고 **프로덕션에서 3일간 기능이 사라졌다**(사이드카·하단 탭바·FAB·broadcast·공지 접기).
+
+복사 전에 **반드시** 역방향 확인:
+
+```bash
+# 배포 repo 에만 있는 내용이 없는지 (CRLF 차이는 무시)
+for f in app.js server.js index.html styles.css brokerSync.js pdfImport.js \
+         .env.example .github/workflows/daily-news.yml; do
+  diff -q --strip-trailing-cr /e/AI/Seed-ledger-main/$f /e/seed-ledger-sync/$f >/dev/null \
+    || echo "차이: $f"
+done
+# 차이가 나오면 어느 쪽이 최신인지 확인하고, 배포 repo 쪽이 최신이면 먼저 모노repo 로 역이식한다.
+```
+
+두 repo 는 히스토리가 분리돼 있어 git 이 병합으로 막아주지 못한다. 이 확인이 유일한 방어선이다. 배포 repo 에서 직접 코드를 고치지 말 것 — 고쳐야 하면 모노repo 에서 고치고 복사한다.
+
+## 라운드 25: 라운드 23 배포 유실 기능 복원 + 캘린더 탭 모바일 연결 (2026-07-20)
+
+라운드 24 배포를 진행하려다 배포 repo 와 모노repo 를 비교하는 과정에서 **라운드 23 배포가 일으킨 회귀**를 발견해 먼저 복구했다. 커밋 `0308a5e`.
+
+**유실 경위** — 6/10 세션은 배포 repo(`E:\seed-ledger-sync`)에서 직접 작업했고 모노repo 로 역이식하지 않았다. 라운드 22 는 "이식"(수동 포팅)이라 살아남았지만, 라운드 23 은 파일 통째 복사라 `abb9f51..3d83c63` 6개 커밋이 전부 날아갔다. 프로덕션 유실 기간 2026-07-17 ~ 07-20.
+
+**복원 방법** — `git diff abb9f51 3d83c63 -- <4파일>` 로 계보 delta 를 뽑아 `git apply --reject` 로 모노repo 에 적용. 15개 hunk 중 3개만 거부(라우트 테이블·API 상수·CSS 말미 — 전부 라운드 22~24 가 같은 위치를 건드려 생긴 컨텍스트 충돌)라 수동 처리.
+
+**복원된 기능**
+1. **주식탭 사이드카 발동 배지** — `GET /api/sidecar`(`handleSidecar`). 네이버 속보 기반 코스피·코스닥 발동/해제 판정 + Google News RSS 폴백. 발동 중이 아니면(normal/closed/unknown) 전부 초록 "정상", 발동 시에만 빨강(매수)/파랑(매도).
+2. **모바일 하단 탭바 + 텔레그램 FAB** — `.bottom-nav`(≤768px). 가운데 FAB 누르면 스냅샷 저장 후 텔레그램 동기화 모달. 모바일에서는 상단 `.sidenav` 를 숨긴다.
+3. **admin 채널 발송** — `GET/POST /api/broadcast`(`handleBroadcast`) + 공지 패널의 발송 UI(`#notice-broadcast`). ADMIN_TOKEN 인증, 뉴스 봇 토큰으로 채널 발송.
+4. **공지 접기/펼치기** + 2건 이상일 때 "전체 공지 보기".
+5. **뉴스 발송 09:30/18:00 KST** — server.js 는 패치로 복원됐고, `.env.example`·`daily-news.yml` 주석/cron 도 09:30 으로 정렬(배포 repo 는 이미 09:30 이었음).
+
+**통합 수정 (두 계보를 합치며 새로 필요해진 것)**
+- **캘린더 탭 모바일 접근 불가** — 라운드 24 가 사이드바에 캘린더 탭을 추가했는데 하단 탭바에는 없었다. 모바일은 `.sidenav` 를 숨기므로 그대로 두면 **캘린더에 도달할 방법이 없다.** 하단 탭바에 캘린더 추가 + 그리드를 `1fr 1fr 1fr 72px 1fr 1fr`(좌3+FAB+우2)로 확장.
+- **탭 활성 표시 불일치** — `setupTabs` 가 `x === t` 로 클릭한 엘리먼트에만 active 를 걸어, 같은 `data-tab` 을 가진 사이드바/하단 탭바 버튼이 따로 놀았고 하단 탭바는 첫 로딩 시 아무것도 강조되지 않았다. `x.getAttribute('data-tab') === name` 으로 교체 + 하단 "대시보드"에 active 초기값. (이 버그는 6/10 원본에도 있었다.)
+
+**배포 전 리뷰(다차원 + 반증검증 워크플로우)에서 확정된 결함 2건 수정**
+- **`mcMarketHours` 서머타임 경계** (`app.js`) — `ymd < dstEnd` 단방향 비교라 DST **시작** 경계가 없었다. `mcRenderHours` 가 데이터 범위가 아니라 `todayKST()` 를 넘기므로, 2027-03-14 부터 다시 서머타임인데도 "밤 11:30 (서머타임 해제)"를 8개월간 표시하고 이후 매년 반복될 상황이었다. 연도별로 3월 둘째 일요일 ~ 11월 첫째 일요일을 산출하는 `mcNthSundayYMD` 로 교체. **종료일 당일은 새벽 2시에 이미 해제되므로 exclusive**(`ymd < dstEnd`) — 리뷰 제안은 inclusive 였으나 tzdb 대조 테스트에서 2026-11-01 불일치가 잡혀 바로잡았다. 2026~2031 경계 포함 30건 IANA tzdb 대조 → 불일치 0건.
+- **`readJSON` 손상 백업 무한 누적** (`server.js`) — JSON 파싱 실패마다 `.corrupt-<ts>.bak` 을 새로 만들어, 파일이 손상된 동안 요청마다 22KB 백업본이 쌓였다(Render 무료 플랜 디스크). `(mtimeMs, size)` 서명 Map 으로 같은 손상본은 1회만 백업하고 정상 복구 시 이력 삭제. 호출부 전체(quote-cache·events·notices·market-calendar)가 함께 보호된다.
+
+**검증** — `node -c` 통과. 로컬 4293 실서버: `/api/market-calendar` 200, `/api/sidecar` 200(코스피·코스닥 실데이터), `/api/notices` 200, `/api/broadcast` 무인증 401 · admin 200. app.js 가 참조하는 복원/신규 기능 ID 39개 전부 index.html 과 일치.
+
+**⚠️ 검증 중 사고** — `/api/broadcast` admin 경로를 실토큰 환경에서 테스트해 채널 `@rearcarcoding` 에 "smoke" 테스트 메시지가 **실제 발송**됐다(message_id 92). 즉시 `deleteMessage` 로 삭제(`ok:true`). **다음부터 broadcast 계열은 무인증 401 까지만 확인하고, admin 경로는 발송 대상을 본인 DM 으로 바꾸거나 dry-run 파라미터를 만들어 테스트할 것.**
+
+**남은 것** — `loadMarketCalendar` 의 `dstEndDate: j.dstEndDate || ''` 와 `data/market-calendar.json` 의 `dstEndDate` 필드는 이제 참조되지 않는 dead field(동작 무해). 리뷰 워크플로우가 세션 한도로 중단돼 **프런트엔드 차원 리뷰 1건과 검증 5건이 미완주** — 미검증 발견으로 ① 자정 경과 후 탭 재진입 시 히어로 스트립만 갱신돼 달력의 '오늘' 과 어긋남 ② events 가 비면 "일정을 불러오는 중…" 고착 ③ 아코디언 제목이 시작 연도만 사용해 해를 넘기면 "2026년 7월 ~ 1월" ④ 엔비디아 8월 실적만 KST 미환산 — 4건이 남아 있다.
+
+## 라운드 24: 주식 캘린더 탭 신규 — 월간 달력 · 핵심일정 · 초보 가이드 (2026-07-20)
+
+FOMC·CPI·고용보고서·휴장일·실적을 한국시간 기준 월간 달력으로 제공하는 "주식 캘린더" 탭. 커밋 `c592dd9`.
+
+- **`server.js`** — `GET /api/market-calendar` 신규. `data/market-calendar.json` 을 프로세스 수명 동안 메모리 캐시(읽기 전용). `data/` 가 정적 서빙에서 막혀 있어 반드시 API 를 거쳐야 한다. GET 외 405, 1시간 브라우저 캐시. 실패는 200 + `ok:false`(프런트가 `j.ok` 로 판별, 같은 파일 `/api/history` 와 동일 관례).
+- **`data/market-calendar.json`** — 큐레이션 데이터 31건 + 초보 가이드 6종. 연준/경제지표/휴장은 공식 일정(Federal Reserve·BLS·NYSE·KRX) 기반, 확정 전 실적일은 `est` 플래그로 "예상" 표시.
+- **`index.html`** — 사이드바 탭 + `#panel-calendar`(요약 스트립 · 월간 달력 · 이달의 핵심 · 전체 기간 아코디언 · 초보 가이드).
+- **`app.js`** — `mcState` 기반 렌더러. 데이터에 존재하는 달만 탐색 대상으로 삼아 연/월 하드코딩 제거. 그리드·아코디언은 이벤트 위임으로 바인딩해 재렌더 시 리스너 중복 없음.
+- **`styles.css`** — `mc-*` 스타일.
+
+**검증**: `node -c` 통과. 로컬 4291/4292 에서 `/api/market-calendar` ok=true events=31 guides=6, Cache-Control 및 POST 405 확인. app.js 참조 `mc-` ID 15개 전부 index.html 과 일치.
 
 ## 라운드 23: 토스 IP 차단 진단 + 모달 정렬 + 야간선물 코드줄 제거 + 종목검색 인라인 차트 (2026-07-17)
 
