@@ -51,7 +51,32 @@ done
 
 **⚠️ 검증 중 사고** — `/api/broadcast` admin 경로를 실토큰 환경에서 테스트해 채널 `@rearcarcoding` 에 "smoke" 테스트 메시지가 **실제 발송**됐다(message_id 92). 즉시 `deleteMessage` 로 삭제(`ok:true`). **다음부터 broadcast 계열은 무인증 401 까지만 확인하고, admin 경로는 발송 대상을 본인 DM 으로 바꾸거나 dry-run 파라미터를 만들어 테스트할 것.**
 
-**남은 것** — `loadMarketCalendar` 의 `dstEndDate: j.dstEndDate || ''` 와 `data/market-calendar.json` 의 `dstEndDate` 필드는 이제 참조되지 않는 dead field(동작 무해). 리뷰 워크플로우가 세션 한도로 중단돼 **프런트엔드 차원 리뷰 1건과 검증 5건이 미완주** — 미검증 발견으로 ① 자정 경과 후 탭 재진입 시 히어로 스트립만 갱신돼 달력의 '오늘' 과 어긋남 ② events 가 비면 "일정을 불러오는 중…" 고착 ③ 아코디언 제목이 시작 연도만 사용해 해를 넘기면 "2026년 7월 ~ 1월" ④ 엔비디아 8월 실적만 KST 미환산 — 4건이 남아 있다.
+**남은 것 (dead code)** — `loadMarketCalendar` 의 `dstEndDate: j.dstEndDate || ''` 와 `data/market-calendar.json` 의 `dstEndDate` 필드는 이제 참조되지 않는다(동작 무해).
+
+### 다음 세션 착수 목록 — 라운드 24 미검증 발견 4건
+
+배포 전 리뷰 워크플로우가 **세션 한도로 중단**(프런트엔드 차원 리뷰 1건 + 반증검증 5건 미완주)돼, 아래 4건은 **발견만 되고 반증검증을 통과하지 못한 상태**다. 착수 전에 각 항목을 먼저 실증으로 확인하고, 진짜인 것만 고칠 것 — 리뷰어가 틀린 전례가 이번에도 있었다(서머타임 종료일 inclusive 제안이 tzdb 대조에서 오류로 드러남).
+
+줄 번호는 라운드 25 수정 반영 후 기준.
+
+**① 자정 경과 후 '오늘' 이 두 날짜를 가리킴 (medium · `app.js:7511` `renderMarketCalendar`)**
+`mcState.loaded` 가 true 면 `mcRenderHours(); return;` 으로 조기 반환한다. `todayKST()` 를 다시 읽는 건 히어로 스트립뿐이고, 그리드의 `is-today` 클래스 · `mcRenderDay` 의 '오늘' 배지 · `mcState.selected` 는 최초 렌더 시점 값에 머문다. 상시 열어두는 대시보드라 탭이 자정을 넘기는 게 일상적이다.
+리뷰어 실측(스텁 DOM): 7/20 에 열고 7/30 에 재진입 → 스트립은 `7월 30일 (목) 오늘 일정 1건`, `is-today` 는 여전히 `2026-07-20` 셀, 상세 패널은 `7월 20일(월) 일정 (0건) [오늘]`.
+제안: `mcState.renderedOn` 을 두고 `todayKST()` 와 다르면 `monthIdx`/`selected` 재계산 후 `mcRenderMonth()` 까지 태운다. `mcRenderAll()` 에서도 `renderedOn` 설정.
+
+**② events 가 비면 "일정을 불러오는 중…" 영구 고착 (low · `app.js:7531` `mcRenderAll`)**
+첫 줄 `if (!mcState.months.length) return;` 이라 빈 배열이면 로딩 플레이스홀더를 지우지도, guides/disclaimer/updatedAt 을 렌더하지도 않고 빠져나온다. 이미 `mcState.loaded = true` 라 탭을 다시 눌러도 `renderMarketCalendar` 가 조기 반환해 재시도가 없다. 서버는 `Array.isArray(data.events)` 만 보므로 빈 배열도 `ok:true` 로 통과하고, 클라 필터(`/^\d{4}-\d{2}-\d{2}$/` + title 필수)에 전부 걸려도 동일. 정상 존재하는 초보 가이드 6종까지 함께 사라진다.
+제안: 조기 반환 대신 빈 상태를 명시 렌더 — `#mc-grid` 에 "표시할 일정이 없습니다." + `mcRenderHours()`/`mcRenderGuides()`/`mcRenderMeta()` 는 태우고 return.
+
+**③ 아코디언 제목이 시작 연도만 사용 (low · `app.js:7659` `mcRenderMonths`)**
+제목이 `${first[0]}년 ${first[1]}월 ~ ${last[1]}월` 라 마지막 달의 연도를 버린다. 현재 데이터가 2026-07~12 단일 연도라 맞게 나오지만, **데이터가 2026-12 에서 끝나므로 2027 일정 추가는 예정된 갱신**이고 그 순간 `2026년 7월 ~ 1월` 로 깨진다. 아코디언 항목도 연도 없이 '1월' 로만 나열돼 2026년 1월로 오해할 수 있다.
+제안: `first[0] === last[0]` 분기로 다르면 `${last[0]}년 ${last[1]}월` 까지 표기. 헤더의 `${m}월` 도 연도가 둘 이상이면 `${y}년 ${m}월`.
+
+**④ 엔비디아 8월 실적일만 KST 미환산 (medium · `data/market-calendar.json:68` `mc-20260826-nvda`)**
+파일 disclaimer 는 "모든 날짜·시각은 한국시간(KST) 기준" 이고 다른 실적 2건은 실제로 환산돼 있다 — `mc-20261119-nvda`(미국 11-18 수 → KST 11-19), `mc-20261030-aapl`(미국 10-29 목 → KST 10-30). 그런데 `mc-20260826-nvda` 만 `usNote` 에 같은 규칙을 써 놓고 `date` 는 미국 현지일 `2026-08-26`(수) 그대로다. 엔비디아 발표 이력(2025-08-27 수, 2024-08-28 수)상 미국 8/26 이 맞으므로 **KST 는 8/27 새벽**이어야 한다. `imp:3`/`impact:"높음"` 이라 노출도가 크고, 사용자가 하루를 헛기다리게 된다. `est:true` 는 확정 전 추정이라는 뜻이지 시간대 오류의 변명이 못 된다.
+제안: `date` 를 `2026-08-27` 로, `id` 도 규칙(id 의 YYYYMMDD = date)에 맞춰 `mc-20260827-nvda` 로. `usNote` 에 현지일을 명시해 재발 방지. 근거: <https://investor.nvidia.com/financial-info/financial-reports/>
+
+**워크플로우 재개 참고** — 스크립트는 `~/.claude/projects/E--AI-Seed-ledger-main/<세션>/workflows/scripts/round24-predeploy-review-*.js` 에 저장돼 있고 run id 는 `wf_1f008759-30c`. 다만 `resumeFromRunId` 캐시는 **같은 세션에서만** 유효하고 산출물도 임시 디렉터리라 정리되면 사라진다. 새 세션에서는 재개가 아니라 위 4건을 직접 검증하는 편이 빠르다. (그래서 발견 원문을 여기에 옮겨 뒀다.)
 
 ## 라운드 24: 주식 캘린더 탭 신규 — 월간 달력 · 핵심일정 · 초보 가이드 (2026-07-20)
 
