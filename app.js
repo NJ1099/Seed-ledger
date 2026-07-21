@@ -7418,6 +7418,7 @@ const mcState = {
   months: [],       // 데이터에 존재하는 'YYYY-MM' 오름차순
   monthIdx: 0,      // months 배열 내 현재 위치
   selected: null,   // 'YYYY-MM-DD'
+  renderedDate: null,  // 마지막 렌더 시점의 todayKST() — 자정 경과 감지용
   meta: null,       // { updatedAt, disclaimer, dstEndDate, marketHours }
 };
 
@@ -7511,8 +7512,24 @@ async function loadMarketCalendar() {
 function renderMarketCalendar() {
   mcBindOnce();
   // 이미 그려둔 상태면 통째로 다시 그리지 않는다 — 보던 달·선택 날짜·아코디언 펼침이 초기화되므로.
-  // 자정을 넘겼을 수 있는 "오늘" 스트립만 갱신한다.
-  if (mcState.loaded) { mcRenderHours(); return; }
+  if (mcState.loaded) {
+    const today = todayKST();
+    // 자정을 넘겼으면 스트립뿐 아니라 그리드의 오늘 표시·상세 패널의 '오늘' 배지까지 함께 갱신한다.
+    // (스트립만 갱신하면 한 화면에서 '오늘' 이 서로 다른 두 날짜를 가리킨다.)
+    if (mcState.renderedDate !== today) {
+      // 사용자가 직접 고른 날짜는 건드리지 않고, "어제의 오늘" 이 선택돼 있을 때만 옮긴다.
+      if (mcState.selected === mcState.renderedDate) {
+        mcState.selected = mcState.months[mcState.monthIdx] === today.slice(0, 7) ? today : null;
+      }
+      mcState.renderedDate = today;
+      mcRenderHours();
+      mcRenderGrid();
+      mcRenderDay();
+      return;
+    }
+    mcRenderHours();
+    return;
+  }
   const grid = $('#mc-grid');
   if (grid) grid.innerHTML = '<div class="mc-empty" style="grid-column:1/-1;border:none">일정을 불러오는 중…</div>';
   loadMarketCalendar().then(() => { if (mcState.loaded) mcRenderAll(); });
@@ -7529,9 +7546,23 @@ function mcPickInitialMonth() {
 }
 
 function mcRenderAll() {
-  if (!mcState.months.length) return;
-  mcState.monthIdx = mcPickInitialMonth();
   const today = todayKST();
+  // 일정이 하나도 없어도 로딩 플레이스홀더는 반드시 걷어내고 가이드·출처는 보여준다.
+  // (그냥 return 하면 loaded=true 라 재진입해도 영구히 "불러오는 중" 으로 남는다.)
+  if (!mcState.months.length) {
+    mcState.renderedDate = today;
+    const grid = $('#mc-grid');
+    if (grid) grid.innerHTML = '<div class="mc-empty" style="grid-column:1/-1;border:none">표시할 일정이 없습니다.</div>';
+    const day = $('#mc-daypanel');
+    if (day) day.innerHTML = '';
+    mcRenderHours();
+    mcRenderMonths();
+    mcRenderGuides();
+    mcRenderMeta();
+    return;
+  }
+  mcState.monthIdx = mcPickInitialMonth();
+  mcState.renderedDate = today;
   mcState.selected = mcState.months[mcState.monthIdx] === today.slice(0, 7) ? today : null;
   mcRenderHours();
   mcRenderMonth();
@@ -7673,11 +7704,19 @@ function mcRenderMonths() {
   if (title && mcState.months.length) {
     const first = mcState.months[0].split('-');
     const last = mcState.months[mcState.months.length - 1].split('-');
-    title.textContent = `${first[0]}년 ${Number(first[1])}월 ~ ${Number(last[1])}월 한눈에`;
+    // 데이터가 해를 넘기면 끝 연도도 함께 적는다 ("7월 ~ 1월" 처럼 역행해 보이는 표기 방지).
+    const lastLabel = first[0] === last[0]
+      ? `${Number(last[1])}월`
+      : `${last[0]}년 ${Number(last[1])}월`;
+    title.textContent = `${first[0]}년 ${Number(first[1])}월 ~ ${lastLabel} 한눈에`;
   }
 
+  // 여러 해에 걸친 데이터면 아코디언 헤더에도 연도를 붙인다 (마지막 "1월" 이 올해 1월로 오해되지 않도록).
+  const multiYear = mcState.months.length
+    && mcState.months[0].slice(0, 4) !== mcState.months[mcState.months.length - 1].slice(0, 4);
   box.innerHTML = Array.from(byMonth.entries()).map(([ym, evs]) => {
-    const m = Number(ym.split('-')[1]);
+    const [ay, am] = ym.split('-');
+    const mLabel = multiYear ? `${ay}년 ${Number(am)}월` : `${Number(am)}월`;
     const items = evs.map(e =>
       `<li><span class="mc-ld">${esc(mcKoreanDate(e.date))}</span>`
       + `<span class="mc-lt">${esc(e.time)}</span>`
@@ -7685,7 +7724,7 @@ function mcRenderMonths() {
       + (e.est ? ' <span class="mc-badge mc-b-est">예상</span>' : '') + '</li>'
     ).join('');
     return `<div class="mc-acc" data-mc-acc="${ym}">`
-      + `<button type="button"><span><span class="mc-mn">${m}월</span>`
+      + `<button type="button"><span><span class="mc-mn">${mLabel}</span>`
       + `<span class="mc-mc">핵심 일정 ${evs.length}건</span></span>`
       + `<span class="mc-plus">＋</span></button><ul>${items}</ul></div>`;
   }).join('') || '<div class="mc-empty">표시할 일정이 없습니다.</div>';
