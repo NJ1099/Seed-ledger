@@ -21,6 +21,7 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const zlib = require('zlib');   // DART corpCode.xml / document.xml 이 ZIP 으로 온다
 
 // pdfImport 는 pdfjs-dist + @napi-rs/canvas 를 쓰므로 호스트에 네이티브 의존이 필요.
 // 실패해도 나머지 기능은 살리기 위해 try-require.
@@ -80,6 +81,7 @@ const QUOTE_CACHE_FILE = path.join(DATA_DIR, 'quote-cache.json');
 const POPULAR_TICKERS_FILE = path.join(DATA_DIR, 'popular-tickers.json');
 const STOCK_MASTER_FILE = path.join(DATA_DIR, 'stock-master.json');
 const MARKET_CALENDAR_FILE = path.join(DATA_DIR, 'market-calendar.json');
+const DART_CORPCODE_FILE = path.join(DATA_DIR, 'dart-corpcodes.json');
 const LOG_DIR = path.join(DATA_DIR, 'logs');
 const SERVER_LOG = path.join(LOG_DIR, 'server.log');
 
@@ -342,6 +344,36 @@ function httpsPostJson(url, body, { timeoutMs = 8000, headers = {} } = {}) {
 
 // 원본 바이트로 받아 charset 자동 디코딩 (네이버 finance.naver.com 같은 EUC-KR 페이지용).
 // Node 18+ 의 TextDecoder 가 'euc-kr' 라벨을 지원 (ICU full data 빌드).
+// 응답을 디코딩 없이 Buffer 그대로 돌려준다. ZIP 같은 바이너리용 —
+// httpsGetBuffer 는 이름과 달리 문자열로 디코딩하므로 바이너리에는 쓸 수 없다.
+function httpsGetRaw(url, { timeoutMs = 10_000, headers = {} } = {}) {
+  return new Promise((resolve) => {
+    try {
+      const u = new URL(url);
+      const req = https.request({
+        method: 'GET',
+        hostname: u.hostname,
+        path: u.pathname + u.search,
+        headers: { 'User-Agent': 'Mozilla/5.0 (seed-ledger/1.0)', 'Accept': '*/*', ...headers },
+        timeout: timeoutMs,
+      }, (r) => {
+        const chunks = [];
+        r.on('data', (c) => chunks.push(c));
+        r.on('end', () => resolve({
+          ok: r.statusCode >= 200 && r.statusCode < 300,
+          status: r.statusCode,
+          body: Buffer.concat(chunks),
+        }));
+      });
+      req.on('error', (e) => resolve({ ok: false, status: 0, body: null, error: String(e) }));
+      req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
+      req.end();
+    } catch (e) {
+      resolve({ ok: false, status: 0, body: null, error: String(e) });
+    }
+  });
+}
+
 // 디코딩 실패 시 utf-8 폴백.
 function httpsGetBuffer(url, { timeoutMs = 6000, headers = {} } = {}) {
   return new Promise((resolve) => {
@@ -746,15 +778,197 @@ async function fetchYahooEarnings(symbol) {
   }
 }
 
+// ---------- 국내 실적일: DART '결산실적공시예고' ----------
+// Yahoo 의 국내 실적일은 추정치라 실제와 어긋난다(실측: 에코프로비엠 Yahoo 7/29 vs 공시 7/31).
+// DART 거래소공시(I001) 의 '결산실적공시예고' 는 기업이 직접 신고한 예정일이라 이쪽이 정확하다.
+// 다만 모든 기업이 내는 공시가 아니다 — 삼성전자·SK하이닉스·LG에너지솔루션은 400일간 0건이었다.
+// 그래서 DART 를 1순위로 쓰되, 없으면 Yahoo 로 폴백한다.
+
+const DART_CORPCODE_TTL = 30 * 24 * 60 * 60 * 1000;
+const DART_EARNINGS_TTL = 12 * 60 * 60 * 1000;
+let __dartCorpIndex = null;          // { at, map: { '005930': '00126380', ... } }
+let __dartCorpInFlight = null;
+const __dartEarningsCache = new Map();  // stockCode → { at, data }
+
+// corpCode.xml 은 27MB(압축 3.5MB) 라 통째로 문자열화하면 Render 무료 플랜 메모리에 부담이 된다.
+// Buffer 에서 <list> 블록만 잘라 순회하며 상장사(stock_code 있는 것)만 추린다.
+function parseDartCorpCodes(buf) {
+  const map = {};
+  const OPEN = Buffer.from('<list>'), CLOSE = Buffer.from('</list>');
+  let pos = 0;
+  for (;;) {
+    const s = buf.indexOf(OPEN, pos);
+    if (s < 0) break;
+    const e = buf.indexOf(CLOSE, s);
+    if (e < 0) break;
+    const block = buf.slice(s + OPEN.length, e).toString('utf8');
+    pos = e + CLOSE.length;
+    const stock = (block.match(/<stock_code>([^<]*)<\/stock_code>/) || [])[1];
+    if (!stock || !/^\d{6}$/.test(stock.trim())) continue;   // 비상장사는 stock_code 가 공백
+    const corp = (block.match(/<corp_code>([^<]*)<\/corp_code>/) || [])[1];
+    if (corp && /^\d{8}$/.test(corp.trim())) map[stock.trim()] = corp.trim();
+  }
+  return map;
+}
+
+// 단일 파일 ZIP 해제 — DART 의 corpCode.xml·document.xml 이 둘 다 이 형식이다.
+function unzipSingleFile(buf) {
+  if (!buf || buf.length < 30 || buf.slice(0, 2).toString() !== 'PK') return null;
+  try {
+    const method = buf.readUInt16LE(8);
+    const nameLen = buf.readUInt16LE(26);
+    const extraLen = buf.readUInt16LE(28);
+    const start = 30 + nameLen + extraLen;
+    if (method === 0) return buf.slice(start);
+    return zlib.inflateRawSync(buf.slice(start));
+  } catch (e) {
+    return null;
+  }
+}
+
+async function getDartCorpIndex() {
+  if (__dartCorpIndex && Date.now() - __dartCorpIndex.at < DART_CORPCODE_TTL) return __dartCorpIndex.map;
+  if (__dartCorpInFlight) return __dartCorpInFlight;
+  __dartCorpInFlight = (async () => {
+    try {
+      // 디스크 캐시부터 — 27MB 다운로드를 재시작마다 반복하지 않는다.
+      const cached = readJSON(DART_CORPCODE_FILE, null);
+      if (cached && cached.map && cached.at && Date.now() - cached.at < DART_CORPCODE_TTL) {
+        __dartCorpIndex = { at: cached.at, map: cached.map };
+        return __dartCorpIndex.map;
+      }
+      if (!dartConfigured()) return null;
+      const r = await httpsGetRaw(
+        `https://opendart.fss.or.kr/api/corpCode.xml?crtfc_key=${dartKey()}`,
+        { timeoutMs: 30_000 }
+      );
+      if (!r.ok || !r.body) throw new Error(`corpCode http ${r.status}`);
+      const xml = unzipSingleFile(r.body);
+      if (!xml) throw new Error('corpCode unzip failed');
+      const map = parseDartCorpCodes(xml);
+      if (!Object.keys(map).length) throw new Error('corpCode empty');
+      __dartCorpIndex = { at: Date.now(), map };
+      writeJSON(DART_CORPCODE_FILE, { at: __dartCorpIndex.at, map });
+      logLine('info', 'dart.corpcode', { listed: Object.keys(map).length });
+      return map;
+    } catch (e) {
+      logLine('warn', 'dart.corpcode.fail', { err: String(e && e.message || e) });
+      // 만료됐어도 남아 있는 맵이 있으면 그거라도 쓴다 — 종목코드는 거의 바뀌지 않는다.
+      return __dartCorpIndex ? __dartCorpIndex.map : null;
+    } finally {
+      __dartCorpInFlight = null;
+    }
+  })();
+  return __dartCorpInFlight;
+}
+
+// 공시 본문에서 '결산실적 공시예정일' 과 결산대상기간을 뽑는다.
+function parseDartEarningsBody(text) {
+  const plain = String(text).replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ');
+  const m = plain.match(/결산실적\s*공시\s*예정일\s*(\d{4})[-.\s]*(\d{1,2})[-.\s]*(\d{1,2})/);
+  if (!m) return null;
+  const date = `${m[1]}-${String(m[2]).padStart(2, '0')}-${String(m[3]).padStart(2, '0')}`;
+  if (!SAFE_DATE_RE.test(date)) return null;
+  const per = plain.match(/결산대상기간\s*시작일\s*(\d{4}-\d{2}-\d{2})\s*종료일\s*(\d{4}-\d{2}-\d{2})/);
+  return { date, periodStart: per ? per[1] : null, periodEnd: per ? per[2] : null };
+}
+
+async function fetchDartEarningsDate(stockCode) {
+  const hit = __dartEarningsCache.get(stockCode);
+  if (hit && Date.now() - hit.at < DART_EARNINGS_TTL) return hit.data;
+  if (!dartConfigured()) return null;
+
+  const miss = (data) => { __dartEarningsCache.set(stockCode, { at: Date.now(), data }); return data; };
+  const index = await getDartCorpIndex();
+  const corp = index && index[stockCode];
+  if (!corp) return miss(null);
+
+  // 예고 공시는 실적 2~4주 전에 나온다. 정정공시까지 잡히도록 넉넉히 150일.
+  const r = await httpsGet(
+    `https://opendart.fss.or.kr/api/list.json?crtfc_key=${dartKey()}&corp_code=${encodeURIComponent(corp)}`
+    + `&bgn_de=${ymdFromKST(150)}&end_de=${ymdFromKST(0)}&pblntf_detail_ty=I001&page_count=100&page_no=1`,
+    { timeoutMs: 8000 }
+  );
+  if (!r.ok) return null;   // 일시 오류는 캐시하지 않는다
+  let list;
+  try {
+    const j = JSON.parse(r.body);
+    if (j.status === '013') return miss(null);          // 조회 결과 없음 = 이 회사는 예고 공시를 안 한다
+    if (j.status !== '000') {
+      logLine('warn', 'dart.earnings.status', { stockCode, status: j.status, msg: dartStatusMessage(j.status) });
+      return null;
+    }
+    list = Array.isArray(j.list) ? j.list : [];
+  } catch (e) {
+    return null;
+  }
+  const pre = list.filter(x => /결산실적공시\s*예고/.test(String(x.report_nm || '')));
+  if (!pre.length) return miss(null);
+  // 접수일 최신 순 — 정정공시가 있으면 그쪽이 이긴다.
+  pre.sort((a, b) => String(b.rcept_dt).localeCompare(String(a.rcept_dt)));
+
+  const today = ymdFromKST(0).replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3');
+  for (const item of pre.slice(0, 3)) {
+    const doc = await httpsGetRaw(
+      `https://opendart.fss.or.kr/api/document.xml?crtfc_key=${dartKey()}&rcept_no=${encodeURIComponent(item.rcept_no)}`,
+      { timeoutMs: 10_000 }
+    );
+    if (!doc.ok || !doc.body) continue;
+    const xml = unzipSingleFile(doc.body);
+    if (!xml) continue;
+    const parsed = parseDartEarningsBody(xml.toString('utf8'));
+    if (!parsed) continue;
+    // 이미 지난 분기의 예고는 버린다 — 다음 분기 예고가 아직 안 나온 상태일 수 있다.
+    if (parsed.date < today) continue;
+    return miss({
+      date: parsed.date,
+      periodStart: parsed.periodStart,
+      periodEnd: parsed.periodEnd,
+      rceptNo: String(item.rcept_no),
+      corpName: String(item.corp_name || '').trim(),
+      source: 'dart',
+    });
+  }
+  return miss(null);
+}
+
 // 국내 종목은 6자리 코드라 거래소 접미사를 알 수 없다 — .KS 먼저, 없으면 .KQ.
 // (fetchNaverHistory 가 시세에 쓰는 것과 같은 폴백 규칙)
-async function fetchEarningsForTicker(type, ticker) {
-  if (type === 'stock_us') return await fetchYahooEarnings(ticker.toUpperCase());
-  if (type !== 'stock_kr') return null;
+async function fetchYahooEarningsForKR(ticker) {
   if (!/^\d{6}$/.test(ticker)) return await fetchYahooEarnings(ticker.toUpperCase());
   const ks = await fetchYahooEarnings(`${ticker}.KS`);
   if (ks) return ks;
   return await fetchYahooEarnings(`${ticker}.KQ`);
+}
+
+async function fetchEarningsForTicker(type, ticker) {
+  if (type === 'stock_us') {
+    const d = await fetchYahooEarnings(ticker.toUpperCase());
+    return d ? { ...d, source: 'yahoo' } : null;
+  }
+  if (type !== 'stock_kr') return null;
+
+  // 국내는 DART 공시 예정일이 1순위. 컨센서스(EPS·매출)는 DART 에 없으니 Yahoo 것을 함께 쓴다.
+  const [dart, yahoo] = await Promise.all([
+    /^\d{6}$/.test(ticker) ? fetchDartEarningsDate(ticker).catch(() => null) : Promise.resolve(null),
+    fetchYahooEarningsForKR(ticker).catch(() => null),
+  ]);
+  if (dart) {
+    return {
+      symbol: yahoo ? yahoo.symbol : ticker,
+      name: yahoo?.name || dart.corpName || null,
+      date: dart.date,
+      dateEnd: null,
+      est: false,                       // 기업이 신고한 예정일이라 추정이 아니다
+      epsAvg: yahoo ? yahoo.epsAvg : null,
+      revAvg: yahoo ? yahoo.revAvg : null,
+      currency: yahoo ? yahoo.currency : 'KRW',
+      source: 'dart',
+      periodEnd: dart.periodEnd || null,
+      rceptNo: dart.rceptNo,
+    };
+  }
+  return yahoo ? { ...yahoo, source: 'yahoo' } : null;
 }
 
 const EARNINGS_MAX_TICKERS = 40;

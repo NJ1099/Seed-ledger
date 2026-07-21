@@ -7522,8 +7522,16 @@ function mcEarningsToEvent(it) {
   }
   const rev = mcFmtBig(it.revAvg, it.currency);
   if (rev) parts.push(`예상 매출 ${rev}`);
+  const isDart = it.source === 'dart';
   const desc = '보유 중인 종목입니다.' + (parts.length ? ' ' + parts.join(' · ') + '.' : '')
+    + (isDart ? ' 기업이 DART 에 신고한 결산실적 공시예정일입니다.' : '')
     + (it.dateEnd ? ` 발표일이 ${mcKoreanDate(it.date)}~${mcKoreanDate(it.dateEnd)} 구간으로만 공시돼 시작일 기준으로 표시합니다.` : '');
+  // 출처에 따라 신뢰도 안내를 다르게 — DART 는 기업이 직접 신고한 예정일, Yahoo 는 추정치다.
+  const usNote = isUS
+    ? '미국 장 마감 후 발표라 한국시간으로는 다음 날 새벽입니다. 확정 전이면 하루 이틀 움직일 수 있습니다.'
+    : isDart
+      ? '기업이 예정일을 변경 공시하면 바뀔 수 있습니다.'
+      : '해외 데이터 기준 추정일입니다. 이 종목은 공시예정일을 신고하지 않아 실제 발표일과 다를 수 있습니다.';
   return {
     id: `mine-${it.type}-${it.ticker}`,
     date: it.date,
@@ -7533,11 +7541,10 @@ function mcEarningsToEvent(it) {
     imp: 2,
     impact: '중간',
     desc,
-    usNote: isUS
-      ? '미국 장 마감 후 발표라 한국시간으로는 다음 날 새벽입니다. 확정 전이면 하루 이틀 움직일 수 있습니다.'
-      : '기업이 공시 시점을 바꾸는 경우가 있어 실제 발표일과 다를 수 있습니다.',
+    usNote,
     est: !!it.est,
     mine: true,
+    source: it.source || '',
   };
 }
 

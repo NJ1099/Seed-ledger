@@ -8,6 +8,7 @@ data/logs/
 data/quote-cache.json
 data/quote-cache.json.tmp
 data/stock-master.json
+data/dart-corpcodes.json
 data/*.corrupt-*.bak
 
 # OS / 에디터
