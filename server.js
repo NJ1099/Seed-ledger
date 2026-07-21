@@ -255,13 +255,14 @@ function httpsGet(url, { timeoutMs = 6000, headers = {} } = {}) {
       const req = https.request(opts, (r) => {
         let data = '';
         r.on('data', (c) => { data += c.toString('utf8'); });
-        r.on('end', () => resolve({ ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: data }));
+        // headers 도 함께 넘긴다 — Yahoo crumb 세션이 set-cookie 를 필요로 한다.
+        r.on('end', () => resolve({ ok: r.statusCode >= 200 && r.statusCode < 300, status: r.statusCode, body: data, headers: r.headers || {} }));
       });
-      req.on('error', (e) => resolve({ ok: false, status: 0, body: '', error: String(e) }));
+      req.on('error', (e) => resolve({ ok: false, status: 0, body: '', headers: {}, error: String(e) }));
       req.on('timeout', () => { try { req.destroy(new Error('timeout')); } catch {} });
       req.end();
     } catch (e) {
-      resolve({ ok: false, status: 0, body: '', error: String(e) });
+      resolve({ ok: false, status: 0, body: '', headers: {}, error: String(e) });
     }
   });
 }
@@ -646,6 +647,153 @@ async function fetchYahoo(symbols) {
     }
   }));
   return out;
+}
+
+// ---------- 보유 종목 실적 일정 (Yahoo quoteSummary) ----------
+// chart API 와 달리 quoteSummary 는 cookie + crumb 인증을 요구한다.
+// fc.yahoo.com 이 404 를 주면서 세션 쿠키를 심어주고, 그 쿠키로 /v1/test/getcrumb 를 부르면 crumb 이 나온다.
+const YF_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36';
+const YF_CRUMB_TTL = 60 * 60 * 1000;        // 세션 1시간
+const YF_EARNINGS_TTL = 6 * 60 * 60 * 1000; // 실적일은 자주 바뀌지 않는다
+let __yfSession = null;         // { cookie, crumb, at }
+let __yfSessionInFlight = null;
+const __yfEarningsCache = new Map();  // symbol → { at, data }
+
+async function getYahooSession(force = false) {
+  if (!force && __yfSession && Date.now() - __yfSession.at < YF_CRUMB_TTL) return __yfSession;
+  // 동시 요청이 각자 세션을 새로 파지 않도록 in-flight 를 공유한다.
+  if (__yfSessionInFlight) return __yfSessionInFlight;
+  __yfSessionInFlight = (async () => {
+    try {
+      const c = await httpsGet('https://fc.yahoo.com/', { timeoutMs: 8000, headers: { 'User-Agent': YF_UA } });
+      const setCookie = c.headers && c.headers['set-cookie'];
+      const cookie = Array.isArray(setCookie) ? setCookie.map(s => String(s).split(';')[0]).join('; ') : '';
+      if (!cookie) throw new Error('no cookie');
+      const r = await httpsGet('https://query1.finance.yahoo.com/v1/test/getcrumb', {
+        timeoutMs: 8000, headers: { 'User-Agent': YF_UA, Cookie: cookie },
+      });
+      const crumb = String(r.body || '').trim();
+      // crumb 은 짧은 토큰이다. HTML 이나 빈 응답이면 실패로 본다.
+      if (!r.ok || !crumb || crumb.length > 40 || crumb.includes('<')) throw new Error(`crumb http ${r.status}`);
+      __yfSession = { cookie, crumb, at: Date.now() };
+      return __yfSession;
+    } catch (e) {
+      logLine('warn', 'yahoo.crumb', { err: String(e && e.message || e) });
+      __yfSession = null;
+      return null;
+    } finally {
+      __yfSessionInFlight = null;
+    }
+  })();
+  return __yfSessionInFlight;
+}
+
+// epoch(초) → KST 날짜 'YYYY-MM-DD'.
+// Yahoo 의 earningsDate 는 거래소 마감 시각으로 들어온다 — 미국은 ET 16:00(=KST 익일 새벽),
+// 한국은 KST 15:00. 그래서 KST 로 환산한 날짜가 곧 이 캘린더가 쓰는 날짜다.
+function epochToKSTDate(sec) {
+  return new Date((Number(sec) + 32400) * 1000).toISOString().slice(0, 10);
+}
+
+async function fetchYahooEarnings(symbol) {
+  const hit = __yfEarningsCache.get(symbol);
+  if (hit && Date.now() - hit.at < YF_EARNINGS_TTL) return hit.data;
+
+  let sess = await getYahooSession();
+  if (!sess) return null;
+  const call = async (s) => httpsGet(
+    `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(symbol)}`
+    + `?modules=calendarEvents,price&crumb=${encodeURIComponent(s.crumb)}`,
+    { timeoutMs: 8000, headers: { 'User-Agent': YF_UA, Cookie: s.cookie } }
+  );
+  let r = await call(sess);
+  // crumb 만료(401)면 세션을 한 번만 새로 파서 재시도한다.
+  if (r.status === 401) {
+    sess = await getYahooSession(true);
+    if (!sess) return null;
+    r = await call(sess);
+  }
+  if (!r.ok) {
+    logLine('warn', 'yahoo.earnings.http', { symbol, status: r.status });
+    return null;
+  }
+  try {
+    const j = JSON.parse(r.body);
+    const res0 = j?.quoteSummary?.result?.[0];
+    const e = res0?.calendarEvents?.earnings;
+    const dates = Array.isArray(e?.earningsDate) ? e.earningsDate : [];
+    if (!dates.length || dates[0]?.raw == null) {
+      // 실적일이 없는 종목(ETF·리츠 등)도 정상 응답이다. null 을 캐시해 반복 조회를 막는다.
+      __yfEarningsCache.set(symbol, { at: Date.now(), data: null });
+      return null;
+    }
+    const data = {
+      symbol,
+      name: res0?.price?.longName || res0?.price?.shortName || null,
+      // 배열 원소가 2개면 Yahoo 가 확정일 대신 추정 구간을 준 것이다. 시작일만 쓰고 구간은 따로 표기한다.
+      date: epochToKSTDate(dates[0].raw),
+      dateEnd: dates.length > 1 && dates[1]?.raw != null ? epochToKSTDate(dates[1].raw) : null,
+      est: !!e.isEarningsDateEstimate || dates.length > 1,
+      epsAvg: e.earningsAverage?.raw ?? null,
+      revAvg: e.revenueAverage?.raw ?? null,
+      currency: res0?.price?.currency || null,
+    };
+    __yfEarningsCache.set(symbol, { at: Date.now(), data });
+    return data;
+  } catch (err) {
+    logLine('warn', 'yahoo.earnings.parse', { symbol, err: String(err) });
+    return null;
+  }
+}
+
+// 국내 종목은 6자리 코드라 거래소 접미사를 알 수 없다 — .KS 먼저, 없으면 .KQ.
+// (fetchNaverHistory 가 시세에 쓰는 것과 같은 폴백 규칙)
+async function fetchEarningsForTicker(type, ticker) {
+  if (type === 'stock_us') return await fetchYahooEarnings(ticker.toUpperCase());
+  if (type !== 'stock_kr') return null;
+  if (!/^\d{6}$/.test(ticker)) return await fetchYahooEarnings(ticker.toUpperCase());
+  const ks = await fetchYahooEarnings(`${ticker}.KS`);
+  if (ks) return ks;
+  return await fetchYahooEarnings(`${ticker}.KQ`);
+}
+
+const EARNINGS_MAX_TICKERS = 40;
+
+async function handleEarningsCalendar(req, res) {
+  if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'POST only' });
+  let body;
+  try {
+    body = JSON.parse(await readBody(req, 16 * 1024));
+  } catch (e) {
+    return reply(res, 400, { ok: false, error: 'invalid body' });
+  }
+  const raw = Array.isArray(body && body.tickers) ? body.tickers : [];
+  const seen = new Set();
+  const wanted = [];
+  for (const t of raw) {
+    if (!t || (t.type !== 'stock_kr' && t.type !== 'stock_us')) continue;
+    const tk = String(t.ticker || '').trim();
+    if (!tk || !SAFE_TICKER_RE.test(tk)) continue;
+    const key = `${t.type}:${tk.toUpperCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    wanted.push({ type: t.type, ticker: tk });
+    if (wanted.length >= EARNINGS_MAX_TICKERS) break;
+  }
+  if (!wanted.length) return reply(res, 200, { ok: true, items: [], ts: nowKST() });
+
+  const settled = await Promise.all(wanted.map(async (w) => {
+    try {
+      const d = await fetchEarningsForTicker(w.type, w.ticker);
+      return d ? { ...d, type: w.type, ticker: w.ticker } : null;
+    } catch (e) {
+      return null;
+    }
+  }));
+  const items = settled.filter(Boolean);
+  logLine('info', 'earnings.calendar', { requested: wanted.length, resolved: items.length });
+  res.setHeader('Cache-Control', 'private, max-age=600');
+  return reply(res, 200, { ok: true, items, ts: nowKST() });
 }
 
 const INDEX_SYMBOL_MAP = {
@@ -3455,6 +3603,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/sidecar')       return await handleSidecar(req, res);
     if (urlPath === '/api/crypto-indicators') return await handleCryptoIndicators(req, res);
     if (urlPath === '/api/market-calendar') return await handleMarketCalendar(req, res);
+    if (urlPath === '/api/earnings-calendar') return await handleEarningsCalendar(req, res);
     if (urlPath === '/api/config-status') return await handleConfigStatus(req, res);
     if (urlPath === '/api/krx-auth-check') return await handleKrxAuthCheck(req, res);
 

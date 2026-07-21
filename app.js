@@ -49,6 +49,7 @@ const API = {
   history: '/api/history',
   notices: '/api/notices',
   marketCalendar: '/api/market-calendar',
+  earningsCalendar: '/api/earnings-calendar',
   sidecar: '/api/sidecar',
   broadcast: '/api/broadcast',
 };
@@ -7413,7 +7414,12 @@ const mcState = {
   loaded: false,
   loading: false,
   bound: false,
-  events: [],       // [{ id, date, time, title, cat, imp, impact, desc, usNote, est }]
+  events: [],       // curated + mine 을 합친 최종 표시 목록
+  curated: [],      // [{ id, date, time, title, cat, imp, impact, desc, usNote, est }]
+  mine: [],         // 보유 종목 실적 (mine:true). curated 와 별도로 들고 있어야 재조회 시 중복되지 않는다.
+  mineLoaded: false,
+  mineLoading: false,
+  mineSig: '',      // 보유 종목 목록의 서명 — 종목이 바뀌면 다시 조회한다
   guides: [],
   months: [],       // 데이터에 존재하는 'YYYY-MM' 오름차순
   monthIdx: 0,      // months 배열 내 현재 위치
@@ -7465,6 +7471,137 @@ function mcMarketHours(ymd) {
     : { open: '밤 11:30', close: '새벽 6:00', dst: false };
 }
 
+// ---------- 보유 종목 실적 일정 ----------
+
+// 계좌·증권계좌 holdings 에서 주식만 추린다 (크립토·현금은 실적 개념이 없다).
+function mcCollectOwnedStocks() {
+  const out = [];
+  const seen = new Set();
+  const push = (type, ticker, label) => {
+    if (!['stock_kr', 'stock_us'].includes(type)) return;
+    const tk = String(ticker || '').trim();
+    if (!tk) return;
+    const key = type + ':' + tk.toUpperCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push({ type, ticker: tk, label: String(label || '').trim() || tk });
+  };
+  for (const a of state.accounts || []) {
+    if (['stock_kr', 'stock_us'].includes(a.type)) {
+      push(a.type, a.ticker, a.label);
+    } else if (a.type === 'brokerage' && Array.isArray(a.holdings)) {
+      for (const h of a.holdings) push(h.assetType, h.ticker, h.label);
+    }
+  }
+  return out;
+}
+
+function mcFmtBig(n, currency) {
+  if (n == null || !isFinite(n)) return '';
+  if (currency === 'KRW') {
+    if (Math.abs(n) >= 1e12) return `${(n / 1e12).toFixed(1)}조원`;
+    if (Math.abs(n) >= 1e8) return `${Math.round(n / 1e8).toLocaleString('ko-KR')}억원`;
+    return `${Math.round(n).toLocaleString('ko-KR')}원`;
+  }
+  if (Math.abs(n) >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (Math.abs(n) >= 1e6) return `$${(n / 1e6).toFixed(0)}M`;
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
+
+// 서버가 준 실적일을 캘린더 이벤트 형태로 바꾼다.
+// 중요도는 ★★ 고정 — 보유 종목이 많아도 '이달의 핵심'(★★★ 전용)이 실적으로 도배되지 않게.
+function mcEarningsToEvent(it) {
+  const isUS = it.type === 'stock_us';
+  const label = it.label && it.label !== it.ticker ? it.label : (it.name || it.ticker);
+  const title = `${label}(${it.ticker}) 실적 발표`;
+  const parts = [];
+  if (it.epsAvg != null && isFinite(it.epsAvg)) {
+    parts.push(`컨센서스 EPS ${it.currency === 'KRW'
+      ? Math.round(it.epsAvg).toLocaleString('ko-KR') + '원'
+      : it.epsAvg.toFixed(2)}`);
+  }
+  const rev = mcFmtBig(it.revAvg, it.currency);
+  if (rev) parts.push(`예상 매출 ${rev}`);
+  const desc = '보유 중인 종목입니다.' + (parts.length ? ' ' + parts.join(' · ') + '.' : '')
+    + (it.dateEnd ? ` 발표일이 ${mcKoreanDate(it.date)}~${mcKoreanDate(it.dateEnd)} 구간으로만 공시돼 시작일 기준으로 표시합니다.` : '');
+  return {
+    id: `mine-${it.type}-${it.ticker}`,
+    date: it.date,
+    time: isUS ? '새벽 (미국 장 마감 후)' : '장중~마감 후',
+    title,
+    cat: '실적',
+    imp: 2,
+    impact: '중간',
+    desc,
+    usNote: isUS
+      ? '미국 장 마감 후 발표라 한국시간으로는 다음 날 새벽입니다. 확정 전이면 하루 이틀 움직일 수 있습니다.'
+      : '기업이 공시 시점을 바꾸는 경우가 있어 실제 발표일과 다를 수 있습니다.',
+    est: !!it.est,
+    mine: true,
+  };
+}
+
+// 큐레이션 일정과 겹치면 큐레이션 쪽을 남긴다 (설명이 더 자세하다).
+// 같은 날 + 실적 카테고리 + 제목에 내 종목의 티커나 이름이 들어 있으면 중복으로 본다.
+function mcIsDuplicateOfCurated(ev, it) {
+  return mcState.curated.some(c => {
+    if (c.date !== ev.date || c.cat !== '실적') return false;
+    const t = c.title.toUpperCase();
+    if (t.includes(String(it.ticker).toUpperCase())) return true;
+    const label = String(it.label || '').trim();
+    return label.length >= 2 && c.title.includes(label);
+  });
+}
+
+function mcMergeEvents() {
+  const mine = mcState.mine.filter(e => !mcState.curated.some(c => c.date === e.date && c.title === e.title));
+  mcState.events = mcState.curated.concat(mine);
+  // 데이터에 실제로 존재하는 달만 탐색 대상으로 삼는다 (하드코딩된 연/월 범위 제거).
+  mcState.months = Array.from(new Set(mcState.events.map(e => e.date.slice(0, 7)))).sort();
+}
+
+async function loadMyEarnings() {
+  const owned = mcCollectOwnedStocks();
+  const sig = owned.map(o => `${o.type}:${o.ticker}`).sort().join(',');
+  // 보유 종목이 그대로면 다시 부르지 않는다. 종목을 추가·삭제하면 서명이 바뀌어 재조회된다.
+  if (mcState.mineLoaded && mcState.mineSig === sig) return;
+  if (mcState.mineLoading) return;
+  if (!owned.length) {
+    mcState.mine = [];
+    mcState.mineSig = sig;
+    mcState.mineLoaded = true;
+    mcMergeEvents();
+    return;
+  }
+  mcState.mineLoading = true;
+  try {
+    const j = await apiPost(API.earningsCalendar, {
+      tickers: owned.map(o => ({ type: o.type, ticker: o.ticker })),
+    });
+    const items = Array.isArray(j && j.items) ? j.items : [];
+    const byKey = new Map(owned.map(o => [`${o.type}:${o.ticker.toUpperCase()}`, o]));
+    const evs = [];
+    for (const it of items) {
+      if (!it || !/^\d{4}-\d{2}-\d{2}$/.test(it.date)) continue;
+      const own = byKey.get(`${it.type}:${String(it.ticker).toUpperCase()}`);
+      const merged = { ...it, label: own ? own.label : it.ticker };
+      const ev = mcEarningsToEvent(merged);
+      if (mcIsDuplicateOfCurated(ev, merged)) continue;
+      evs.push(ev);
+    }
+    mcState.mine = evs;
+    mcState.mineSig = sig;
+    mcState.mineLoaded = true;
+    mcMergeEvents();
+  } catch (e) {
+    // 실적 조회 실패는 캘린더 전체를 막지 않는다 — 큐레이션 일정은 그대로 보여준다.
+    console.warn('my earnings fail', e);
+    mcState.mineLoaded = false;
+  } finally {
+    mcState.mineLoading = false;
+  }
+}
+
 async function loadMarketCalendar() {
   if (mcState.loading) return;
   mcState.loading = true;
@@ -7474,7 +7611,7 @@ async function loadMarketCalendar() {
     if (!j || !j.ok) throw new Error((j && j.error) || 'load failed');
 
     const evs = Array.isArray(j.events) ? j.events : [];
-    mcState.events = evs
+    mcState.curated = evs
       .filter(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && e.title)
       .map(e => ({
         id: String(e.id || ''),
@@ -7495,8 +7632,7 @@ async function loadMarketCalendar() {
       dstEndDate: j.dstEndDate || '',
     };
 
-    // 데이터에 실제로 존재하는 달만 탐색 대상으로 삼는다 (하드코딩된 연/월 범위 제거).
-    mcState.months = Array.from(new Set(mcState.events.map(e => e.date.slice(0, 7)))).sort();
+    mcMergeEvents();
     mcState.loaded = true;
   } catch (e) {
     mcState.loaded = false;
@@ -7525,14 +7661,41 @@ function renderMarketCalendar() {
       mcRenderHours();
       mcRenderGrid();
       mcRenderDay();
+      mcSyncMyEarnings();
       return;
     }
     mcRenderHours();
+    mcSyncMyEarnings();
     return;
   }
   const grid = $('#mc-grid');
   if (grid) grid.innerHTML = '<div class="mc-empty" style="grid-column:1/-1;border:none">일정을 불러오는 중…</div>';
-  loadMarketCalendar().then(() => { if (mcState.loaded) mcRenderAll(); });
+  loadMarketCalendar().then(() => {
+    if (!mcState.loaded) return;
+    mcRenderAll();
+    mcSyncMyEarnings();
+  });
+}
+
+// 보유 종목 실적은 외부 조회라 느릴 수 있다. 큐레이션 일정을 먼저 그려두고,
+// 도착하면 보던 달을 유지한 채 달력·상세만 다시 그린다.
+function mcSyncMyEarnings() {
+  const beforeMonths = mcState.months.slice();
+  const curYm = mcState.months[mcState.monthIdx] || null;
+  const beforeIds = mcState.mine.map(e => e.id + '@' + e.date).join(',');
+  loadMyEarnings().then(() => {
+    if (!mcState.loaded) return;
+    if (mcState.mine.map(e => e.id + '@' + e.date).join(',') === beforeIds
+      && mcState.months.join(',') === beforeMonths.join(',')) return;   // 달라진 게 없으면 재렌더 생략
+    // 실적일이 기존에 없던 달에 있으면 months 가 늘어난다 — 보던 달의 인덱스를 다시 찾는다.
+    const idx = curYm ? mcState.months.indexOf(curYm) : -1;
+    mcState.monthIdx = idx >= 0 ? idx : mcPickInitialMonth();
+    mcRenderHours();
+    mcRenderMonth();
+    // 아코디언(★★★ 전용)에는 ★★ 인 보유 종목 실적이 들어가지 않지만,
+    // 달 범위가 바뀌면 "N월 ~ M월 한눈에" 제목이 달라지므로 그때만 다시 그린다.
+    if (mcState.months.join(',') !== beforeMonths.join(',')) mcRenderMonths();
+  });
 }
 
 // 오늘이 포함된 달을 기본으로 열되, 데이터 범위를 벗어나면 가장 가까운 달로.
@@ -7605,6 +7768,7 @@ function mcEvCard(e, hl) {
     + (e.time ? `<div class="mc-tm">${esc(e.time)}</div>` : '')
     + `</div>`
     + `<div class="mc-body"><div class="mc-name">${esc(e.title)}`
+    + (e.mine ? ' <span class="mc-badge mc-b-mine">보유</span>' : '')
     + (e.est ? ' <span class="mc-badge mc-b-est">예상</span>' : '')
     + `</div>`
     + `<div class="mc-badges">${mcStarsHtml(e.imp)}${mcImpactHtml(e.impact)}<span class="mc-badge mc-b-cat">${esc(e.cat)}</span></div>`

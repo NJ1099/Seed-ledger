@@ -3853,6 +3853,8 @@ main {
 .mc-b-low  { background: var(--surface-3);   color: var(--ink-3); }
 .mc-b-cat  { background: var(--surface-3);   color: var(--ink-2); }
 .mc-b-est  { background: transparent; border: 1px solid var(--ink-5); color: var(--ink-3); }
+/* 보유 중인 종목의 실적 — '실적' 카테고리 색(accent)과 같은 계열로 묶어 표시 */
+.mc-b-mine { background: var(--accent-soft); color: var(--accent-ink); }
 .mc-ev .mc-desc { margin: 8px 0 0; font-size: 13px; line-height: 1.65; color: var(--ink-2); }
 .mc-ev .mc-us   { margin: 4px 0 0; font-size: 11.5px; color: var(--ink-4); }
 
