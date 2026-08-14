@@ -61,18 +61,23 @@ const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
 
 // 캔버스를 화면 밀도(DPR)에 맞춰 확대해서 그리도록 준비한다.
 // 이 처리가 없으면 레티나·고해상도 폰에서 도넛과 글자가 뭉개져 보인다.
-// 반환값은 그리기에 쓸 논리 크기(CSS 픽셀).
-function setupCanvasDPR(canvas, ctx, fallbackW, fallbackH) {
+//
+// cssW/cssH 는 이 캔버스가 차지할 논리 크기(CSS 픽셀)로, 호출부가 고정값을 준다.
+// clientWidth 를 매번 다시 재면 안 된다 — CSS 로 크기를 고정하지 않은 캔버스는
+// width 속성이 곧 레이아웃 크기라서 clientWidth -> canvas.width -> clientWidth 가 물려
+// 렌더할 때마다 dpr 배씩 커진다(자산 구성 도넛이 실제로 계속 커졌다).
+// style.width/height 로 논리 크기를 못박아 그 고리를 끊는다.
+function setupCanvasDPR(canvas, ctx, cssW, cssH) {
   const dpr = window.devicePixelRatio || 1;
-  const W = canvas.clientWidth || fallbackW;
-  const H = canvas.clientHeight || fallbackH;
-  const pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+  canvas.style.width = cssW + 'px';
+  canvas.style.height = cssH + 'px';
+  const pw = Math.round(cssW * dpr), ph = Math.round(cssH * dpr);
   if (canvas.width !== pw || canvas.height !== ph) {
     canvas.width = pw;
     canvas.height = ph;
   }
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  return { W, H };
+  return { W: cssW, H: cssH };
 }
 function fmtKRW(n) {
   if (n == null || !isFinite(n)) return '—';

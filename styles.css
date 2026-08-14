@@ -484,6 +484,9 @@ main {
   display: grid;
   grid-template-columns: 1.1fr 1.4fr 1fr;
   gap: 14px;
+  /* 카드마다 필요한 만큼만 높이를 갖는다. stretch 로 두면 포트폴리오 목록이 길어질 때
+     도넛·추이 카드까지 같이 늘어나 아래쪽이 빈 공간이 된다. */
+  align-items: start;
 }
 .dash-card {
   background: var(--surface);
@@ -792,7 +795,9 @@ main {
   align-items: center;
   gap: 16px;
 }
-.dash-donut canvas { flex-shrink: 0; }
+/* 캔버스 크기를 CSS 로도 못박는다. 이 지정이 없으면 width 속성이 곧 레이아웃 크기가 되어,
+   DPR 스케일링과 물려 렌더할 때마다 도넛이 계속 커진다(app.js setupCanvasDPR 주석 참조). */
+.dash-donut canvas { flex-shrink: 0; width: 200px; height: 200px; }
 .alloc-legend {
   display: flex;
   flex-direction: column;
@@ -822,7 +827,9 @@ main {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 240px;
+  /* 240px 이면 종목 7개 정도만 보여서 계속 스크롤해야 했다.
+     화면 높이에 따라 늘어나되 너무 길어지지는 않게 잡는다. */
+  max-height: min(460px, 52vh);
   overflow-y: auto;
 }
 .pf-row {
@@ -4007,8 +4014,8 @@ main {
 }
 
 /* ============ BOTTOM NAV (mobile) ============
-   ≤768px 에서만 body 하단에 고정. 5칸 grid 의 가운데 슬롯은 비워두고
-   FAB(텔레그램) 가 absolute 로 들어가 약간 떠 보이게 한다. iOS 안전영역 보정. */
+   ≤768px 에서만 body 하단에 고정. 메뉴 5개를 균등 배분하고,
+   텔레그램 버튼은 탭바 위 오른쪽에 떠 있게 한다. iOS 안전영역 보정. */
 .bottom-nav { display: none; }
 
 @media (max-width: 768px) {
@@ -4021,8 +4028,9 @@ main {
 
   .bottom-nav {
     display: grid;
-    /* 좌 3칸(대시보드·주식·캘린더) + FAB 슬롯 + 우 2칸(소비·그래프) */
-    grid-template-columns: 1fr 1fr 1fr 72px 1fr 1fr;
+    /* 메뉴 5개를 균등 배분한다. 예전에는 가운데에 FAB 슬롯(72px)이 끼어 있어
+       좌 3칸 / 우 2칸으로 폭이 어긋나 있었다. FAB 는 탭바 위로 띄운다. */
+    grid-template-columns: repeat(5, 1fr);
     position: fixed;
     left: 0; right: 0; bottom: 0;
     height: 64px;
@@ -4051,20 +4059,16 @@ main {
   .bn-tab.active { color: var(--accent); }
   .bn-tab:active { transform: scale(0.96); }
 
-  /* 사이드바는 모바일에서 이미 다른 미디어 쿼리로 숨겨져 있을 수 있으나,
-     혹시 보이고 있다면 bottom-nav 와 함께 떠 있어 혼란을 주므로 명시적으로 처리.
-     기존 미디어 쿼리에서 sidebar 가 표시되고 있다면 이 규칙은 무시됨. */
-  .bn-fab-slot { /* 가운데 빈 슬롯 — FAB 가 absolute 로 자리잡음 */ }
-
+  /* 텔레그램 동기화 버튼 — 탭바 가운데를 비집고 들어가는 대신,
+     탭바 바로 위 오른쪽에 떠 있게 한다. 메뉴 5개는 아래에서 균등하게 유지된다. */
   .bn-fab {
-    position: absolute;
-    left: 50%;
-    top: -22px;
-    transform: translateX(-50%);
-    width: 64px;
-    height: 64px;
+    position: fixed;
+    right: 16px;
+    bottom: calc(64px + env(safe-area-inset-bottom, 0px) + 14px);
+    width: 56px;
+    height: 56px;
     border-radius: 50%;
-    border: 4px solid var(--bg, var(--surface));
+    border: 0;
     background: linear-gradient(135deg, #229ED9 0%, #1E88C8 100%); /* 텔레그램 톤 */
     color: #fff;
     cursor: pointer;
@@ -4074,10 +4078,10 @@ main {
     justify-content: center;
     transition: transform 120ms ease, box-shadow 120ms ease;
   }
-  .bn-fab .bn-fab-ico { font-size: 26px; line-height: 1; }
+  .bn-fab .bn-fab-ico { font-size: 24px; line-height: 1; }
   /* FAB 텔레그램 종이비행기 SVG — currentColor(흰색) */
-  .bn-fab .bn-fab-ico .tg-glyph { width: 30px; height: 30px; display: block; }
-  .bn-fab:active { transform: translateX(-50%) scale(0.94); }
+  .bn-fab .bn-fab-ico .tg-glyph { width: 26px; height: 26px; display: block; }
+  .bn-fab:active { transform: scale(0.94); }
   .bn-fab.bn-fab-busy {
     pointer-events: none;
     opacity: 0.7;

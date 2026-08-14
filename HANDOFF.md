@@ -122,10 +122,39 @@ GET .../marketValue?page=1&pageSize=500
 
 **휴장일과 CPI·고용보고서 2027 일정은 넣지 않았다** — KRX·BLS 공식 발표 전이라 추측이 되기 때문. 백로그 3번 참조.
 
+### 배포 완료 (2026-08-14)
+
+- 모노repo `NJ1099/AI` — `6328ea2` + `e19a117`(리뷰 반영), origin 푸시 완료
+- 배포 repo `NJ1099/Seed-ledger` — `7a6e23c`, `db0de0f..7a6e23c` 푸시 → Render 자동 배포
+- 배포 전 **역방향 diff 수행** — 배포 repo 전용 변경 없음을 확인하고 복사(라운드 23 사고 절차 준수). 다만 `HANDOFF.md` 는 그 검사 목록에 없어서 라운드 26 시점에 머물러 있었고, 이번에 라운드 27~29 를 한꺼번에 동기화했다. **다음부터는 역방향 diff 목록에 `HANDOFF.md` 도 넣을 것.**
+- **프로덕션 실측 확인 완료**(이번엔 1차 시도에 반영됨 — 라운드 28 의 "2회는 구버전" 과 달랐다):
+  - `/api/market-calendar` → events 39건, 2027 FOMC 8건 조회됨
+  - `/server.js` `/package.json` `/HANDOFF.md` → **404**(화이트리스트 적용 확인)
+  - `/` `/app.js` `/styles.css` `/healthz` → 200
+
+### 라운드 29-1: 배포 후 사용자 확인에서 나온 수정 3건 (2026-08-15)
+
+사용자: "자산 구성 원 그래프가 계속 커지고, 포트폴리오 목록도 좁아서 스크롤을 오래 해야 된다. 모바일 메뉴는 텔레그램 버튼을 메뉴 위 오른쪽에 두고 5개를 정돈해달라."
+
+**① 도넛이 계속 커진 것 — 라운드 29 가 낸 회귀다.**
+`setupCanvasDPR` 이 매 렌더마다 `clientWidth` 를 다시 읽어 `canvas.width` 에 넣었다. `#alloc-donut` 은 `.donut-wrap` **밖**(`.dd-wrap` 안)이라 CSS 크기 고정이 없었고, 캔버스는 CSS 크기 지정이 없으면 **`width` 속성이 곧 레이아웃 크기**가 된다. 그래서 `clientWidth → canvas.width → clientWidth` 가 물려 15초 폴링마다 dpr 배씩 커졌다(dpr 1.25 기준 200 → 250 → 312 → 390 …). `#donut`(소비)은 `.donut-wrap canvas` 가 `!important` 로 240px 고정이라 무사했다.
+
+- 논리 크기를 **호출부가 고정값으로 주고**, `style.width/height` 로 못박아 고리를 끊었다
+- `.dash-donut canvas` 에 CSS 크기도 명시(이중 방어)
+- 스텁 하네스로 8회 렌더 검증 — dpr 1.25 에서 250px 고정
+
+> **교훈**: 캔버스 DPR 스케일링에서 `clientWidth` 를 매 프레임 다시 재면 안 된다. CSS 가 크기를 고정하지 않은 캔버스에서는 자기 자신을 되먹임한다.
+
+**② 포트폴리오 목록** — `.pf-table max-height: 240px` 라 종목 7개 정도만 보였다. `min(460px, 52vh)` 로 확대. 더불어 `.dash-split` 이 `stretch` 라 목록이 길어지면 도넛·추이 카드까지 같이 늘어나 아래가 비었다 → `align-items: start`.
+
+**③ 모바일 하단 메뉴** — 그리드가 `1fr 1fr 1fr 72px 1fr 1fr` 이라 가운데 FAB 슬롯 때문에 좌 3칸 / 우 2칸으로 폭이 어긋나 있었다 → `repeat(5, 1fr)` 균등. 텔레그램 버튼은 탭바 위 오른쪽 플로팅(`fixed`, `right:16px`, 탭바 위 14px)으로 옮기고 64 → 56px. 빈 슬롯 `div` 제거.
+
+> FAB 는 `.bottom-nav` **안에** 둔 채 `position: fixed` 로 띄웠다. 밖으로 빼면 데스크톱(`.bottom-nav { display:none }`)에서 버튼만 남아 떠 버린다.
+
 ### 남은 것 / 다음 세션 주의
 
 - **`PUBLIC_FILES` 등록을 잊지 말 것.** 정적 자산(아이콘·폰트·이미지)을 추가하면 화이트리스트에도 넣어야 한다.
-- **UI 는 실제 브라우저로 확인하지 못했다.** Chrome 확장이 연결되지 않았고 playwright MCP 도 죽어 있었다. 코드·API 레벨 검증(정적 차단, 캐시, 문법, CSS 변수 전수, DOM ID 대조)만 마쳤다. **다음 세션에서 실제 화면 확인 필요** — 특히 모바일 폭(≤480px)의 `.tx-row`, 모달 z-index, 도넛 DPR.
+- ~~UI 는 실제 브라우저로 확인하지 못했다~~ → 사용자가 확인해 라운드 29-1 에서 3건 수정. **여전히 직접 확인이 안 된 것**: 모바일 폭(≤480px)의 `.tx-row`, 모달 z-index, 도넛 선명도.<br>원래 메모: Chrome 확장이 연결되지 않았고 playwright MCP 도 죽어 있었다. 코드·API 레벨 검증(정적 차단, 캐시, 문법, CSS 변수 전수, DOM ID 대조)만 마쳤다. **다음 세션에서 실제 화면 확인 필요** — 특히 모바일 폭(≤480px)의 `.tx-row`, 모달 z-index, 도넛 DPR.
 - `handleQuotes` ↔ `autoPollQuotes` 의 85줄 중복은 그대로 남아 있다(한쪽만 고치면 조용히 불일치). HTTP 클라이언트 래퍼도 11종 중복.
 - `server.js` 4,900줄 단일 파일 · `app.js` 8,000줄 IIFE — 모듈 분리는 손대지 않았다.
 - `alert()` 45회 / `confirm()` 12회 — 토스트 시스템이 없어 모든 피드백이 네이티브 모달이다.
