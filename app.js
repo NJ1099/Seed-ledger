@@ -31,6 +31,7 @@ const state = {
   sidecarTimer: null,        // 사이드카 배지 폴링 타이머
   stockSearchDebounce: null,  // 종목 검색 디바운스 핸들
   pensionDays: 30,            // 국민연금 매수/매도 표 조회 기간 (일)
+  krxPensionDays: 30,         // KRX 연기금 일별 매매 조회 기간 (일). 기본 버튼과 같은 값으로 둔다
   flowsDays: 30,              // 연기금·외국인 순매수/순매도 조회 기간 (일)
   flowsNextRefreshAt: 0,      // 다음 자동 갱신 예정 시각 (ms)
   flowsTicker: null,          // 카운트다운/자동 갱신 1분 틱 타이머
@@ -57,6 +58,22 @@ const API = {
 // ---------- 유틸 ----------
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => Array.from(el.querySelectorAll(sel));
+
+// 캔버스를 화면 밀도(DPR)에 맞춰 확대해서 그리도록 준비한다.
+// 이 처리가 없으면 레티나·고해상도 폰에서 도넛과 글자가 뭉개져 보인다.
+// 반환값은 그리기에 쓸 논리 크기(CSS 픽셀).
+function setupCanvasDPR(canvas, ctx, fallbackW, fallbackH) {
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth || fallbackW;
+  const H = canvas.clientHeight || fallbackH;
+  const pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+  if (canvas.width !== pw || canvas.height !== ph) {
+    canvas.width = pw;
+    canvas.height = ph;
+  }
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  return { W, H };
+}
 function fmtKRW(n) {
   if (n == null || !isFinite(n)) return '—';
   return '₩ ' + Math.round(n).toLocaleString('ko-KR');
@@ -1660,7 +1677,7 @@ function renderAllocationDonut() {
   const canvas = document.getElementById('alloc-donut');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
+  const { W, H } = setupCanvasDPR(canvas, ctx, 200, 200);
   ctx.clearRect(0, 0, W, H);
   const cx = W / 2, cy = H / 2;
   const rOuter = Math.min(W, H) / 2 - 8;
@@ -1673,8 +1690,8 @@ function renderAllocationDonut() {
   }
   const total = data.reduce((s, d) => s + d.v, 0);
   if (!total) {
-    ctx.fillStyle = '#a6aab2';
-    ctx.font = '11px "EB Garamond", serif';
+    ctx.fillStyle = '#B0B8C1';
+    ctx.font = '11px Pretendard, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('데이터 없음', cx, cy);
     return;
@@ -1692,12 +1709,12 @@ function renderAllocationDonut() {
   }
   // 중앙 총합
   ctx.fillStyle = '#1a1d22';
-  ctx.font = '500 15px "Inter Tight", sans-serif';
+  ctx.font = '600 15px Pretendard, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(fmtKRWShort(total), cx, cy - 4);
-  ctx.fillStyle = '#6f7480';
-  ctx.font = 'italic 11px "EB Garamond", serif';
+  ctx.fillStyle = '#8B95A1';
+  ctx.font = '11px Pretendard, system-ui, sans-serif';
   ctx.fillText('total', cx, cy + 12);
 
   // 레전드
@@ -2012,8 +2029,8 @@ function renderMiniSpark() {
   sparkState.recent = recent;
   const stat = document.getElementById('dt-stat');
   if (recent.length < 2) {
-    ctx.fillStyle = '#a6aab2';
-    ctx.font = 'italic 11px "EB Garamond", serif';
+    ctx.fillStyle = '#B0B8C1';
+    ctx.font = '11px Pretendard, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('스냅샷이 누적되면 표시됩니다', W / 2, H / 2);
     if (stat) stat.textContent = '—';
@@ -2854,7 +2871,7 @@ function drawDonut(byCat) {
   const canvas = $('#donut');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
+  const { W, H } = setupCanvasDPR(canvas, ctx, 240, 240);
   ctx.clearRect(0, 0, W, H);
 
   const entries = Object.entries(byCat).filter(([, v]) => v > 0);
@@ -2864,11 +2881,11 @@ function drawDonut(byCat) {
   const rI = rO - 32;
 
   if (!total) {
-    ctx.strokeStyle = '#E6E1D3';
+    ctx.strokeStyle = '#E5E8EB';
     ctx.lineWidth = 22;
     ctx.beginPath(); ctx.arc(cx, cy, (rO + rI) / 2, 0, Math.PI * 2); ctx.stroke();
-    ctx.fillStyle = '#a6aab2';
-    ctx.font = 'italic 14px "EB Garamond", serif';
+    ctx.fillStyle = '#B0B8C1';
+    ctx.font = '14px Pretendard, system-ui, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('이번 달 지출 없음', cx, cy + 4);
     return;
@@ -2893,11 +2910,11 @@ function drawDonut(byCat) {
 
   // 중앙 라벨
   ctx.fillStyle = '#111418';
-  ctx.font = '500 18px "Inter Tight", sans-serif';
+  ctx.font = '600 18px Pretendard, system-ui, sans-serif';
   ctx.textAlign = 'center';
   ctx.fillText(fmtKRWShort(total), cx, cy - 2);
-  ctx.font = 'italic 11px "EB Garamond", serif';
-  ctx.fillStyle = '#6f7480';
+  ctx.font = '11px Pretendard, system-ui, sans-serif';
+  ctx.fillStyle = '#8B95A1';
   ctx.fillText('총 지출', cx, cy + 16);
 
   const legend = $('#donut-legend');
@@ -3266,7 +3283,7 @@ function renderGraph() {
       if (!meta || !meta.data) return;
       ctx.save();
       ctx.font = '600 10px ui-sans-serif, -apple-system, "Segoe UI", sans-serif';
-      ctx.fillStyle = '#1F3A5F';
+      ctx.fillStyle = '#3182F6';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'bottom';
       meta.data.forEach((pt, i) => {
@@ -3285,7 +3302,7 @@ function renderGraph() {
         ctx.strokeStyle = 'rgba(31,58,95,0.18)';
         ctx.lineWidth = 0.5;
         ctx.strokeRect(x - w / 2, y - h, w, h);
-        ctx.fillStyle = '#1F3A5F';
+        ctx.fillStyle = '#3182F6';
         ctx.fillText(text, x, y - 2);
       });
       ctx.restore();
@@ -3299,13 +3316,13 @@ function renderGraph() {
       datasets: [{
         label: '총자산 (₩)',
         data: totals,
-        borderColor: '#1F3A5F',
+        borderColor: '#3182F6',
         backgroundColor: 'rgba(31,58,95,0.08)',
         borderWidth: 1.5,
         fill: true,
         tension: 0.25,
         pointRadius: (c) => showLabelAt(c.dataIndex) ? 3 : 0,
-        pointBackgroundColor: '#1F3A5F',
+        pointBackgroundColor: '#3182F6',
         pointHoverRadius: 5,
       }],
     },
@@ -3340,9 +3357,9 @@ function renderGraph() {
       },
       scales: {
         x: {
-          grid: { color: '#EAE5D8' },
+          grid: { color: '#E5E8EB' },
           ticks: {
-            color: '#6f7480', font: { size: 10 },
+            color: '#8B95A1', font: { size: 10 },
             // 7일 이하면 모든 날짜 표시. 그 이상은 Chart.js 자동 간격.
             autoSkip: labels.length > 14,
             maxRotation: 0,
@@ -3350,9 +3367,9 @@ function renderGraph() {
           },
         },
         y: {
-          grid: { color: '#EAE5D8' },
+          grid: { color: '#E5E8EB' },
           ticks: {
-            color: '#6f7480', font: { size: 10 },
+            color: '#8B95A1', font: { size: 10 },
             callback: (v) => fmtKRWShort(v),
           },
         },
@@ -3364,16 +3381,14 @@ function renderGraph() {
   // 스택 영역
   const ctx2 = $('#chart-stack').getContext('2d');
   if (state.charts.stack) state.charts.stack.destroy();
-  const stackColors = {
-    cash: '#a6aab2', savings: '#6f7480', deposit: '#2c4f7a',
-    stock_kr: '#1F3A5F', stock_us: '#3E6B3E', crypto: '#D4A017', realestate: '#B83227',
-  };
+  // 색은 TYPE_COLOR 하나만 쓴다. 예전에는 여기만 구 팔레트(네이비·베이지)를 따로 들고 있어서
+  // 같은 자산 유형이 대시보드 도넛과 이 스택 차트에서 서로 다른 색으로 보였다.
   const stackDatasets = TYPE_ORDER
     .filter(t => filtered.some(s => (s.breakdown?.[t] || 0) > 0))
     .map(t => ({
       label: TYPE_LABEL[t],
       data: filtered.map(s => s.breakdown?.[t] || 0),
-      backgroundColor: stackColors[t] || '#a6aab2',
+      backgroundColor: TYPE_COLOR[t] || TYPE_COLOR.custom,
       borderWidth: 0,
       fill: true,
     }));
@@ -3410,16 +3425,16 @@ function renderGraph() {
       },
       scales: {
         x: {
-          stacked: true, grid: { color: '#EAE5D8' },
+          stacked: true, grid: { color: '#E5E8EB' },
           ticks: {
-            color: '#6f7480', font: { size: 10 },
+            color: '#8B95A1', font: { size: 10 },
             autoSkip: labels.length > 14, maxRotation: 0, minRotation: 0,
           },
         },
         y: {
           stacked: true,
-          grid: { color: '#EAE5D8' },
-          ticks: { color: '#6f7480', font: { size: 10 }, callback: (v) => fmtKRWShort(v) },
+          grid: { color: '#E5E8EB' },
+          ticks: { color: '#8B95A1', font: { size: 10 }, callback: (v) => fmtKRWShort(v) },
         },
       },
       elements: { line: { tension: 0.2, borderWidth: 0 }, point: { radius: 0, hoverRadius: 4 } },
@@ -5071,10 +5086,17 @@ function buildAccountsFromCsv() {
 // ---------- 폴링 스케줄 ----------
 function schedulePolling() {
   const tick = async () => {
+    // 백그라운드 탭에서는 시세를 받아도 볼 사람이 없다.
+    // 예전에는 숨은 탭에서도 15초마다 요청 + 전체 렌더를 계속 돌렸다.
+    if (document.hidden) return;
     await refreshQuotes();
   };
   tick();
   setInterval(tick, 15_000);
+  // 탭으로 돌아오면 그동안 멈춰 있던 만큼 즉시 한 번 따라잡는다.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) tick();
+  });
 }
 
 // ---------- 진입 ----------
@@ -5649,7 +5671,24 @@ async function setupSync() {
   });
 }
 
+// .field 안의 라벨을 해당 입력과 연결한다.
+// 마크업에 id/for 가 하나도 없어서 라벨을 눌러도 포커스가 가지 않고,
+// 스크린리더가 "유형", "금액" 같은 필드 이름을 읽어주지 못했다.
+// (라벨이 입력을 감싸는 .field.cb 형태는 이미 연결돼 있으므로 건너뛴다)
+function wireFieldLabels(root = document) {
+  let seq = 0;
+  for (const field of root.querySelectorAll('.field')) {
+    const label = field.querySelector(':scope > label');
+    const input = field.querySelector('input, select, textarea');
+    if (!label || !input) continue;
+    if (label.hasAttribute('for') || label.contains(input)) continue;
+    if (!input.id) input.id = `fld-${input.name || 'x'}-${++seq}`;
+    label.setAttribute('for', input.id);
+  }
+}
+
 async function boot() {
+  wireFieldLabels();
   setupTabs();
   setupAccForm();
   setupTxForm();
@@ -6061,30 +6100,41 @@ function stockTimeAgo(iso) {
   return d.toLocaleDateString('ko-KR', { month: 'long', day: 'numeric' });
 }
 
+// 주식 탭을 마지막으로 불러온 시각. 탭 왕복 때마다 10개 API 를 다시 때리면
+// 화면이 매번 '불러오는 중…' 으로 되돌아가며 깜빡인다.
+let _stockLoadedAt = 0;
+const STOCK_RELOAD_MIN_GAP = 60 * 1000;
+
 function renderStock() {
-  // API 병렬 호출
   setupKimpToggle();
-  loadIndices();
-  loadSidecar();
-  loadCryptoIndicators();
-  loadNightFutures();
-  loadMovers();
-  loadNews();
-  loadNpsPortfolio();
-  loadKrxInvestorFlows();
-  loadKrxPensionTrading();
-  loadPensionFlows();
+  // 방금 불러온 직후 재진입이면 화면에 이미 있는 내용을 그대로 두고 타이머만 다시 건다.
+  const justLoaded = Date.now() - _stockLoadedAt < STOCK_RELOAD_MIN_GAP;
+  if (!justLoaded) {
+    _stockLoadedAt = Date.now();
+    // API 병렬 호출
+    loadIndices();
+    loadSidecar();
+    loadCryptoIndicators();
+    loadNightFutures();
+    loadMovers();
+    loadNews();
+    loadNpsPortfolio();
+    loadKrxInvestorFlows();
+    loadKrxPensionTrading();
+    loadPensionFlows();
+    const el = $('#stock-updated-at');
+    if (el) el.textContent = `${nowKSTDisplay()} 갱신`;
+  }
   setupFlowsRange();
   setupKrxPensionRange();
   setupPensionRange();
-  const el = $('#stock-updated-at');
-  if (el) el.textContent = `${nowKSTDisplay()} 갱신`;
   // 5분 폴링 (연기금은 24h TTL, hyperliquid 는 30s TTL — 같이 호출해도 캐시가 흡수)
   stopStockRefresh();
   // 사이드카 전용 60초 틱 (발동 시각 빠른 반영)
   state.sidecarTimer = setInterval(() => { if (state.tab === 'stock') loadSidecar(); }, 60 * 1000);
   state.stockRefreshTimer = setInterval(() => {
     if (state.tab === 'stock') {
+      _stockLoadedAt = Date.now();
       loadIndices();
       loadSidecar();
       loadCryptoIndicators();

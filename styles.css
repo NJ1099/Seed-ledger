@@ -63,10 +63,19 @@
   /* Layout */
   --sidebar-w: 220px;
   --topbar-h:  68px;
+
+  /* 보조 토큰 — 아래 5개는 코드에서 쓰이는데 정의가 빠져 있었다.
+     정의가 없으면 var() 를 쓴 선언이 통째로 무효화된다(테두리·배경이 사라짐). */
+  --bg-2:          #F4F5F7;   /* 모달 안쪽 보조 배경 */
+  --border-strong: #B0B8C1;   /* 입력창처럼 테두리를 또렷하게 보여야 하는 곳 */
+  --muted:         #6B7684;   /* 보조 텍스트. --ink-3 보다 진해서 본문 대비 기준을 만족한다 */
+  --accent-red:    #F04452;   /* = --danger. 예전 주사(#B83227) 잔재를 현재 팔레트로 통일 */
+  --steel:         #3182F6;   /* = --down. 예전 네이비 계열 잔재를 현재 팔레트로 통일 */
 }
 
-/* Pretendard webfont (self-contained via CDN) */
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css');
+/* Pretendard webfont 는 index.html 의 <link> 로 불러온다.
+   CSS 의 @import 는 @charset/@layer 를 뺀 모든 규칙보다 앞서야 유효한데,
+   여기(:root 뒤)에 있으면 브라우저가 통째로 무시해서 폰트가 전혀 로드되지 않았다. */
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
@@ -82,11 +91,29 @@ body {
 button { font-family: inherit; cursor: pointer; }
 input, select, textarea { font-family: inherit; }
 
+/* 보조 텍스트 유틸.
+   마크업에서 50곳 넘게 쓰는데 정의가 없어서, 제목 옆 부제(예: "— KRX 시장 전체")가
+   제목과 완전히 같은 크기·굵기로 나오고 있었다. */
+.muted { color: var(--muted); font-weight: 400; }
+.small { font-size: 12px; }
+
+/* 모션 최소화 설정을 존중한다. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* ============ APP SHELL ============ */
 .app {
   display: grid;
   grid-template-columns: var(--sidebar-w) 1fr;
+  /* dvh 는 모바일 주소창이 접혔다 펴져도 높이가 튀지 않는다. 미지원 브라우저는 위 vh 로 폴백. */
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 .sidebar {
@@ -96,6 +123,7 @@ input, select, textarea { font-family: inherit; }
   position: sticky;
   top: 0;
   height: 100vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   gap: 22px;
@@ -283,7 +311,8 @@ input, select, textarea { font-family: inherit; }
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 5;
+  /* 자산 액션바(sticky, z-index 5)와 같은 값이면 스크롤 시 상단바 위로 겹쳐 그려진다. */
+  z-index: 6;
 }
 
 .ticker-strip {
@@ -383,7 +412,10 @@ input, select, textarea { font-family: inherit; }
 main {
   padding: 28px 32px 80px;
   min-height: calc(100vh - var(--topbar-h));
-  overflow-x: hidden;
+  min-height: calc(100dvh - var(--topbar-h));
+  /* clip 대신 hidden 을 쓰면 overflow-y 가 auto 로 계산되어 main 이 스크롤 컨테이너가 되고,
+     그 안의 position:sticky(자산 액션바)가 전부 무력화된다. */
+  overflow-x: clip;
 }
 .panel {
   animation: fade 180ms ease;
@@ -1162,8 +1194,9 @@ main {
 }
 .field.grow { grid-column: span 2; }
 .field label {
-  font-size: 11.5px;
-  color: var(--ink-3);
+  font-size: 12px;
+  /* --ink-3(#8B95A1)은 흰 배경 대비 3:1 로, 11.5px 라벨에 쓰면 읽기 어렵다. */
+  color: var(--ink-2);
   font-weight: 500;
 }
 .field input,
@@ -1188,7 +1221,7 @@ main {
   background: var(--surface);
   box-shadow: 0 0 0 3px rgba(49, 130, 246, 0.15);
 }
-.field input::placeholder { color: var(--ink-4); }
+.field input::placeholder { color: var(--ink-3); }
 .field.cb, .cb {
   display: flex;
   align-items: center;
@@ -1720,12 +1753,17 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
+  /* 기본은 보이게 둔다. 터치 기기에는 hover 가 없어서, 예전처럼 opacity:0 으로 시작하면
+     거래를 수정할 방법 자체가 사라진다. 숨김 연출은 hover 가 있는 기기에서만. */
+  opacity: 1;
   cursor: pointer;
   transition: opacity 120ms, background-color 120ms, color 120ms;
 }
-.tx-row:hover .tx-edit,
-.tx-row.editing .tx-edit { opacity: 1; }
+@media (hover: hover) {
+  .tx-row .tx-edit { opacity: 0; }
+  .tx-row:hover .tx-edit,
+  .tx-row.editing .tx-edit { opacity: 1; }
+}
 .tx-row .tx-edit:hover { background: var(--accent-soft); color: var(--accent, #3182F6); }
 
 /* 일괄 삭제 바 */
@@ -1894,10 +1932,14 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  opacity: 0;
+  /* tx-edit 과 같은 이유로 기본 노출. 숨김은 hover 가 있는 기기에서만. */
+  opacity: 1;
   transition: opacity 120ms, background-color 120ms, color 120ms;
 }
-.tx-row:hover .del { opacity: 1; }
+@media (hover: hover) {
+  .tx-row .del { opacity: 0; }
+  .tx-row:hover .del { opacity: 1; }
+}
 .tx-row .del:hover { background: var(--up-soft); color: var(--up); }
 .tx-empty {
   color: var(--ink-3);
@@ -2000,7 +2042,9 @@ main {
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 50;
+  /* 모바일 하단 탭바(z-index 80)보다 위에 있어야 한다.
+     예전에는 50 이라 모달을 열면 탭바와 텔레그램 버튼이 모달 위를 덮었다. */
+  z-index: 1000;
   padding: 20px;
   animation: fade 150ms ease;
 }
@@ -2448,7 +2492,7 @@ main {
   transition: border-color 120ms ease;
 }
 .sync-confirm-input:focus { border-color: var(--accent); }
-.sync-confirm-input::placeholder { color: var(--ink-5); letter-spacing: .25em; }
+.sync-confirm-input::placeholder { color: var(--ink-4); letter-spacing: .25em; }
 .sync-confirm-expires { font-size: 11.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .sync-confirm-error {
   font-size: 12.5px;
@@ -2469,6 +2513,9 @@ main {
   margin-bottom: 14px;
   max-height: 360px;
   overflow-y: auto;
+  /* 5열 표 전체가 nowrap 이라 좁은 화면에서는 가로로 넘친다. 잘리는 대신 스크롤되게 한다. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .graph-table-head {
   display: flex;
@@ -2770,7 +2817,7 @@ main {
   transition: border-color 160ms, box-shadow 160ms;
   box-sizing: border-box;
 }
-.stock-search input::placeholder { color: var(--ink-4); }
+.stock-search input::placeholder { color: var(--ink-3); }
 .stock-search input:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
@@ -3084,7 +3131,9 @@ main {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--r-md);
-  overflow: hidden;
+  /* hidden 이면 좁은 화면에서 표 오른쪽이 잘린 채 스크롤조차 안 된다. */
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   box-shadow: var(--shadow-sm);
 }
 .pension-source {
@@ -3167,7 +3216,7 @@ main {
   font-size: 11.5px;
   color: var(--ink-3);
 }
-.krx-pension-wrap { display: block; }
+.krx-pension-wrap { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .krx-pension-summary { margin-bottom: 16px; }
 .krx-pension-chart-wrap {
   background: var(--surface);
@@ -4033,4 +4082,48 @@ main {
     pointer-events: none;
     opacity: 0.7;
   }
+}
+
+/* ============ 터치 기기 · 좁은 화면 보정 ============ */
+/* 마우스 환경의 밀도는 그대로 두고, 손가락으로 쓸 때만 적용되는 보정이다. */
+@media (pointer: coarse) {
+  /* iOS Safari 는 16px 미만 입력에 포커스하면 화면을 자동으로 확대한다.
+     확대된 화면은 사용자가 손으로 되돌려야 해서, 입력할 때마다 화면이 튀는 느낌을 준다. */
+  .field input,
+  .field select,
+  .tx-search input,
+  .holdings-editor input { font-size: 16px; }
+
+  /* 손가락이 누를 수 있는 최소 크기 확보 (기존 22~30px 은 조준이 어렵다) */
+  .tx-row { grid-template-columns: 22px 82px 72px minmax(0,1fr) auto 32px 32px; }
+  .tx-row .tx-edit,
+  .tx-row .del { width: 32px; height: 32px; }
+  .btn-xs { min-height: 32px; padding-left: 10px; padding-right: 10px; }
+  .cal-nav,
+  .cal-today,
+  .chart-ranges .chip,
+  .pr-btn,
+  .mt-btn { min-height: 34px; }
+  .modal-x { width: 40px; height: 40px; }
+  .he-del,
+  .mc-navbtn,
+  .mc-todaybtn { min-width: 36px; min-height: 36px; }
+  .welcome-banner-link,
+  .welcome-banner-dismiss,
+  .foot-link,
+  .linklike { display: inline-block; padding: 6px 2px; }
+}
+
+@media (max-width: 480px) {
+  /* 거래 행은 7열 그리드라 고정폭 합계가 360px 폰 너비를 넘겼다.
+     간격과 고정폭을 줄여 가로 잘림 없이 한 줄에 들어오게 한다. */
+  .tx-row {
+    grid-template-columns: 20px 60px 54px minmax(0,1fr) auto 30px 30px;
+    gap: 6px;
+    padding: 12px 12px;
+  }
+  /* 좌우 2열 고정이라 종목명이 극단적으로 잘렸다. 폰에서는 세로로 쌓는다. */
+  .flow-cols { grid-template-columns: 1fr; }
+  /* 도넛 캔버스가 240px 고정이라 여백까지 더하면 넘치는 경우가 있었다. */
+  .donut-wrap canvas { width: 200px !important; height: 200px !important; }
 }

@@ -6,7 +6,7 @@ yarn-error.log*
 # 서버 런타임 산출물 (배포 후 자동 생성). 커밋하지 않는다.
 data/logs/
 data/quote-cache.json
-data/quote-cache.json.tmp
+data/*.tmp
 data/stock-master.json
 data/dart-corpcodes.json
 data/*.corrupt-*.bak

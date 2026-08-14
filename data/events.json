@@ -1,52 +1,16 @@
 {
   "version": 2,
-  "updatedAt": "2026-07-20T22:17:21+09:00",
+  "updatedAt": "2026-08-14T23:32:40+09:00",
   "source": "toss-invest-ai-key-events",
   "events": [
     {
-      "id": "ev-20260723-krgdpaeci",
-      "date": "2026-07-23",
-      "title": "경제성장률 발표(속보치) (08:00 KST)",
-      "category": "economic",
-      "importance": "high",
-      "tag": "KR",
-      "note": "이전 3.8 %"
-    },
-    {
-      "id": "ev-20260723-usjobeci",
-      "date": "2026-07-23",
-      "title": "신규 실업수당 청구건수 (21:30 KST)",
-      "category": "economic",
-      "importance": "high",
-      "tag": "US",
-      "note": "이전 208 만 명"
-    },
-    {
-      "id": "ev-20260723-kr207940",
-      "date": "2026-07-23",
-      "title": "삼성바이오로직스 실적 발표 (발표 전)",
+      "id": "ev-20260814-usnas000c7re",
+      "date": "2026-08-14",
+      "title": "어플라이드 머티리얼즈 실적 발표 (오전 5시 이후)",
       "category": "earnings",
       "importance": "critical",
       "tag": "실적",
-      "note": "영업이익 예상 5,982억 · 매출 예상 1조 3,231억"
-    },
-    {
-      "id": "ev-20260723-usnas006xy7e",
-      "date": "2026-07-23",
-      "title": "테슬라 실적 발표 (오전 5시 이후)",
-      "category": "earnings",
-      "importance": "critical",
-      "tag": "실적",
-      "note": ""
-    },
-    {
-      "id": "ev-20260724-usnas000n01e",
-      "date": "2026-07-24",
-      "title": "인텔 실적 발표 (오전 5시 이후)",
-      "category": "earnings",
-      "importance": "critical",
-      "tag": "실적",
-      "note": ""
+      "note": "매출 예상 90억"
     }
   ]
 }

@@ -153,6 +153,16 @@ function nowKST() {
 
 // ---------- 보안 가드 ----------
 const SAFE_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+// 정적 서빙 화이트리스트. 여기 등록된 경로만 브라우저로 나간다.
+// 예전에는 루트 하위 아무 파일이나 서빙해서 /.env(실제 API 키 포함) · /HANDOFF.md ·
+// /server.js 가 그대로 노출됐다. 새 정적 자산을 추가하면 반드시 이 목록에도 등록할 것.
+const PUBLIC_FILES = new Set([
+  '/index.html',
+  '/app.js',
+  '/styles.css',
+  '/favicon.ico',
+]);
 const SAFE_TICKER_RE = /^[A-Za-z0-9.^_=-]{1,20}$/;
 
 // ---------- 이벤트 스키마 (읽기 전용이지만 응답 정규화용) ----------
@@ -162,7 +172,7 @@ function inferCategory(e) {
   return 'economic';
 }
 
-// \uAC19\uC740 \uC190\uC0C1 \uD30C\uC77C\uC5D0 \uB300\uD574 \uBC31\uC5C5\uBCF8\uC774 \uBB34\uD55C \uB204\uC801\uB418\uC9C0 \uC54A\uB3C4\uB85D (mtime, size) \uC11C\uBA85\uC744 \uAE30\uC5B5\uD55C\uB2E4.
+// 같은 손상 파일에 대해 백업본이 무한 누적되지 않도록 (mtime, size) 서명을 기억한다.
 const __corruptBackedUp = new Map();
 
 function readJSON(file, fallback) {
@@ -170,7 +180,7 @@ function readJSON(file, fallback) {
     if (!fs.existsSync(file)) return fallback;
     const raw = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
     const parsed = JSON.parse(raw);
-    __corruptBackedUp.delete(file);   // \uC815\uC0C1 \uBCF5\uAD6C\uB418\uBA74 \uBC31\uC5C5 \uC774\uB825\uC744 \uC9C0\uC6B4\uB2E4
+    __corruptBackedUp.delete(file);   // 정상 복구되면 백업 이력을 지운다
     return parsed;
   } catch (e) {
     try {
@@ -185,10 +195,62 @@ function readJSON(file, fallback) {
     return fallback;
   }
 }
-function writeJSON(file, obj) {
-  const tmp = file + '.tmp';
-  fs.writeFileSync(tmp, JSON.stringify(obj, null, 2), 'utf8');
-  fs.renameSync(tmp, file);
+function writeJSON(file, obj, opts = {}) {
+  // tmp 이름이 고정이면 동시 쓰기 때 두 writer 가 같은 임시파일을 밟아 결과가 깨진다.
+  // (data/*.corrupt-*.bak 이 쌓인 원인) — 프로세스·랜덤 접미사로 충돌을 없앤다.
+  const tmp = `${file}.${process.pid}.${crypto.randomBytes(4).toString('hex')}.tmp`;
+  const json = opts.compact ? JSON.stringify(obj) : JSON.stringify(obj, null, 2);
+  try {
+    fs.writeFileSync(tmp, json, 'utf8');
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    try { fs.unlinkSync(tmp); } catch {}
+    throw e;
+  }
+}
+
+// ---------- quote-cache 정리 ----------
+// 예전에는 만료 엔트리를 지우는 코드가 없어서 __search:<사용자입력> · __news:<사용자입력> 처럼
+// 요청마다 새로 생기는 키가 파일에 영구 누적됐다(디스크 고갈 + 매 요청 전체 재직렬화).
+const QUOTE_ENTRY_MAX_AGE = 7 * 24 * 60 * 60 * 1000;   // 시세 엔트리 보관 한도
+// __ 주식탭 캐시는 종류마다 TTL 이 다르다(연기금 __pension: 은 24h, __nps: 는 6h).
+// 실제 TTL 보다 짧게 지우면 DART·KRX 를 쓸데없이 다시 호출하게 되므로 가장 긴 TTL + 여유로 잡는다.
+const STOCK_TAB_MAX_AGE   = 48 * 60 * 60 * 1000;
+// 다만 __search:<입력> · __news:<입력> 은 사용자 입력마다 새 키가 생겨 무한히 늘어난다.
+// 애초에 이 정리 로직을 넣은 이유가 이 두 종류이므로 짧게 유지한다(실제 TTL 은 60초·300초).
+const USER_QUERY_MAX_AGE  = 6 * 60 * 60 * 1000;
+const QUOTE_CACHE_MAX_KEYS = 800;
+
+// 키 종류별 보관 한도
+function quoteEntryMaxAge(key) {
+  if (!key.startsWith('__')) return QUOTE_ENTRY_MAX_AGE;
+  if (/^__(search|news):/.test(key)) return USER_QUERY_MAX_AGE;
+  return STOCK_TAB_MAX_AGE;
+}
+
+function quoteEntryTs(key, v) {
+  if (!v || typeof v !== 'object') return 0;
+  if (key.startsWith('__')) return Number(v._ts) || 0;
+  return v.ts ? new Date(v.ts).getTime() : 0;
+}
+
+// cache.quotes 에서 만료 엔트리를 제거한다. 지운 개수를 반환.
+function pruneQuoteCache(cache) {
+  const quotes = cache && cache.quotes;
+  if (!quotes || typeof quotes !== 'object') return 0;
+  const now = Date.now();
+  let removed = 0;
+  for (const [k, v] of Object.entries(quotes)) {
+    const ts = quoteEntryTs(k, v);
+    if (!Number.isFinite(ts) || ts <= 0 || (now - ts) > quoteEntryMaxAge(k)) { delete quotes[k]; removed++; }
+  }
+  // 그래도 많으면 오래된 순으로 잘라낸다. 잘려도 다음 조회 때 다시 채워지므로 무해.
+  const keys = Object.keys(quotes);
+  if (keys.length > QUOTE_CACHE_MAX_KEYS) {
+    keys.sort((a, b) => quoteEntryTs(a, quotes[a]) - quoteEntryTs(b, quotes[b]));
+    for (const k of keys.slice(0, keys.length - QUOTE_CACHE_MAX_KEYS)) { delete quotes[k]; removed++; }
+  }
+  return removed;
 }
 
 async function readBody(req, maxBytes = 2 * 1024 * 1024) {
@@ -399,7 +461,7 @@ function httpsGetBuffer(url, { timeoutMs = 6000, headers = {} } = {}) {
           let charset = (ct.match(/charset=([^;]+)/i) || [, ''])[1].trim().toLowerCase();
           if (!charset && buf.length) {
             // HTML <meta charset> 추정 (처음 1KB)
-            const head = buf.slice(0, 1024).toString('latin1');
+            const head = buf.subarray(0, 1024).toString('latin1');
             const m = head.match(/charset=([\w-]+)/i);
             if (m) charset = m[1].toLowerCase();
           }
@@ -801,7 +863,7 @@ function parseDartCorpCodes(buf) {
     if (s < 0) break;
     const e = buf.indexOf(CLOSE, s);
     if (e < 0) break;
-    const block = buf.slice(s + OPEN.length, e).toString('utf8');
+    const block = buf.subarray(s + OPEN.length, e).toString('utf8');
     pos = e + CLOSE.length;
     const stock = (block.match(/<stock_code>([^<]*)<\/stock_code>/) || [])[1];
     if (!stock || !/^\d{6}$/.test(stock.trim())) continue;   // 비상장사는 stock_code 가 공백
@@ -813,14 +875,14 @@ function parseDartCorpCodes(buf) {
 
 // 단일 파일 ZIP 해제 — DART 의 corpCode.xml·document.xml 이 둘 다 이 형식이다.
 function unzipSingleFile(buf) {
-  if (!buf || buf.length < 30 || buf.slice(0, 2).toString() !== 'PK') return null;
+  if (!buf || buf.length < 30 || buf.subarray(0, 2).toString() !== 'PK') return null;
   try {
     const method = buf.readUInt16LE(8);
     const nameLen = buf.readUInt16LE(26);
     const extraLen = buf.readUInt16LE(28);
     const start = 30 + nameLen + extraLen;
-    if (method === 0) return buf.slice(start);
-    return zlib.inflateRawSync(buf.slice(start));
+    if (method === 0) return buf.subarray(start);
+    return zlib.inflateRawSync(buf.subarray(start));
   } catch (e) {
     return null;
   }
@@ -1099,8 +1161,15 @@ async function handleQuotes(req, res) {
       cache.quotes[k] = v;
     }
   }
-  cache.updatedAt = nowKST();
-  writeJSON(QUOTE_CACHE_FILE, cache);
+  const fetched = Object.keys(upbitRes).length + Object.keys(naverRes).length + Object.keys(yahooRes).length;
+  const pruned = pruneQuoteCache(cache);
+  // 새로 받은 값도 없고 지운 것도 없으면 파일을 건드리지 않는다.
+  // (예전에는 캐시가 전부 fresh 한 요청에서도 매번 파일 전체를 다시 썼다)
+  if (fetched || pruned) {
+    cache.updatedAt = nowKST();
+    try { writeJSON(QUOTE_CACHE_FILE, cache, { compact: true }); }
+    catch (e) { logLine('error', 'quotes.cache.write', { err: String(e) }); }
+  }
 
   const out = {};
   for (const t of tickers) {
@@ -1125,7 +1194,7 @@ async function handleImportPdf(req, res) {
   if (!buffer || buffer.length < 100) {
     return reply(res, 400, { ok: false, error: '빈 요청 본문' });
   }
-  const magic = buffer.slice(0, 5).toString('latin1');
+  const magic = buffer.subarray(0, 5).toString('latin1');
   if (!magic.startsWith('%PDF-')) {
     return reply(res, 400, { ok: false, error: 'PDF 파일이 아닙니다 (헤더 불일치)' });
   }
@@ -1309,7 +1378,8 @@ function writeStockCacheKey(key, payload) {
   const cache = readStockCache();
   cache.quotes[key] = { _ts: Date.now(), payload };
   cache.updatedAt = nowKST();
-  try { writeJSON(QUOTE_CACHE_FILE, cache); } catch (e) {
+  pruneQuoteCache(cache);
+  try { writeJSON(QUOTE_CACHE_FILE, cache, { compact: true }); } catch (e) {
     logLine('warn', 'stock.cache.write', { key, err: String(e) });
   }
 }
@@ -1751,21 +1821,38 @@ const STOCK_MASTER_SEED = [
   { code: 'TSM',   name: 'TSMC (Taiwan Semi)', market: 'NYSE', type: 'stock_us' },
 ];
 
+// 네이버가 pageSize 상한을 100 으로 제한한다. 예전 코드는 500 을 한 번에 요청해서
+// 네 거래소 모두 400(getStockLists.pageSize: must be less than or equal to 100)을 받았고,
+// 종목 마스터 갱신이 계속 실패하고 있었다. 100 씩 나눠 받는다.
+const MASTER_PAGE_SIZE = 100;
+const MASTER_MAX_PAGES = 5;   // 거래소당 상위 500 종목
+
 async function fetchExchangeMaster(exchange) {
   // stock.naver.com 의 시총 정렬 API 로 거래소별 상위 종목을 수집한다.
-  const url = `https://api.stock.naver.com/stock/exchange/${exchange}/marketValue?page=1&pageSize=500`;
-  const r = await httpsGet(url, {
-    headers: { 'Referer': 'https://stock.naver.com/', 'User-Agent': BROWSER_UA },
-  });
-  if (!r.ok) {
-    logLine('warn', 'master.http', { exchange, status: r.status });
-    return [];
-  }
-  try {
-    const j = JSON.parse(r.body);
-    const items = j?.stocks || j?.items || j?.result?.stocks || j?.list || [];
-    if (!Array.isArray(items)) return [];
-    const out = [];
+  const out = [];
+  for (let page = 1; page <= MASTER_MAX_PAGES; page++) {
+    const url = `https://api.stock.naver.com/stock/exchange/${exchange}/marketValue?page=${page}&pageSize=${MASTER_PAGE_SIZE}`;
+    const r = await httpsGet(url, {
+      headers: { 'Referer': 'https://stock.naver.com/', 'User-Agent': BROWSER_UA },
+    });
+    if (!r.ok) {
+      logLine('warn', 'master.http', { exchange, page, status: r.status });
+      break;
+    }
+    let items;
+    try {
+      const j = JSON.parse(r.body);
+      items = j?.stocks || j?.items || j?.result?.stocks || j?.list || [];
+      // 장 시간 외에는 marketStatus 가 PREOPEN/CLOSE 이고 목록이 빈 배열로 온다.
+      // API 가 깨진 것과 구분되게 상태를 남긴다.
+      if (page === 1 && (!Array.isArray(items) || !items.length)) {
+        logLine('info', 'master.empty', { exchange, marketStatus: j?.marketStatus || '', total: j?.totalCount ?? null });
+      }
+    } catch (e) {
+      logLine('warn', 'master.parse', { exchange, page, err: String(e) });
+      break;
+    }
+    if (!Array.isArray(items) || !items.length) break;   // 마지막 페이지 또는 장외
     for (const it of items) {
       const code = it.itemCode || it.code || it.reutersCode || it.symbolCode || null;
       const name = it.stockName || it.itemName || it.name || null;
@@ -1777,11 +1864,9 @@ async function fetchExchangeMaster(exchange) {
         type: /^\d{6}$/.test(code) ? 'stock_kr' : 'stock_us',
       });
     }
-    return out;
-  } catch (e) {
-    logLine('warn', 'master.parse', { exchange, err: String(e) });
-    return [];
+    if (items.length < MASTER_PAGE_SIZE) break;   // 더 받을 게 없다
   }
+  return out;
 }
 
 async function buildStockMaster() {
@@ -2875,7 +2960,8 @@ async function getUsdKrwRate() {
         source: 'yahoo',
       };
       cache.updatedAt = nowKST();
-      writeJSON(QUOTE_CACHE_FILE, cache);
+      pruneQuoteCache(cache);
+      writeJSON(QUOTE_CACHE_FILE, cache, { compact: true });
       return Number(v.price);
     }
   } catch (e) {
@@ -3764,9 +3850,30 @@ async function handleConfigStatus(req, res) {
 }
 
 // GET /api/krx-auth-check — 강제로 KRX 로그인 1회 시도 후 성패만 반환 (자격증명 미노출).
+// 이 엔드포인트는 호출될 때마다 KRX 에 실제 로그인을 시도한다.
+// 무인증·무제한이면 외부에서 반복 호출해 계정 잠금이나 IP 차단을 유발할 수 있어 쿨다운을 둔다.
+let krxAuthCheckLastAt = 0;
+const KRX_AUTH_CHECK_COOLDOWN = 60 * 1000;
+
 async function handleKrxAuthCheck(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
   const hasCreds = !!(process.env.KRX_ID || '').trim() && !!(process.env.KRX_PW || '').trim();
+  const sinceLast = Date.now() - krxAuthCheckLastAt;
+  if (sinceLast < KRX_AUTH_CHECK_COOLDOWN) {
+    // 쿨다운 중에는 재로그인 없이 마지막 판정 결과만 돌려준다.
+    const lastCode = krxLastAuth?.errorCode || 'UNKNOWN';
+    return reply(res, 200, {
+      ok: true,
+      hasCreds,
+      authenticated: !!krxLastAuth?.authenticated,
+      errorCode: lastCode,
+      hint: KRX_AUTH_HINT[lastCode] || lastCode,
+      cooldown: true,
+      retryAfterSec: Math.ceil((KRX_AUTH_CHECK_COOLDOWN - sinceLast) / 1000),
+      ts: nowKST(),
+    });
+  }
+  krxAuthCheckLastAt = Date.now();
   // 캐시 무효화 후 새 로그인 강제.
   krxSessionCache = null;
   try {
@@ -3852,25 +3959,30 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(403); return res.end('Forbidden');
     }
 
-    const target = path.normalize(path.join(root, urlPath === '/' ? '/index.html' : urlPath));
-    if (!target.startsWith(root)) { res.writeHead(403); return res.end('Forbidden'); }
+    // 화이트리스트에 없는 경로는 전부 404. dotfile(.env)·문서(HANDOFF.md)·서버 소스(server.js)가
+    // 여기서 함께 막힌다. 목록은 PUBLIC_FILES 참조.
+    const reqPath = urlPath === '/' ? '/index.html' : urlPath;
+    if (!PUBLIC_FILES.has(reqPath)) { res.writeHead(404); return res.end('Not Found'); }
+
+    const target = path.normalize(path.join(root, reqPath));
+    // path.sep 을 붙여야 형제 디렉터리(예: root 가 /app 일 때 /app-old)로 새지 않는다.
+    if (!target.startsWith(root + path.sep)) { res.writeHead(403); return res.end('Forbidden'); }
     if (!fs.existsSync(target))   { res.writeHead(404); return res.end('Not Found'); }
 
-    const stat = fs.statSync(target);
-    if (stat.isDirectory()) {
-      const idx = path.join(target, 'index.html');
-      if (fs.existsSync(idx)) {
-        res.writeHead(200, { 'Content-Type': MIME['.html'] });
-        return res.end(fs.readFileSync(idx));
-      }
-      res.writeHead(404); return res.end('Not Found');
-    }
     const ext = path.extname(target).toLowerCase();
     res.writeHead(200, { 'Content-Type': MIME[ext] || 'application/octet-stream' });
-    fs.createReadStream(target).pipe(res);
+    const stream = fs.createReadStream(target);
+    // error 리스너가 없으면 스트림 오류가 uncaughtException 으로 튀고 응답은 영원히 매달린다.
+    stream.on('error', (e) => {
+      logLine('error', 'static.stream', { path: reqPath, err: String(e) });
+      res.destroy();
+    });
+    stream.pipe(res);
   } catch (err) {
+    // err.message 를 그대로 내보내면 내부 경로가 노출된다. 상세는 로그로만.
+    logLine('error', 'request.fail', { path: String(req.url || ''), err: String(err && err.stack || err) });
     res.writeHead(500);
-    res.end('Server Error: ' + err.message);
+    res.end('Server Error');
   }
 });
 
@@ -3963,7 +4075,10 @@ async function autoPollQuotes() {
       }
     }
     cache.updatedAt = nowKST();
-    writeJSON(QUOTE_CACHE_FILE, cache);
+    // 2분 주기 폴링이 캐시 청소도 겸한다.
+    const pruned = pruneQuoteCache(cache);
+    writeJSON(QUOTE_CACHE_FILE, cache, { compact: true });
+    if (pruned) logLine('info', 'quotes.cache.pruned', { removed: pruned });
     logLine('info', 'autopoll.ok', {
       upbit: Object.keys(up).length,
       naver: Object.keys(nv).length,
@@ -4243,7 +4358,8 @@ function verifyCred(s) {
 
 function newPairCode() {
   for (let i = 0; i < 20; i++) {
-    const c = String(Math.floor(100000 + Math.random() * 900000));
+    // 페어링 코드는 추측 가능하면 안 되므로 Math.random 대신 CSPRNG 를 쓴다.
+    const c = String(crypto.randomInt(100000, 1000000));
     if (!pendingPairs.has(c)) return c;
   }
   return null;
@@ -4297,7 +4413,7 @@ async function startPairingPoller() {
           pair.userName = msg.from?.first_name || msg.chat?.first_name || '';
           pair.pairedAt = Date.now();
           // 2단계: 4자리 확인 코드 발급 (어깨너머 도용 차단)
-          pair.confirmCode = String(1000 + Math.floor(Math.random() * 9000));
+          pair.confirmCode = String(crypto.randomInt(1000, 10000));
           pair.confirmCreatedAt = Date.now();
           pair.confirmAttempts = 0;
           pendingPairs.set(code, pair);
