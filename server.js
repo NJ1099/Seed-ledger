@@ -1172,12 +1172,21 @@ async function handleQuotes(req, res) {
   }
 
   const out = {};
+  // 값을 못 구한 티커는 여기서 조용히 빠진다 — 예전에는 그대로 침묵해서,
+  // 사용자는 자기 자산에 시세가 안 붙는 이유를 알 방법이 없었다(오타·상장폐지·미지원 거래소 전부 같은 모습).
+  // 이제 못 구한 목록을 사유와 함께 돌려준다.
+  const missing = [];
   for (const t of tickers) {
-    if (!t || typeof t.ticker !== 'string') continue;
-    if (cache.quotes[t.ticker]) out[t.ticker] = cache.quotes[t.ticker];
+    if (!t || typeof t.ticker !== 'string') { missing.push({ ticker: null, reason: 'bad-shape' }); continue; }
+    if (cache.quotes[t.ticker]) { out[t.ticker] = cache.quotes[t.ticker]; continue; }
+    const reason = !SAFE_TICKER_RE.test(t.ticker) ? 'invalid-format'
+      : (t.type === 'crypto' && !t.ticker.startsWith('KRW-') && !t.ticker.endsWith('-USD')) ? 'unsupported-pair'
+      : 'not-found';
+    missing.push({ ticker: t.ticker, type: t.type || null, reason });
   }
+  if (missing.length) logLine('warn', 'quotes.missing', { count: missing.length, sample: missing.slice(0, 5) });
   const fx = cache.quotes['USDKRW'] || null;
-  reply(res, 200, { ok: true, quotes: out, exchangeRate: fx, cacheUpdatedAt: cache.updatedAt });
+  reply(res, 200, { ok: true, quotes: out, missing, exchangeRate: fx, cacheUpdatedAt: cache.updatedAt });
 }
 
 async function handleImportPdf(req, res) {
@@ -4653,6 +4662,21 @@ async function handleNewsPushNow(req, res) {
     const sent = await sendDailyNews('scheduled-http');
     if (!sent) lastNewsPushSlot = '';   // 실패 시 해제 → 다음 트리거 재시도
     return reply(res, sent ? 200 : 502, { ok: sent, slot: key });
+  }
+
+  // ⚠️ 여기부터는 **수동 발송** 경로다.
+  //    예전에는 인증이 전혀 없고 30초 쿨다운만 있어서, URL 을 아는 사람이면 누구나
+  //    공개 채널로 하루 2,880번까지 발송을 시킬 수 있었다(라운드 25 의 실발송 사고와 같은 문). 
+  //    cron 이 쓰는 위쪽 `?scheduled=1` 경로는 slot dedupe 로 하루 2회가 상한이라 그대로 두고,
+  //    무제한으로 열려 있던 이 경로만 관리자 인증을 요구한다.
+  if (!ADMIN_TOKEN) {
+    return reply(res, 503, { ok: false, error: 'admin-disabled', hint: '수동 발송은 ADMIN_TOKEN 설정이 필요합니다.' });
+  }
+  if (!isAdminReq(req)) {
+    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+      || (req.socket && req.socket.remoteAddress) || 'unknown';
+    logLine('warn', 'newspush.unauthorized', { ip });
+    return reply(res, 401, { ok: false, error: 'unauthorized', hint: '수동 발송은 관리자 토큰이 필요합니다.' });
   }
 
   const now = Date.now();

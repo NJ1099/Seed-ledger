@@ -11,6 +11,7 @@ const state = {
   accounts: [],
   transactions: [],
   quotes: {},           // { ticker: {priceKRW|priceUSD|rate, ts, source, ...} }
+  missingQuotes: [],    // [{ticker, type, reason}] 이번 갱신에서 시세를 못 구한 것들
   exchangeRate: null,   // { rate, ts }
   snapshots: [],
   events: [],
@@ -126,9 +127,64 @@ function lsReadJSON(key, fallback) {
     return JSON.parse(raw);
   } catch { return fallback; }
 }
+// localStorage 한도는 브라우저마다 다르지만 보통 도메인당 5MB 다.
+// 텔레그램 기기 동기화(백업)는 서버가 4MB 에서 413 을 준다 — 그쪽이 먼저 막힌다.
+// 그래서 백업 한도보다 조금 앞선 지점에서 미리 알린다.
+const LS_BACKUP_LIMIT_BYTES = 4 * 1024 * 1024;
+const LS_WARN_BYTES = Math.round(LS_BACKUP_LIMIT_BYTES * 0.85);
+let lsBudgetWarned = false;
+
+function fmtBytes(n) {
+  if (n < 1024) return n + 'B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + 'KB';
+  return (n / 1024 / 1024).toFixed(2) + 'MB';
+}
+
+/** seed* 키가 실제로 쓰고 있는 바이트 수(근사). */
+function lsUsageBytes() {
+  let total = 0;
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith('seed')) continue;
+      total += k.length + (localStorage.getItem(k) || '').length;
+    }
+  } catch { /* 접근 불가 환경 */ }
+  return total;
+}
+
+/**
+ * 저장 공간이 백업 한도에 가까워지면 한 세션에 한 번 알린다.
+ * 조용히 두면 어느 날 저장이 통째로 실패하고, 그 시점엔 이미 손쓸 게 없다.
+ */
+function checkStorageBudget() {
+  const used = lsUsageBytes();
+  if (used > LS_WARN_BYTES && !lsBudgetWarned) {
+    lsBudgetWarned = true;
+    console.warn(`[storage] ${fmtBytes(used)} 사용 중 — 백업 한도 ${fmtBytes(LS_BACKUP_LIMIT_BYTES)} 에 근접`);
+    setTimeout(() => alert(
+      `자산 데이터가 ${fmtBytes(used)} 를 넘었습니다.\n\n` +
+      `텔레그램 기기 동기화는 ${fmtBytes(LS_BACKUP_LIMIT_BYTES)} 까지만 백업할 수 있어, 이대로 두면 백업이 실패합니다.\n` +
+      `오래된 자산 스냅샷은 자동으로 정리되지만, 거래 내역이 많다면 오래된 연도를 따로 내보낸 뒤 지우는 것을 권합니다.`
+    ), 0);
+  }
+  return used;
+}
+
 function lsWriteJSON(key, obj) {
-  try { localStorage.setItem(key, JSON.stringify(obj)); } catch (e) {
-    console.warn('[localStorage] 저장 실패 — 용량 초과 가능성:', e);
+  const json = JSON.stringify(obj);
+  try { localStorage.setItem(key, json); } catch (e) {
+    // QuotaExceededError 는 브라우저마다 이름·코드가 제각각이다.
+    const quota = e && (e.name === 'QuotaExceededError'
+      || e.name === 'NS_ERROR_DOM_QUOTA_REACHED'
+      || e.code === 22 || e.code === 1014);
+    console.warn('[localStorage] 저장 실패:', e);
+    if (quota) {
+      throw new Error(
+        `브라우저 저장 공간이 가득 찼습니다 (${key} 에 ${fmtBytes(json.length)} 저장 시도). ` +
+        `방금 입력한 내용은 저장되지 않았습니다. 오래된 거래 내역을 정리한 뒤 다시 시도해 주세요.`
+      );
+    }
     throw new Error('localStorage 저장 실패 (' + e.message + ')');
   }
 }
@@ -261,8 +317,46 @@ function localSnapshotSave(body) {
   };
   const map = lsGetSnapshots();
   map[d] = snap;
+  const pruned = pruneSnapshots(map);
   lsSetSnapshots(map);
-  return { ok: true, snapshot: snap };
+  if (pruned) console.info(`[snapshots] 1년 넘은 기록 ${pruned}건을 월 1건으로 압축했습니다.`);
+  checkStorageBudget();
+  return { ok: true, snapshot: snap, pruned };
+}
+
+/** 스냅샷을 매일 남기는 기간. 이 뒤로는 월 1건만 남긴다. */
+const SNAPSHOT_DAILY_DAYS = 365;
+
+/**
+ * 오래된 스냅샷 솎아내기.
+ *
+ * 스냅샷은 날짜별로 **정리 없이 무한히** 쌓이는데, localStorage 는 보통 5MB,
+ * 텔레그램 백업은 4MB 가 한도다. 자산 항목이 많은 사용자는 몇 해만 지나도
+ * 한도에 부딪히고, 그 순간 저장이 통째로 실패한다(그때는 이미 늦다).
+ *
+ * 최근 1년은 손대지 않고, 그 이전 구간만 **그 달의 마지막 기록 1건**으로 압축한다.
+ * 자산 추이 그래프의 장기 구간은 어차피 월 단위로 읽으므로 체감 손실이 거의 없다.
+ * @returns {number} 지운 개수
+ */
+function pruneSnapshots(map) {
+  const keys = Object.keys(map).filter((k) => /^\d{4}-\d{2}-\d{2}$/.test(k)).sort();
+  const cutoff = new Date(Date.now() - SNAPSHOT_DAILY_DAYS * 86400000).toISOString().slice(0, 10);
+
+  // 정렬돼 있으므로 마지막에 기록된 값이 그 달의 대표로 남는다.
+  const keepOfMonth = new Map();
+  for (const k of keys) {
+    if (k >= cutoff) continue;
+    keepOfMonth.set(k.slice(0, 7), k);
+  }
+
+  let removed = 0;
+  for (const k of keys) {
+    if (k >= cutoff) continue;
+    if (keepOfMonth.get(k.slice(0, 7)) === k) continue;
+    delete map[k];
+    removed++;
+  }
+  return removed;
 }
 
 function localSnapshotsList(qs) {
@@ -1016,6 +1110,13 @@ async function refreshQuotes() {
     if (mySeq !== _quoteSeq) return;
     state.quotes = r.quotes || {};
     state.exchangeRate = r.exchangeRate || null;
+    // 시세를 못 구한 티커 — 예전에는 서버도 클라도 조용해서, 사용자는 자기 자산에
+    // 값이 안 붙는 이유(오타·상장폐지·미지원 거래소)를 구분할 방법이 없었다.
+    state.missingQuotes = Array.isArray(r.missing) ? r.missing : [];
+    if (state.missingQuotes.length) {
+      console.warn('[quotes] 시세를 못 구한 티커:',
+        state.missingQuotes.map((m) => `${m.ticker}(${m.reason})`).join(', '));
+    }
     renderTickerStrip(r.cacheUpdatedAt);
     renderAssets();
     renderTotals();
@@ -2551,9 +2652,21 @@ async function autoSnapshot() {
     const sorted = state.snapshots.slice().sort((a, b) => a.date < b.date ? -1 : 1);
     state.lastSnapshotTotal = sorted.length >= 2 ? sorted[sorted.length - 2].totalKRW : null;
   } catch (e) {
+    // 용량 초과로 저장이 막히면 **자산 추이 그래프가 조용히 멈춘다.**
+    // 사용자는 며칠 뒤에야 눈치채고, 그때는 이미 그 기간 기록이 없다. 한 번은 알려야 한다.
     console.warn('autoSnapshot fail', e);
+    if (!autoSnapshotWarned) {
+      autoSnapshotWarned = true;
+      setTimeout(() => alert(
+        '오늘 자산 스냅샷을 저장하지 못했습니다. 자산 변동 그래프가 오늘부터 비게 됩니다.\n\n'
+        + (e && e.message ? e.message : String(e))
+      ), 0);
+    }
   }
 }
+
+/** 스냅샷 저장 실패 알림은 세션당 한 번만 — 자동 저장이라 자주 재시도된다. */
+let autoSnapshotWarned = false;
 
 // 모든 영역 재렌더 (CRUD 후 단일 호출)
 function renderAll() {
