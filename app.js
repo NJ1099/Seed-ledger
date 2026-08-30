@@ -5594,18 +5594,18 @@ async function startPairingFlow() {
           if (syncState.pairTimer) clearInterval(syncState.pairTimer);
           syncState.pairTimer = null;
           enterConfirmStage(r.confirmExpiresInSec || 300);
-        } else if (r.paired && r.cred) {
-          // (백워드 호환) 구버전 페어 — confirmCode 없이 즉시 발급
+        } else if (r.status === 409) {
+          // 서버가 앞뒤 안 맞는 페어를 폐기한 경우. 4자리 확인을 건너뛰고 연동되는 경로는
+          // 서버에서 없앴으므로(확인 우회가 되면 6자리만 맞히면 계정이 넘어간다) 여기서도 받지 않는다.
           clearInterval(syncState.pairCheckTimer);
           syncState.pairCheckTimer = null;
           if (syncState.pairTimer) clearInterval(syncState.pairTimer);
           syncState.pairTimer = null;
-          syncWriteCred(r.cred);
-          syncWriteMeta({ chatId: r.chatId, userName: r.userName, pairedAt: new Date().toISOString() });
-          showSyncStage('active');
-          renderSyncActiveStage();
-          updateSyncBtn();
-          await tryFirstSyncAction();
+          document.getElementById('sync-pair-status').textContent = '연동 상태가 어긋나 취소됐습니다. 다시 시도해주세요.';
+          document.getElementById('sync-pair-status').className = 'sync-pair-status err';
+        } else if (r.status === 429) {
+          // 속도 제한 — 폴링을 멈추지 않고 다음 주기를 기다린다.
+          document.getElementById('sync-pair-status').textContent = '요청이 잦아 잠시 기다리는 중…';
         } else if (r.status === 404) {
           // 만료
           clearInterval(syncState.pairCheckTimer);

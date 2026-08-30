@@ -22,4 +22,10 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      # 신뢰하는 프록시 홉 수. 속도 제한이 접속자를 어떻게 식별할지 결정한다.
+      # Render 는 앞에 프록시가 1단이므로 X-Forwarded-For 의 맨 오른쪽 값이 실제 접속자다.
+      # (맨 왼쪽은 클라이언트가 위조해 보낼 수 있어 믿으면 IP 제한이 통째로 뚫린다.)
+      # 앞에 CDN 을 더 붙이면 그 수만큼 올릴 것. 코드는 이 값이 없으면 RENDER 감지로 1을 쓴다.
+      - key: TRUSTED_PROXY_HOPS
+        value: "1"
       # PORT 는 Render 가 주입함. 직접 설정 금지.

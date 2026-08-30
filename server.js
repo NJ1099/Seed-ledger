@@ -1189,14 +1189,20 @@ async function handleQuotes(req, res) {
   reply(res, 200, { ok: true, quotes: out, missing, exchangeRate: fx, cacheUpdatedAt: cache.updatedAt });
 }
 
+// PDF 파싱은 인증 없이 부를 수 있고 CPU 를 많이 쓴다(=서버를 눕히기 가장 쉬운 경로).
+// 그래서 ①IP 단위 호출 상한 ②본문 크기 상한을 기본값(20MB)보다 낮게 둔다.
+// 거래내역 PDF 는 보통 1MB 안팎이라 10MB 면 정상 사용을 막지 않는다.
+const PDF_MAX_BYTES = 10 * 1024 * 1024;
+
 async function handleImportPdf(req, res) {
   if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'POST only' });
   if (!parsePdfBuffer) {
     return reply(res, 503, { ok: false, error: 'PDF 파서가 이 서버에서 비활성 상태입니다.' });
   }
+  if (rateLimited('import-pdf', clientIp(req), 5)) return replyRateLimited(res);
   let buffer;
   try {
-    buffer = await readBodyBytes(req);
+    buffer = await readBodyBytes(req, PDF_MAX_BYTES);
   } catch (e) {
     return reply(res, 413, { ok: false, error: e.message });
   }
@@ -1227,20 +1233,60 @@ async function handleImportPdf(req, res) {
 }
 
 // 공개 프록시 남용 방지 — IP 단위 분당 호출 상한 (자격증명 스터핑 릴레이/아웃바운드 부하 완화).
-const _brokerSyncHits = new Map(); // ip -> [timestamps]
-function brokerSyncRateLimited(ip) {
+//
+// ⚠️ X-Forwarded-For 의 **맨 앞** 값을 IP 로 쓰면 안 된다.
+//    이 헤더는 클라이언트가 직접 써서 보낼 수 있고, 프록시는 그 뒤에 자기가 본 주소를 덧붙일 뿐
+//    앞쪽 값을 지우지 않는다. 따라서 맨 앞을 믿으면 요청마다 다른 값을 넣는 것만으로
+//    IP 기반 제한이 통째로 무력화된다(예전 구현이 이랬다).
+//    프록시가 붙인 값은 오른쪽에 쌓이므로 **신뢰하는 프록시 홉 수만큼 뒤에서** 세야 한다.
+//    Render 는 프록시 1단이고 RENDER 환경변수를 자동 주입한다. 로컬은 프록시가 없으므로
+//    헤더를 아예 무시하고 소켓 주소만 쓴다(로컬에서 헤더를 믿으면 같은 우회가 그대로 된다).
+const TRUSTED_PROXY_HOPS = (() => {
+  const v = process.env.TRUSTED_PROXY_HOPS;
+  if (v != null && String(v).trim() !== '') return Math.max(0, parseInt(v, 10) || 0);
+  return process.env.RENDER ? 1 : 0;
+})();
+
+function clientIp(req) {
+  const socketIp = (req.socket && req.socket.remoteAddress) || 'unknown';
+  if (!TRUSTED_PROXY_HOPS) return socketIp;
+  const list = String(req.headers['x-forwarded-for'] || '')
+    .split(',').map((s) => s.trim()).filter(Boolean);
+  if (!list.length) return socketIp;
+  // 홉이 1이면 맨 오른쪽 = 우리 프록시가 본 실제 접속자. 목록이 홉 수보다 짧으면(위조로 짧게 만든 경우)
+  // 0 으로 잘려 맨 앞을 쓰게 되는데, 그때는 소켓 주소로 되돌리는 편이 안전하다.
+  const idx = list.length - TRUSTED_PROXY_HOPS;
+  return idx >= 0 ? (list[idx] || socketIp) : socketIp;
+}
+
+// 버킷별 슬라이딩 윈도우 제한. bucket 은 엔드포인트 이름, key 는 보통 clientIp(req).
+const _rlBuckets = new Map(); // bucket -> Map(key -> [timestamps])
+function rateLimited(bucket, key, max, windowMs = 60 * 1000) {
   const now = Date.now();
-  const windowMs = 60 * 1000;
-  const max = 20; // 분당 20회 — 정상 사용(계좌 몇 개 동기화)엔 충분.
-  const arr = (_brokerSyncHits.get(ip) || []).filter((t) => now - t < windowMs);
+  let hits = _rlBuckets.get(bucket);
+  if (!hits) { hits = new Map(); _rlBuckets.set(bucket, hits); }
+  const arr = (hits.get(key) || []).filter((t) => now - t < windowMs);
   arr.push(now);
-  _brokerSyncHits.set(ip, arr);
-  if (_brokerSyncHits.size > 5000) { // 맵 비대화 방지 — 오래된 IP 청소.
-    for (const [k, v] of _brokerSyncHits) {
-      if (!v.length || now - v[v.length - 1] > windowMs) _brokerSyncHits.delete(k);
+  hits.set(key, arr);
+  if (hits.size > 5000) { // 맵 비대화 방지 — 창이 지난 키 청소.
+    for (const [k, v] of hits) {
+      if (!v.length || now - v[v.length - 1] > windowMs) hits.delete(k);
     }
   }
   return arr.length > max;
+}
+
+// 표준 429 응답. retryAfterSec 은 헤더로도 내려 클라이언트가 백오프할 수 있게 한다.
+function replyRateLimited(res, retryAfterSec = 60) {
+  res.writeHead(429, {
+    'Content-Type': 'application/json; charset=utf-8',
+    'Retry-After': String(retryAfterSec),
+  });
+  return res.end(JSON.stringify({
+    ok: false,
+    error: '요청이 너무 잦습니다. 잠시 후 다시 시도하세요.',
+    retryAfterSec,
+  }));
 }
 
 // 증권사 Open API 무상태 프록시.
@@ -1251,10 +1297,8 @@ async function handleBrokerSync(req, res) {
   if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'POST only' });
   if (!syncBroker) return reply(res, 503, { ok: false, error: '증권사 연동 모듈이 이 서버에서 비활성 상태입니다.' });
 
-  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || (req.socket && req.socket.remoteAddress) || 'unknown';
-  if (brokerSyncRateLimited(ip)) {
-    return reply(res, 429, { ok: false, error: '요청이 너무 잦습니다. 잠시 후 다시 시도하세요.' });
-  }
+  // 분당 20회 — 정상 사용(계좌 몇 개 동기화)엔 충분.
+  if (rateLimited('broker-sync', clientIp(req), 20)) return replyRateLimited(res);
 
   let body;
   try {
@@ -4251,6 +4295,7 @@ const SYNC_CONFIRM_TTL_MS = 5 * 60 * 1000;  // 2단계: 4자리 확인 만료 (�
 const SYNC_CONFIRM_MAX_ATTEMPTS = 3;        // 4자리 오답 허용 횟수
 const SYNC_POLL_TTL_MS = 8 * 60 * 1000;     // 페어링 폴링 워커 수명
 const SYNC_MAX_BODY = 4 * 1024 * 1024;      // 4MB (텔레그램 sendDocument 한도 50MB 와는 별개로 클라가 보내는 JSON 한도)
+const SYNC_MAX_PENDING = 500;               // 동시에 대기 가능한 페어링 수 상한 (메모리 고갈 방지)
 
 const pendingPairs = new Map();             // code -> { createdAt, chatId? , userName? }
 let syncPollerActive = false;
@@ -4861,11 +4906,19 @@ async function handleSyncStatus(req, res) {
 async function handleSyncInit(req, res) {
   if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled', hint: '서버에 TELEGRAM_BOT_TOKEN 이 설정되지 않음.' });
   if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
+  // 페어링 시작은 사람이 하는 일이라 드물다. 무제한이면 pendingPairs 가 메모리에 계속 쌓이고
+  // gcPendingPairs 가 매 요청 전체를 훑으므로 CPU 도 같이 먹힌다.
+  if (rateLimited('sync-init', clientIp(req), 5)) return replyRateLimited(res);
   if (!TELEGRAM_BOT_USERNAME) {
     try { await bootTelegram(); } catch {}
     if (!TELEGRAM_BOT_USERNAME) return reply(res, 503, { ok: false, error: 'bot-not-ready' });
   }
   gcPendingPairs();
+  // 전역 상한 — 한 IP 를 우회해도(분산 요청) 맵이 무한히 커지지 않게 막는 2차 방어선.
+  if (pendingPairs.size >= SYNC_MAX_PENDING) {
+    logLine('warn', 'sync.init.pending-full', { size: pendingPairs.size });
+    return reply(res, 503, { ok: false, error: 'too-many-pending', hint: '잠시 후 다시 시도해주세요.' });
+  }
   const code = newPairCode();
   if (!code) return reply(res, 503, { ok: false, error: 'too-many-pending' });
   pendingPairs.set(code, { createdAt: Date.now() });
@@ -4881,6 +4934,10 @@ async function handleSyncInit(req, res) {
 
 async function handleSyncCheck(req, res) {
   if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
+  // 6자리 코드는 열거가 가능하다. 맞히기만 하면 계정이 넘어가진 않지만(2단계 4자리가 막는다),
+  // 진행 중인 페어링을 찾아 confirm 을 3회 틀려 **남의 페어링을 폐기**시킬 수는 있다.
+  // 클라이언트 폴링이 2.5초 간격(분당 24회)이므로 40회면 정상 사용에 여유가 있다.
+  if (rateLimited('sync-check', clientIp(req), 40)) return replyRateLimited(res, 30);
   const url = new URL(req.url, 'http://localhost');
   const code = url.searchParams.get('code') || '';
   if (!/^\d{6}$/.test(code)) return reply(res, 400, { ok: false, error: 'bad-code' });
@@ -4901,21 +4958,22 @@ async function handleSyncCheck(req, res) {
       confirmExpiresInSec: Math.max(0, Math.floor((SYNC_CONFIRM_TTL_MS - elapsed) / 1000)),
     });
   }
-  // 백워드 호환: confirmCode 없이 chatId 만 세팅된 경우 (구버전 페어 — 기능적으로 폐기)
+  // chatId 는 있는데 confirmCode 가 없는 상태는 정상 흐름에 존재하지 않는다.
+  // (startPairingPoller 가 chatId 를 넣는 그 자리에서 confirmCode 도 함께 넣고,
+  //  4자리를 못 보내면 페어를 지운다.)
+  // 예전에는 여기서 4자리 확인을 건너뛰고 cred 를 바로 내줬는데 — 그 분기가 살아나면
+  // 6자리만 맞히면 계정이 넘어간다. 확인 단계를 우회하는 경로는 남겨두지 않는다.
   pendingPairs.delete(code);
-  return reply(res, 200, {
-    ok: true,
-    paired: true,
-    cred: signCred(pair.chatId),
-    chatId: pair.chatId,
-    userName: pair.userName || '',
-  });
+  logLine('warn', 'sync.check.inconsistent-pair', { code });
+  return reply(res, 409, { ok: false, error: 'inconsistent-pair', hint: '페어링을 다시 시작해주세요.' });
 }
 
 // 4자리 확인 코드 검증 → 일치 시 cred 발급, 불일치 시 시도 카운터 증가, 3회 초과 시 폐기.
 async function handleSyncConfirm(req, res) {
   if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
   if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
+  // 코드별 3회 제한은 아래에 있다. 이건 여러 코드를 옮겨 다니며 시도하는 것을 막는 IP 단위 제한.
+  if (rateLimited('sync-confirm', clientIp(req), 10)) return replyRateLimited(res);
   let body;
   try { body = await readBody(req, 1024); }
   catch { return reply(res, 400, { ok: false, error: 'bad-body' }); }
@@ -4985,9 +5043,13 @@ function getCredFromHeaders(req) {
 async function handleSyncPush(req, res) {
   if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
   if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
+  if (rateLimited('sync-push', clientIp(req), 10)) return replyRateLimited(res);
   const cred = getCredFromHeaders(req);
   const chatId = verifyCred(cred);
   if (!chatId) return reply(res, 401, { ok: false, error: 'bad-cred' });
+  // cred 소유자 단위로도 제한한다. 백업 1회가 텔레그램 업로드 + 핀 2번 호출이라,
+  // 한 계정이 폭주하면 봇 전체가 텔레그램 API 제한에 걸려 다른 사용자까지 막힌다.
+  if (rateLimited('sync-push-cred', chatId, 6)) return replyRateLimited(res);
   let body;
   try { body = await readBody(req, SYNC_MAX_BODY); }
   catch (e) { return reply(res, 413, { ok: false, error: 'too-large' }); }
@@ -5038,9 +5100,12 @@ async function handleSyncPush(req, res) {
 async function handleSyncPull(req, res) {
   if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
   if (req.method !== 'POST' && req.method !== 'GET') return reply(res, 405, { ok: false, error: 'method' });
+  if (rateLimited('sync-pull', clientIp(req), 20)) return replyRateLimited(res);
   const cred = getCredFromHeaders(req);
   const chatId = verifyCred(cred);
   if (!chatId) return reply(res, 401, { ok: false, error: 'bad-cred' });
+  // 복원 1회가 getChat + getFile + 파일 다운로드 3연속이라 계정 단위로도 묶는다.
+  if (rateLimited('sync-pull-cred', chatId, 12)) return replyRateLimited(res);
   try {
     const chat = await tgPostJson('getChat', { chat_id: chatId });
     const pinned = chat && chat.pinned_message;
@@ -5070,9 +5135,12 @@ async function handleSyncDisconnect(req, res) {
   // 다만 텔레그램 채팅에서 핀을 해제하는 편의 동작은 제공.
   if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
   if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
+  if (rateLimited('sync-disconnect', clientIp(req), 10)) return replyRateLimited(res);
   const cred = getCredFromHeaders(req);
   const chatId = verifyCred(cred);
   if (!chatId) return reply(res, 401, { ok: false, error: 'bad-cred' });
+  // 해제는 채팅에 메시지를 남긴다. cred 하나로 반복 호출하면 도배가 되므로 계정 단위로도 묶는다.
+  if (rateLimited('sync-disconnect-cred', chatId, 5)) return replyRateLimited(res);
   try {
     await tgPostJson('unpinAllChatMessages', { chat_id: chatId }).catch(() => {});
     await tgPostJson('sendMessage', {
