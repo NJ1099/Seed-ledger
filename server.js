@@ -4635,13 +4635,25 @@ const NEWS_PUSH_SLOTS_KST = [
 const NEWS_PUSH_WINDOW_MIN = 5;         // slot 분 ±N분 윈도우 안에서 1회 발송(in-process 틱용)
 const NEWS_PUSH_COUNT = 10;             // 발송할 뉴스 건수
 
-// 외부 트리거(`?scheduled=1`)가 slot 을 인정해 주는 유예 시간.
+// 외부 트리거(`?scheduled=1`)가 slot 을 인정해 주는 유예 시간(분).
 //
-// 🔴 **짧게 조이지 말 것.** GitHub Actions cron 은 이 저장소에서 반복 실측된 대로
-//    **100~150분 늦게** 온다. ±5분 윈도우로 막으면 일일 뉴스가 통째로 끊긴다.
-//    (예전 코드가 `adhoc` 키로 아무 때나 받아 준 덕에 발송이 되고 있었다 —
-//     그 느슨함이 사실상 이 지연을 흡수하고 있었던 것이다.)
-const NEWS_TRIGGER_GRACE_MIN = Math.max(5, Number(process.env.NEWS_TRIGGER_GRACE_MIN) || 240);
+// 🔴 **짧게 조이지 말 것. 실측 없이 숫자를 고르지도 말 것.**
+//    처음에 인계 문서의 "GHA cron 은 100~150분 늦는다"를 믿고 240분으로 잡았는데,
+//    **이 저장소의 실제 실행 이력은 260~276분**이었다(`gh run list` 로 8회 확인):
+//      아침 slot(09:30) 트리거 도착 = KST 13:52~14:04
+//      저녁 slot(18:00) 트리거 도착 = KST 22:25~22:36
+//    240 이면 두 창이 각각 13:30·22:00 에 닫혀 **트리거가 전부 유예 밖으로 떨어진다.**
+//    게다가 유예 밖 응답이 200(`skipped`)이라 GitHub Actions 는 **계속 초록불**이다 —
+//    일일 뉴스가 조용히 끊기고 아무도 모른다. ("성공"은 "일을 했다"가 아니다)
+//
+// 20회 실측(`gh run list`): 최소 209 · 평균 267 · **최대 356분**
+// (2026-09-07 저녁분이 KST 23:56 도착 — 자정까지 4분 남았다).
+// 즉 **자정을 넘겨 도착하는 일이 실제로 일어날 수 있고**, 그러면 날짜가 바뀌어
+// slot 을 못 찾고 그날 저녁 뉴스가 조용히 사라진다.
+// → 유예는 420분(관측 최대 +64분)으로 두고, 자정을 넘긴 트리거는
+//   **전날 slot 으로 넘겨 받는다**(triggerSlot 의 wrap).
+// 발송 상한은 유예가 아니라 **slot 키**가 지킨다 — 하루에 인정되는 키는 2개뿐이다.
+const NEWS_TRIGGER_GRACE_MIN = Math.max(5, Number(process.env.NEWS_TRIGGER_GRACE_MIN) || 420);
 
 // 외부 트리거 공유 비밀. 설정되어 있으면 `?scheduled=1` 에 요구한다.
 // 미설정이면 예전처럼 열려 있다 — 설정을 강제하면 갱신 전까지 뉴스가 끊기므로,
@@ -4771,9 +4783,20 @@ function slotKey(date, slot) {
   return `${date}:${hh}:${mm}`;
 }
 
+/** 'YYYY-MM-DD' 의 하루 전. 자정을 넘겨 도착한 트리거를 전날 slot 으로 묶을 때 쓴다. */
+function prevDate(d) {
+  const t = new Date(`${d}T00:00:00Z`);
+  t.setUTCDate(t.getUTCDate() - 1);
+  return t.toISOString().slice(0, 10);
+}
+
 /**
  * 외부 트리거가 인정받을 slot — slot 시각부터 NEWS_TRIGGER_GRACE_MIN 분 안이면 그 slot.
  * 여러 개가 걸리면 **가장 최근** slot. 유예 밖이면 null(=발송하지 않는다).
+ *
+ * @returns {{ slot: {hour:number,minute:number}, date: string } | null}
+ *   `date` 는 **그 slot 이 속한 날짜**다. 자정을 넘겨 도착하면 전날이 된다 —
+ *   오늘 날짜로 키를 만들면 어제 저녁분이 오늘 키를 먹어 오늘 아침 발송이 막힌다.
  *
  * 예전에는 slot 을 못 찾으면 `${date}:${hour}:adhoc` 키로 **그냥 발송**했다. 키가
  * 시간마다 새로 생기므로 주석이 말하던 "하루 2회"가 아니라 **하루 24회**가 상한이었다.
@@ -4783,9 +4806,15 @@ function triggerSlot(parts) {
   let best = null;
   let bestAge = Infinity;
   for (const s of NEWS_PUSH_SLOTS_KST) {
-    const age = nowMin - (s.hour * 60 + s.minute);
-    if (age < 0 || age > NEWS_TRIGGER_GRACE_MIN) continue;
-    if (age < bestAge) { best = s; bestAge = age; }
+    let age = nowMin - (s.hour * 60 + s.minute);
+    let date = parts.date;
+    if (age < 0) {
+      // 자정을 넘겨 도착했다 — 전날 slot 으로 본다(실측 최대 지연이 356분이었다)
+      age += 24 * 60;
+      date = prevDate(parts.date);
+    }
+    if (age > NEWS_TRIGGER_GRACE_MIN) continue;
+    if (age < bestAge) { best = { slot: s, date }; bestAge = age; }
   }
   return best;
 }
@@ -4867,7 +4896,7 @@ async function handleNewsPushNow(req, res) {
         hint: `발송 slot 기준 ${NEWS_TRIGGER_GRACE_MIN}분 유예 밖입니다.`,
       });
     }
-    const key = slotKey(parts.date, matched);
+    const key = slotKey(matched.date, matched.slot);
     if (key === lastNewsPushSlot) {
       return reply(res, 200, { ok: true, skipped: 'already-sent', slot: key });
     }

@@ -35,10 +35,13 @@ services:
       # 🔴 값은 여기 적지 말 것 — Render 대시보드에서 입력한다.
       - key: NEWS_CRON_SECRET
         sync: false
-      # 외부 트리거가 slot 을 인정하는 유예(분). 기본 240.
-      # 🔴 짧게 줄이지 말 것 — GitHub Actions cron 은 실측상 100~150분 늦게 온다.
+      # 외부 트리거가 slot 을 인정하는 유예(분). 기본 420.
+      # 🔴 줄이지 말 것. 이 저장소에서 20회 실측한 GitHub Actions 지연은
+      #    최소 209 · 평균 267 · 최대 356분이다(문서에 흔한 "100~150분"이 아니다).
+      #    240 으로 잡으면 트리거가 전부 창 밖으로 떨어져 일일 뉴스가 끊기는데,
+      #    유예 밖 응답이 200 이라 GitHub Actions 는 계속 초록불이다 — 조용히 멈춘다.
       - key: NEWS_TRIGGER_GRACE_MIN
-        value: "240"
+        value: "420"
       # 동기화 자격(cred) 수명(일). 기본 180. 만료되면 앱이 자동으로 재페어링을 요구한다.
       - key: SYNC_CRED_TTL_DAYS
         value: "180"

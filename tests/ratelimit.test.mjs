@@ -160,35 +160,72 @@ test('🔴 테스트에서는 뉴스 발송 스케줄러가 뜨지 않는다', (
 // 유예 창 — 순수 함수라 시계를 건드리지 않고 검사할 수 있다.
 const triggerSlot = new Function(`
   const NEWS_PUSH_SLOTS_KST = [{ hour: 9, minute: 30 }, { hour: 18, minute: 0 }];
-  const NEWS_TRIGGER_GRACE_MIN = 240;
+  const NEWS_TRIGGER_GRACE_MIN = 420;
+  ${extractFn('prevDate')}
   ${extractFn('triggerSlot')}
   return triggerSlot;
 `)();
 
-test('🔴 외부 트리거 유예가 GitHub Actions 지연(100~150분)을 덮는다', () => {
-  const at = (hour, minute) => triggerSlot({ hour, minute });
-  assert.deepEqual(at(9, 30), { hour: 9, minute: 30 }, '정시 트리거가 거부됐다');
-  // 🔴 이 저장소에서 반복 실측된 사실이다. 유예를 조이면 일일 뉴스가 통째로 끊긴다.
-  assert.ok(at(11, 10), 'GHA 100분 지연이 거부됐다 — 뉴스가 끊긴다');
-  assert.ok(at(12, 0), 'GHA 150분 지연이 거부됐다 — 뉴스가 끊긴다');
-  assert.deepEqual(at(19, 40), { hour: 18, minute: 0 });
+const DAY = '2026-09-12';
+const at = (hour, minute, date = DAY) => triggerSlot({ hour, minute, date });
+
+test('🔴 유예가 GitHub Actions 의 **실측** 지연을 덮는다', () => {
+  // 🔴 이 숫자들은 추측이 아니라 `gh run list` 로 본 실제 실행 시각이다(20회).
+  //    인계 문서의 "100~150분"을 믿고 240분으로 잡았다가, 실측하니
+  //    **최소 209 · 평균 267 · 최대 356분**이었다. 240 이면 트리거가 전부 창 밖으로
+  //    떨어져 일일 뉴스가 조용히 끊긴다 — 응답이 200 이라 GHA 는 계속 초록불이다.
+  assert.deepEqual(at(9, 30).slot, { hour: 9, minute: 30 }, '정시 트리거가 거부됐다');
+
+  // 아침 slot 실측 도착 구간 (KST 13:50~14:04 = 260~274분)
+  assert.deepEqual(at(13, 50).slot, { hour: 9, minute: 30 }, '실측 지연 260분이 거부됐다');
+  assert.deepEqual(at(14, 4).slot, { hour: 9, minute: 30 }, '실측 지연 274분이 거부됐다');
+
+  // 저녁 slot 실측 도착 구간 (KST 21:29~23:56 = 209~356분)
+  assert.deepEqual(at(21, 29).slot, { hour: 18, minute: 0 }, '실측 최소 지연 209분이 거부됐다');
+  assert.deepEqual(at(23, 56).slot, { hour: 18, minute: 0 }, '실측 최대 지연 356분이 거부됐다');
+});
+
+test('🔴 자정을 넘겨 도착해도 전날 slot 으로 받는다', () => {
+  // 실측 최대가 23:56(356분)이었다 — 자정까지 4분 남았다. 즉 실제로 일어날 수 있다.
+  // 날짜만 보고 버리면 그날 저녁 뉴스가 조용히 사라진다.
+  const r = at(0, 30, '2026-09-13');
+  assert.deepEqual(r.slot, { hour: 18, minute: 0 }, '자정 넘긴 트리거를 버렸다 — 저녁 뉴스가 사라진다');
+  assert.equal(r.date, '2026-09-12', '키 날짜가 오늘이면 어제분이 오늘 키를 먹는다');
 });
 
 test('엉뚱한 시간대에는 발송하지 않는다 — adhoc 경로는 없앴다', () => {
-  for (const [h, m] of [[3, 0], [15, 0], [23, 59], [8, 0]]) {
-    assert.equal(triggerSlot({ hour: h, minute: m }), null, `${h}:${m} 에 발송이 허용된다`);
+  // 유예(420분) 밖. 03:00 은 전날 18:00 에서 540분이라 여기서 걸러진다.
+  for (const [h, m] of [[3, 0], [6, 0], [8, 0], [9, 29]]) {
+    assert.equal(at(h, m), null, `${h}:${m} 에 발송이 허용된다`);
   }
 });
 
+test('지연된 트리거는 **가장 최근** slot 으로 묶인다', () => {
+  // 저녁 트리거(22:25)가 아침 slot 으로 잡히면 저녁분이 아침 키를 먹어
+  // 그날 저녁 뉴스가 통째로 사라진다.
+  assert.deepEqual(at(22, 25).slot, { hour: 18, minute: 0 });
+  assert.deepEqual(at(15, 0).slot, { hour: 9, minute: 30 });
+});
+
 test('하루에 인정되는 slot 은 2개뿐이다 (예전엔 시간마다 새 키라 24개였다)', () => {
-  const keys = new Set();
+  // 상한을 지키는 것은 유예 창이 아니라 **slot 키**다. 창을 넓혀도 이 수는 안 변해야 한다.
+  const byDate = new Map();
   for (let h = 0; h < 24; h++) {
     for (let m = 0; m < 60; m += 5) {
-      const s = triggerSlot({ hour: h, minute: m });
-      if (s) keys.add(`${s.hour}:${s.minute}`);
+      const r = at(h, m);
+      if (!r) continue;
+      const set = byDate.get(r.date) ?? new Set();
+      set.add(`${r.slot.hour}:${r.slot.minute}`);
+      byDate.set(r.date, set);
     }
   }
-  assert.equal(keys.size, 2, `하루 slot 이 ${keys.size}개 — 발송 상한이 늘어났다`);
+  // 자정 직후에는 **전날** slot 을 받으므로 날짜가 둘 나올 수 있다.
+  // 중요한 것은 "날짜마다 2개 이하"다 — 그래야 하루 2회가 유지된다.
+  for (const [date, set] of byDate) {
+    assert.ok(set.size <= 2, `${date} 에 slot 이 ${set.size}개 — 발송 상한이 늘어났다`);
+  }
+  assert.deepEqual([...(byDate.get(DAY) ?? [])].sort(), ['18:0', '9:30'],
+    '그날 자체의 slot 두 개가 다 살아 있어야 한다');
 });
 
 // cred — 서명·만료. 폐기는 저장소를 읽어야 해서 여기서는 형식만 본다.
