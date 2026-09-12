@@ -18,12 +18,14 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+import crypto from 'node:crypto';
 import path from 'node:path';
 
 const ROOT = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const PORT = 4700 + Math.floor(Math.random() * 200);
 const BASE = `http://127.0.0.1:${PORT}`;
 let child;
+let serverLog = '';   // 띄운 서버가 찍은 것 — 스케줄러가 떴는지 여기서 본다
 
 const get = (p, opts = {}) => fetch(`${BASE}${p}`, opts);
 
@@ -41,6 +43,8 @@ before(async () => {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  child.stdout.on('data', (c) => { serverLog += c.toString('utf8'); });
+  child.stderr.on('data', (c) => { serverLog += c.toString('utf8'); });
   const deadline = Date.now() + 20_000;
   for (;;) {
     try {
@@ -122,4 +126,116 @@ test('PDF 업로드 상한이 기본값(20MB)보다 낮게 묶여 있다', () =>
   assert.ok(Number(m[1]) <= 10, `PDF 상한이 ${m[1]}MB — 인증 없는 CPU 소모 경로라 10MB 이하로 유지할 것`);
   assert.ok(/readBodyBytes\(req,\s*PDF_MAX_BYTES\)/.test(src),
     'handleImportPdf 가 상한을 넘기지 않고 readBodyBytes 를 부른다 — 기본 20MB 가 적용된다');
+});
+
+// ── ⑤ 2026-09-12 점검에서 나온 것들 ──────────────────────────
+//
+// 🔴 **이 파일에서 `/api/news-push-now?scheduled=1` 을 절대 부르지 말 것.**
+//    .env 에 진짜 뉴스 봇 토큰·채팅ID 가 있으면 그 호출은 **공개 채널로 실제 발송**된다.
+//    아래는 전부 순수 로직 추출 + 소스 검사 + 인증 거부만 본다.
+
+const SERVER_SRC = readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+
+/** server.js 에서 `function 이름(` 부터 짝이 맞는 닫는 중괄호까지 잘라낸다(logic.test.mjs 와 같은 방식). */
+function extractFn(name) {
+  const start = SERVER_SRC.indexOf(`function ${name}(`);
+  assert.notEqual(start, -1, `server.js 에서 ${name} 을 찾지 못했다 (이름이 바뀌었는지 확인)`);
+  let depth = 0, i = SERVER_SRC.indexOf('{', start);
+  for (; i < SERVER_SRC.length; i++) {
+    if (SERVER_SRC[i] === '{') depth++;
+    else if (SERVER_SRC[i] === '}') { depth--; if (depth === 0) break; }
+  }
+  return SERVER_SRC.slice(start, i + 1);
+}
+
+test('🔴 테스트에서는 뉴스 발송 스케줄러가 뜨지 않는다', () => {
+  // 이 테스트의 서버는 .env 를 읽으므로 진짜 뉴스 토큰·채팅ID 를 갖고 뜬다.
+  // 예전 코드는 그 상태에서 setInterval 을 걸었고, KST 09:30~09:34 / 18:00~18:04 에
+  // `npm test` 를 돌리는 것만으로 **공개 채널에 진짜 뉴스가 나갔다.**
+  assert.ok(!/newspush\.enabled/.test(serverLog),
+    '테스트 서버가 발송 스케줄러를 띄웠다 — npm test 가 실제 발송을 일으킬 수 있다');
+  assert.match(SERVER_SRC, /NODE_ENV\s*!==\s*'test'/, '스케줄러의 테스트 가드가 사라졌다');
+});
+
+// 유예 창 — 순수 함수라 시계를 건드리지 않고 검사할 수 있다.
+const triggerSlot = new Function(`
+  const NEWS_PUSH_SLOTS_KST = [{ hour: 9, minute: 30 }, { hour: 18, minute: 0 }];
+  const NEWS_TRIGGER_GRACE_MIN = 240;
+  ${extractFn('triggerSlot')}
+  return triggerSlot;
+`)();
+
+test('🔴 외부 트리거 유예가 GitHub Actions 지연(100~150분)을 덮는다', () => {
+  const at = (hour, minute) => triggerSlot({ hour, minute });
+  assert.deepEqual(at(9, 30), { hour: 9, minute: 30 }, '정시 트리거가 거부됐다');
+  // 🔴 이 저장소에서 반복 실측된 사실이다. 유예를 조이면 일일 뉴스가 통째로 끊긴다.
+  assert.ok(at(11, 10), 'GHA 100분 지연이 거부됐다 — 뉴스가 끊긴다');
+  assert.ok(at(12, 0), 'GHA 150분 지연이 거부됐다 — 뉴스가 끊긴다');
+  assert.deepEqual(at(19, 40), { hour: 18, minute: 0 });
+});
+
+test('엉뚱한 시간대에는 발송하지 않는다 — adhoc 경로는 없앴다', () => {
+  for (const [h, m] of [[3, 0], [15, 0], [23, 59], [8, 0]]) {
+    assert.equal(triggerSlot({ hour: h, minute: m }), null, `${h}:${m} 에 발송이 허용된다`);
+  }
+});
+
+test('하루에 인정되는 slot 은 2개뿐이다 (예전엔 시간마다 새 키라 24개였다)', () => {
+  const keys = new Set();
+  for (let h = 0; h < 24; h++) {
+    for (let m = 0; m < 60; m += 5) {
+      const s = triggerSlot({ hour: h, minute: m });
+      if (s) keys.add(`${s.hour}:${s.minute}`);
+    }
+  }
+  assert.equal(keys.size, 2, `하루 slot 이 ${keys.size}개 — 발송 상한이 늘어났다`);
+});
+
+// cred — 서명·만료. 폐기는 저장소를 읽어야 해서 여기서는 형식만 본다.
+const cred = new Function('crypto', `
+  const SYNC_SECRET = 'test-secret-for-cred-checks';
+  const CRED_VERSION = 'v2';
+  const CRED_TTL_MS = 180 * 24 * 60 * 60 * 1000;
+  ${extractFn('credSig')}
+  ${extractFn('signCred')}
+  ${extractFn('verifyCred')}
+  return { signCred, verifyCred };
+`)(crypto);
+
+test('🔴 cred 에 만료가 있고, 무기한이던 v1 형식은 거부한다', () => {
+  const good = cred.signCred('12345');
+  assert.equal(cred.verifyCred(good).chatId, '12345');
+
+  // v1 은 `<chatId>:<서명>` — 발급시각도 버전도 없어 한 번 새면 영구 유효였다
+  assert.equal(cred.verifyCred(`12345:${'a'.repeat(32)}`), null, 'v1 cred 가 아직 통과한다');
+
+  const expired = cred.signCred('12345', Date.now() - 181 * 24 * 60 * 60 * 1000);
+  assert.equal(cred.verifyCred(expired), null, '만료된 cred 가 통과한다');
+});
+
+test('서명이 발급시각까지 덮는다 — 시각만 바꿔치기하면 안 통한다', () => {
+  // 서명이 chatId 만 덮으면, 만료를 붙여도 공격자가 시각을 최신으로 바꿔 영구 연장할 수 있다.
+  const good = cred.signCred('12345', Date.now() - 200 * 24 * 60 * 60 * 1000);
+  const sig = good.split(':')[3];
+  assert.equal(cred.verifyCred(`v2:12345:${Date.now()}:${sig}`), null,
+    '발급시각을 바꿔치기한 cred 가 통과한다 — 만료가 무력화된다');
+  assert.equal(cred.verifyCred(`v2:12345:${Date.now()}:${'b'.repeat(32)}`), null);
+});
+
+test('v1 cred 로는 동기화가 안 된다 (401 → 앱이 cred 를 지우고 재페어링한다)', async () => {
+  const r = await fetch(`${BASE}/api/sync/push`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer 12345:${'a'.repeat(32)}` },
+    body: '{}',
+  });
+  assert.equal(r.status, 401);
+});
+
+test('해제(disconnect)가 서버에 폐기를 기록한다', () => {
+  // 예전에는 "클라이언트가 cred 를 지우는 것"이 전부라, 이미 새어 나간 cred 는 그대로 살아 있었다.
+  const start = SERVER_SRC.indexOf('async function handleSyncDisconnect');
+  assert.ok(start > 0, 'handleSyncDisconnect 를 찾지 못했다');
+  const next = SERVER_SRC.indexOf('\nasync function ', start + 1);
+  const body = SERVER_SRC.slice(start, next > 0 ? next : undefined);
+  assert.match(body, /revokeCredsFor\(/, '해제가 폐기를 기록하지 않는다 — 새어 나간 cred 가 계속 먹힌다');
 });

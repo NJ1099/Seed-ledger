@@ -139,12 +139,16 @@ test('공개 조회 API 가 ok 형태로 응답한다', async () => {
 test('발송 엔드포인트는 무인증 요청을 거부한다', async () => {
   // ⚠️ 이 테스트는 절대로 실제 발송을 유발하면 안 된다.
   //    /api/broadcast 는 공개 채널로 나가므로 **무인증 거부만** 확인한다(라운드 25 실발송 사고).
-  for (const p of ['/api/broadcast', '/api/news-push-now']) {
-    const r = await postJson(p, {});
-    // 405(메서드 거부)도 통과 — 실제 발송으로 이어지지 않으면 된다.
-    assert.ok([401, 403, 404, 405, 503].includes(r.status),
-      `${p} 가 ${r.status} — 무인증으로 통과하면 안 된다`);
-  }
+  const r = await postJson('/api/broadcast', {});
+  assert.ok([401, 403, 503].includes(r.status), `/api/broadcast 가 ${r.status} — 무인증으로 통과하면 안 된다`);
+});
+
+test('/api/news-push-now 는 POST 를 받지 않는다', async () => {
+  // ⚠️ 예전에는 이 검사가 위 루프에 섞여 있었고 통과 목록에 405 가 들어 있었다.
+  //    이 엔드포인트는 **GET 전용**이라 POST 는 인증과 무관하게 무조건 405 다 —
+  //    즉 그 단언은 인증에 대해 **아무것도 지키지 않으면서** 통과하고 있었다.
+  //    진짜 인증 검사는 아래 GET 테스트가 한다.
+  assert.equal((await postJson('/api/news-push-now', {})).status, 405);
 });
 
 test('수동 뉴스 발송은 인증 없이는 절대 발송되지 않는다', async () => {

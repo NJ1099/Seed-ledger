@@ -3898,6 +3898,20 @@ async function handleConfigStatus(req, res) {
     krxAuth: krxLastAuth
       ? { authenticated: krxLastAuth.authenticated, errorCode: krxLastAuth.errorCode, ts: krxLastAuth.ts }
       : null,
+    // 🔴 배포 반영 확인용. **200 도, 갱신된 시각도 새 코드의 증거가 아니다** — 예전에
+    //    배포 검증에 두 번 속았다(edge 전파 지연 · 응답 캐시). 그래서 "새 코드에만 있는
+    //    모양"을 응답에 싣는다. 값이 아니라 **설정의 모양**만 — 시크릿은 내보내지 않는다.
+    //
+    //    이게 없으면 `?scheduled=1` 응답으로 확인할 수밖에 없는데, 구 코드면 그 호출이
+    //    **실제 발송**을 해버려서 확인 수단으로 쓸 수 없다.
+    newsTrigger: {
+      graceMin: NEWS_TRIGGER_GRACE_MIN,
+      secretRequired: !!NEWS_CRON_SECRET,
+    },
+    syncCred: {
+      version: CRED_VERSION,
+      ttlDays: Math.round(CRED_TTL_MS / (24 * 60 * 60 * 1000)),
+    },
     ts: nowKST(),
   });
 }
@@ -4392,22 +4406,109 @@ function tgDownloadFile(filePath) {
   });
 }
 
-function signCred(chatId) {
-  const sig = crypto.createHmac('sha256', SYNC_SECRET).update(String(chatId)).digest('hex').slice(0, 32);
-  return `${chatId}:${sig}`;
+// ---------- 자격증명(cred) ----------
+//
+// 형식: `v2:<chatId>:<발급시각ms>:<서명>`
+//
+// 🔴 v1(`<chatId>:<서명>`)에는 **발급 시각도 버전도 없었다.** 한 번 새면 영구 유효였고,
+//    `/api/sync/disconnect` 를 눌러도 서버가 무상태라 그 cred 는 계속 먹혔다. 무효화할
+//    유일한 방법이 봇 토큰 교체인데 그러면 전체 사용자가 같이 끊긴다.
+//    → 발급 시각을 서명에 넣어 **만료**를 두고, 계정별 **폐기 시점**을 저장해 해제가
+//      실제로 동작하게 했다.
+//
+// ⚠️ **v1 cred 는 더 이상 받지 않는다.** 앱은 401 을 받으면 cred 를 지우므로
+//    (app.js 의 syncPushNow/syncPullNow) 사용자는 **한 번만 다시 페어링**하면 된다.
+const CRED_VERSION = 'v2';
+const CRED_TTL_MS = Math.max(1, Number(process.env.SYNC_CRED_TTL_DAYS) || 180) * 24 * 60 * 60 * 1000;
+const REVOKED_KEY = 'seed:sync:revoked';   // { [chatId]: 이 시각 이전 발급분은 폐기 }
+const REVOKED_FILE = path.join(DATA_DIR, 'sync-revoked.json');
+let _revokedCache = { at: 0, map: null };
+
+function credSig(payload) {
+  return crypto.createHmac('sha256', SYNC_SECRET).update(payload).digest('hex').slice(0, 32);
 }
+
+function signCred(chatId, issuedAt = Date.now()) {
+  const payload = `${CRED_VERSION}:${chatId}:${issuedAt}`;
+  return `${payload}:${credSig(payload)}`;
+}
+
+/**
+ * 서명·형식·만료를 본다(동기). **폐기 여부는 credRevoked 로 따로 확인한다** —
+ * 저장소를 읽어야 해서 비동기이기 때문이다.
+ * @returns {{chatId: string, issuedAt: number} | null}
+ */
 function verifyCred(s) {
-  if (!s || typeof s !== 'string' || !s.includes(':')) return null;
-  const idx = s.lastIndexOf(':');
-  const chatId = s.slice(0, idx);
-  const sig = s.slice(idx + 1);
+  if (!s || typeof s !== 'string') return null;
+  const parts = s.split(':');
+  if (parts.length !== 4 || parts[0] !== CRED_VERSION) return null;   // v1 은 거부 → 앱이 재페어링
+  const [, chatId, issuedAtRaw, sig] = parts;
   if (!/^-?\d{1,20}$/.test(chatId)) return null;
-  const expected = crypto.createHmac('sha256', SYNC_SECRET).update(chatId).digest('hex').slice(0, 32);
+  if (!/^\d{10,16}$/.test(issuedAtRaw)) return null;
+  const expected = credSig(`${CRED_VERSION}:${chatId}:${issuedAtRaw}`);
   if (sig.length !== expected.length) return null;
   try {
     if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
   } catch { return null; }
-  return chatId;
+  const issuedAt = Number(issuedAtRaw);
+  if (!Number.isFinite(issuedAt) || Date.now() - issuedAt > CRED_TTL_MS) return null;   // 만료
+  return { chatId, issuedAt };
+}
+
+/** 폐기 목록. 공지와 같은 방식 — Upstash 우선, 없으면 파일. */
+async function loadRevoked() {
+  if (_revokedCache.map && Date.now() - _revokedCache.at < 30_000) return _revokedCache.map;
+  let map = {};
+  try {
+    if (upstashEnabled()) {
+      const raw = await upstashCmd(['GET', REVOKED_KEY]);
+      if (raw) {
+        const o = JSON.parse(raw);
+        if (o && typeof o === 'object' && !Array.isArray(o)) map = o;
+      }
+    } else {
+      const o = readJSON(REVOKED_FILE, {});
+      if (o && typeof o === 'object' && !Array.isArray(o)) map = o;
+    }
+  } catch (e) {
+    logLine('warn', 'sync.revoked.load', { err: String(e) });
+    // 🔴 못 읽었으면 **캐시에 넣지 않는다.** 빈 목록을 30초 붙잡으면 그동안 폐기가 무시된다.
+    return _revokedCache.map || {};
+  }
+  _revokedCache = { at: Date.now(), map };
+  return map;
+}
+
+/** 이 계정의 기존 cred 를 전부 폐기한다(해제 시점 기록). */
+async function revokeCredsFor(chatId) {
+  const map = await loadRevoked();
+  const next = { ...map, [String(chatId)]: Date.now() };
+  // TTL 이 지난 폐기 기록은 어차피 만료로 걸리므로 정리한다(목록 무한 증가 방지).
+  const cutoff = Date.now() - CRED_TTL_MS;
+  for (const [k, v] of Object.entries(next)) if (Number(v) < cutoff) delete next[k];
+  if (upstashEnabled()) await upstashCmd(['SET', REVOKED_KEY, JSON.stringify(next)]);
+  else writeJSON(REVOKED_FILE, next);
+  _revokedCache = { at: Date.now(), map: next };
+}
+
+async function credRevoked(chatId, issuedAt) {
+  try {
+    const at = Number((await loadRevoked())[String(chatId)] || 0);
+    return at > 0 && issuedAt < at;
+  } catch {
+    return false;   // 저장소 장애로 정상 사용자를 막지는 않는다
+  }
+}
+
+/** 세 동기화 핸들러가 함께 쓰는 인증 — 서명·만료·폐기를 한 벌로 본다. */
+async function authSync(req, res) {
+  const claim = verifyCred(getCredFromHeaders(req));
+  if (!claim) { reply(res, 401, { ok: false, error: 'bad-cred' }); return null; }
+  if (await credRevoked(claim.chatId, claim.issuedAt)) {
+    reply(res, 401, { ok: false, error: 'revoked', hint: '해제된 자격입니다. 다시 페어링해주세요.' });
+    return null;
+  }
+  return claim.chatId;
 }
 
 function newPairCode() {
@@ -4531,8 +4632,21 @@ const NEWS_PUSH_SLOTS_KST = [
   { hour: 9, minute: 30 },
   { hour: 18, minute: 0 },
 ];
-const NEWS_PUSH_WINDOW_MIN = 5;         // slot 분 ±N분 윈도우 안에서 1회 발송
+const NEWS_PUSH_WINDOW_MIN = 5;         // slot 분 ±N분 윈도우 안에서 1회 발송(in-process 틱용)
 const NEWS_PUSH_COUNT = 10;             // 발송할 뉴스 건수
+
+// 외부 트리거(`?scheduled=1`)가 slot 을 인정해 주는 유예 시간.
+//
+// 🔴 **짧게 조이지 말 것.** GitHub Actions cron 은 이 저장소에서 반복 실측된 대로
+//    **100~150분 늦게** 온다. ±5분 윈도우로 막으면 일일 뉴스가 통째로 끊긴다.
+//    (예전 코드가 `adhoc` 키로 아무 때나 받아 준 덕에 발송이 되고 있었다 —
+//     그 느슨함이 사실상 이 지연을 흡수하고 있었던 것이다.)
+const NEWS_TRIGGER_GRACE_MIN = Math.max(5, Number(process.env.NEWS_TRIGGER_GRACE_MIN) || 240);
+
+// 외부 트리거 공유 비밀. 설정되어 있으면 `?scheduled=1` 에 요구한다.
+// 미설정이면 예전처럼 열려 있다 — 설정을 강제하면 갱신 전까지 뉴스가 끊기므로,
+// 잠그는 것은 사람이 GitHub Secret 을 넣은 뒤에 켜지도록 했다.
+const NEWS_CRON_SECRET = (process.env.NEWS_CRON_SECRET || '').trim();
 let lastNewsPushSlot = '';              // 중복 발송 방지 키 (YYYY-MM-DD:HH:MM)
 let lastManualNewsPush = 0;             // 수동 트리거 쿨다운용 타임스탬프
 
@@ -4657,6 +4771,35 @@ function slotKey(date, slot) {
   return `${date}:${hh}:${mm}`;
 }
 
+/**
+ * 외부 트리거가 인정받을 slot — slot 시각부터 NEWS_TRIGGER_GRACE_MIN 분 안이면 그 slot.
+ * 여러 개가 걸리면 **가장 최근** slot. 유예 밖이면 null(=발송하지 않는다).
+ *
+ * 예전에는 slot 을 못 찾으면 `${date}:${hour}:adhoc` 키로 **그냥 발송**했다. 키가
+ * 시간마다 새로 생기므로 주석이 말하던 "하루 2회"가 아니라 **하루 24회**가 상한이었다.
+ */
+function triggerSlot(parts) {
+  const nowMin = parts.hour * 60 + parts.minute;
+  let best = null;
+  let bestAge = Infinity;
+  for (const s of NEWS_PUSH_SLOTS_KST) {
+    const age = nowMin - (s.hour * 60 + s.minute);
+    if (age < 0 || age > NEWS_TRIGGER_GRACE_MIN) continue;
+    if (age < bestAge) { best = s; bestAge = age; }
+  }
+  return best;
+}
+
+/** 외부 트리거 비밀 확인 — 헤더 또는 ?key=. timing-safe 비교. */
+function cronSecretOk(req, url) {
+  const got = String(req.headers['x-cron-secret'] || url.searchParams.get('key') || '');
+  if (!got) return false;
+  try {
+    const a = Buffer.from(got), b = Buffer.from(NEWS_CRON_SECRET);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  } catch { return false; }
+}
+
 // 1분 주기 틱 — KST 09:30 / 18:00 윈도우 안에서 1회만 발송.
 // 윈도우 + slot dedupe 로 setInterval 드리프트/중복을 흡수한다.
 function newsPushTick() {
@@ -4672,9 +4815,19 @@ function newsPushTick() {
     .catch((e) => { lastNewsPushSlot = ''; logLine('error', 'newspush.tick.fail', { err: String(e) }); });
 }
 
-if (NEWS_PUSH_ENABLED) {
+// 🔴 테스트에서는 스케줄러를 띄우지 않는다.
+//    `loadDotEnv()` 는 무조건 돌아 .env 의 실제 봇 토큰·채팅ID 를 읽으므로, 테스트가
+//    서버를 spawn 하면 이 틱도 같이 떴다. 테스트 코드는 발송 엔드포인트를 조심해서
+//    부르지 않지만 **스케줄러는 그것과 무관하게 시계만 본다** — KST 09:30~09:34 /
+//    18:00~18:04 에 `npm test` 를 돌리면 공개 채널로 진짜 뉴스가 나갔다.
+//    (라운드 25 실발송 사고와 같은 문. 2026-09-12 점검에서 발견)
+const NEWS_PUSH_SCHEDULER_ON = NEWS_PUSH_ENABLED && process.env.NODE_ENV !== 'test';
+
+if (NEWS_PUSH_SCHEDULER_ON) {
   setInterval(newsPushTick, 60_000);
   logLine('info', 'newspush.enabled', { slotsKst: NEWS_PUSH_SLOTS_KST, count: NEWS_PUSH_COUNT });
+} else if (NEWS_PUSH_ENABLED) {
+  logLine('info', 'newspush.scheduler-off', { reason: 'NODE_ENV=test' });
 } else {
   logLine('info', 'newspush.disabled', {
     reason: !NEWS_BOT_TOKEN ? 'no-token' : 'no-chat-id',
@@ -4693,13 +4846,28 @@ async function handleNewsPushNow(req, res) {
 
   const url = new URL(req.url, 'http://x');
   if (url.searchParams.get('scheduled') === '1') {
+    // 🔴 이 경로는 인증이 없다(GitHub Actions 가 부른다). 예전에는 slot 을 못 찾으면
+    //    `${date}:${hour}:adhoc` 키로 그냥 발송해서, 주석이 말하던 "하루 2회"가 아니라
+    //    **하루 24회**까지 나갈 수 있었다. 더 나쁜 것은 09:00 에 때리면 키가 09:30 슬롯으로
+    //    잡혀 **정규 발송이 `already-sent` 로 건너뛰어졌다** — 외부인이 발송 시각을 정하고
+    //    정규 발송을 가로챌 수 있었다. (2026-09-12 점검)
+    if (NEWS_CRON_SECRET && !cronSecretOk(req, url)) {
+      logLine('warn', 'newspush.cron.unauthorized', { ip: clientIp(req) });
+      return reply(res, 401, { ok: false, error: 'unauthorized' });
+    }
+    if (rateLimited('news-push', clientIp(req), 10)) return replyRateLimited(res);
+
     const parts = kstClockParts();
-    // 외부 cron 은 약간의 지연을 가질 수 있으므로 윈도우를 벗어나도
-    // "가장 가까운 같은 시각 slot" 이 있으면 그 slot 키로 dedupe + 발송.
-    const matched = currentNewsSlot(parts)
-      || NEWS_PUSH_SLOTS_KST.find((s) => s.hour === parts.hour)
-      || null;
-    const key = matched ? slotKey(parts.date, matched) : `${parts.date}:${parts.hour}:adhoc`;
+    const matched = triggerSlot(parts);
+    if (!matched) {
+      // 200 으로 답한다 — GitHub Actions 의 `curl -fsS` 는 4xx 에서 스텝을 실패시킨다.
+      return reply(res, 200, {
+        ok: true,
+        skipped: 'outside-window',
+        hint: `발송 slot 기준 ${NEWS_TRIGGER_GRACE_MIN}분 유예 밖입니다.`,
+      });
+    }
+    const key = slotKey(parts.date, matched);
     if (key === lastNewsPushSlot) {
       return reply(res, 200, { ok: true, skipped: 'already-sent', slot: key });
     }
@@ -4718,9 +4886,10 @@ async function handleNewsPushNow(req, res) {
     return reply(res, 503, { ok: false, error: 'admin-disabled', hint: '수동 발송은 ADMIN_TOKEN 설정이 필요합니다.' });
   }
   if (!isAdminReq(req)) {
-    const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim()
-      || (req.socket && req.socket.remoteAddress) || 'unknown';
-    logLine('warn', 'newspush.unauthorized', { ip });
+    // ⚠️ `x-forwarded-for` 의 맨 앞 값을 직접 쓰지 말 것 — 클라이언트가 위조할 수 있다.
+    //    여기는 로그에만 쓰이지만, 위조된 IP 가 남으면 나중에 침입을 조사할 때 엉뚱한
+    //    주소를 쫓게 된다. 라운드 31 이 만든 clientIp() 를 이 한 곳이 안 쓰고 있었다.
+    logLine('warn', 'newspush.unauthorized', { ip: clientIp(req) });
     return reply(res, 401, { ok: false, error: 'unauthorized', hint: '수동 발송은 관리자 토큰이 필요합니다.' });
   }
 
@@ -5044,9 +5213,8 @@ async function handleSyncPush(req, res) {
   if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
   if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
   if (rateLimited('sync-push', clientIp(req), 10)) return replyRateLimited(res);
-  const cred = getCredFromHeaders(req);
-  const chatId = verifyCred(cred);
-  if (!chatId) return reply(res, 401, { ok: false, error: 'bad-cred' });
+  const chatId = await authSync(req, res);   // 서명·만료·폐기를 한 벌로 본다
+  if (!chatId) return;
   // cred 소유자 단위로도 제한한다. 백업 1회가 텔레그램 업로드 + 핀 2번 호출이라,
   // 한 계정이 폭주하면 봇 전체가 텔레그램 API 제한에 걸려 다른 사용자까지 막힌다.
   if (rateLimited('sync-push-cred', chatId, 6)) return replyRateLimited(res);
@@ -5101,9 +5269,8 @@ async function handleSyncPull(req, res) {
   if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
   if (req.method !== 'POST' && req.method !== 'GET') return reply(res, 405, { ok: false, error: 'method' });
   if (rateLimited('sync-pull', clientIp(req), 20)) return replyRateLimited(res);
-  const cred = getCredFromHeaders(req);
-  const chatId = verifyCred(cred);
-  if (!chatId) return reply(res, 401, { ok: false, error: 'bad-cred' });
+  const chatId = await authSync(req, res);
+  if (!chatId) return;
   // 복원 1회가 getChat + getFile + 파일 다운로드 3연속이라 계정 단위로도 묶는다.
   if (rateLimited('sync-pull-cred', chatId, 12)) return replyRateLimited(res);
   try {
@@ -5136,11 +5303,22 @@ async function handleSyncDisconnect(req, res) {
   if (!SYNC_ENABLED) return reply(res, 503, { ok: false, error: 'sync-disabled' });
   if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'method' });
   if (rateLimited('sync-disconnect', clientIp(req), 10)) return replyRateLimited(res);
-  const cred = getCredFromHeaders(req);
-  const chatId = verifyCred(cred);
-  if (!chatId) return reply(res, 401, { ok: false, error: 'bad-cred' });
+  const chatId = await authSync(req, res);
+  if (!chatId) return;
   // 해제는 채팅에 메시지를 남긴다. cred 하나로 반복 호출하면 도배가 되므로 계정 단위로도 묶는다.
   if (rateLimited('sync-disconnect-cred', chatId, 5)) return replyRateLimited(res);
+
+  // 🔴 **해제가 실제로 무언가를 하게 만드는 줄이다.** 예전에는 서버가 무상태라
+  //    "클라이언트가 cred 를 지우는 것"이 전부였고, 이미 새어 나간 cred 는 그대로 살아 있었다.
+  //    이제 이 시점 이전에 발급된 이 계정의 cred 는 전부 못 쓰게 된다.
+  try {
+    await revokeCredsFor(chatId);
+  } catch (e) {
+    // 폐기를 기록하지 못했는데 성공이라고 답하면, 사용자는 끊었다고 믿는데 cred 는 살아 있다.
+    logLine('error', 'sync.revoke.fail', { err: String(e) });
+    return reply(res, 502, { ok: false, error: 'revoke-failed', hint: '잠시 후 다시 시도해주세요.' });
+  }
+
   try {
     await tgPostJson('unpinAllChatMessages', { chat_id: chatId }).catch(() => {});
     await tgPostJson('sendMessage', {

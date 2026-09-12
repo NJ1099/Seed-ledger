@@ -28,4 +28,18 @@ services:
       # 앞에 CDN 을 더 붙이면 그 수만큼 올릴 것. 코드는 이 값이 없으면 RENDER 감지로 1을 쓴다.
       - key: TRUSTED_PROXY_HOPS
         value: "1"
+      # 외부 뉴스 트리거(/api/news-push-now?scheduled=1)의 공유 비밀.
+      # 이 값이 **설정되면** 그 경로가 잠기고, GitHub Actions 는 같은 값을
+      # repo Secret(NEWS_CRON_SECRET)으로 보내야 한다. 미설정이면 예전처럼 열려 있다
+      # (강제하면 값을 넣기 전까지 일일 뉴스가 끊기므로 사람이 켜도록 했다).
+      # 🔴 값은 여기 적지 말 것 — Render 대시보드에서 입력한다.
+      - key: NEWS_CRON_SECRET
+        sync: false
+      # 외부 트리거가 slot 을 인정하는 유예(분). 기본 240.
+      # 🔴 짧게 줄이지 말 것 — GitHub Actions cron 은 실측상 100~150분 늦게 온다.
+      - key: NEWS_TRIGGER_GRACE_MIN
+        value: "240"
+      # 동기화 자격(cred) 수명(일). 기본 180. 만료되면 앱이 자동으로 재페어링을 요구한다.
+      - key: SYNC_CRED_TTL_DAYS
+        value: "180"
       # PORT 는 Render 가 주입함. 직접 설정 금지.

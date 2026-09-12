@@ -4,6 +4,15 @@ yarn-debug.log*
 yarn-error.log*
 
 # 서버 런타임 산출물 (배포 후 자동 생성). 커밋하지 않는다.
+# 개인 금융 데이터 — 선제 차단. 이 repo 는 PUBLIC 이다.
+# 형제 프로젝트(E:/AI/seed)가 같은 이름의 파일에 실제 계좌번호·잔고를 쓴다.
+# 서버 코드가 한 번이라도 이 클론에 이 파일들을 만들면 곧장 공개 repo 로 간다.
+data/accounts.json
+data/transactions.json
+data/snapshots/
+data/notices.json
+data/sync-revoked.json
+data/_newspush_test.log
 data/logs/
 data/quote-cache.json
 data/*.tmp

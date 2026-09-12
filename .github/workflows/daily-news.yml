@@ -18,9 +18,15 @@ jobs:
       - name: 서버 깨우기
         run: curl -fsS -m 90 "https://seed-ledger.onrender.com/healthz" || true
 
+      # 🔴 NEWS_CRON_SECRET 은 repo Secret 에 넣는다. 서버에도 같은 값을 넣어야 잠긴다.
+      #    둘 다 비어 있으면 예전처럼 인증 없이 동작한다(뉴스가 끊기지 않도록).
+      #    한쪽만 넣으면 401 로 발송이 멈추므로 **서버 → repo 순서로** 넣을 것.
       - name: 뉴스 푸시 트리거
+        env:
+          CRON_SECRET: ${{ secrets.NEWS_CRON_SECRET }}
         run: |
           curl -fsS -m 120 --retry 2 --retry-delay 20 --retry-all-errors \
+            -H "x-cron-secret: ${CRON_SECRET}" \
             "https://seed-ledger.onrender.com/api/news-push-now?scheduled=1" \
             -w "\n[HTTP %{http_code}]\n"
 
