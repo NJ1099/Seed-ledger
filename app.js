@@ -6853,6 +6853,27 @@ async function loadStockDetail(code, type) {
   }
 }
 
+/**
+ * 억 단위 숫자를 사람이 읽는 단위로.
+ *
+ * 🔴 그냥 `toLocaleString() + '억'` 을 붙이면 "1,350,680,382억" 같은 게 나온다.
+ *    자릿수가 열 자리라 큰지 작은지 가늠조차 안 된다 — 비교표에서는 치명적이다.
+ *    조 단위부터는 조로 끊어 준다.
+ */
+function formatEokWon(eok) {
+  if (eok == null || !Number.isFinite(eok)) return '—';
+  const abs = Math.abs(eok);
+  if (abs >= 10000) {
+    const jo = Math.floor(abs / 10000);
+    const rest = Math.round(abs % 10000);
+    const sign = eok < 0 ? '-' : '';
+    return rest
+      ? `${sign}${jo.toLocaleString('ko-KR')}조 ${rest.toLocaleString('ko-KR')}억`
+      : `${sign}${jo.toLocaleString('ko-KR')}조`;
+  }
+  return `${Math.round(eok).toLocaleString('ko-KR')}억`;
+}
+
 function renderStockDetail(box, d) {
   const parts = [];
 
@@ -6908,7 +6929,7 @@ function renderStockDetail(box, d) {
             <th>${esc(x.name)}<span class="muted small"> ${esc(x.code)}</span></th>
             <td class="tnum">${esc(x.priceText ?? '—')}</td>
             <td class="tnum ${cls}">${esc(rate)}</td>
-            <td class="tnum">${x.marketValue == null ? '—' : esc(x.marketValue.toLocaleString('ko-KR')) + '억'}</td>
+            <td class="tnum">${esc(formatEokWon(x.marketValue))}</td>
           </tr>`;
         }).join('')}</tbody>
       </table></div>
