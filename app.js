@@ -6949,13 +6949,24 @@ function renderStockDetail(box, d, news) {
         <tbody>${fin.rows.map(row => {
           // 🔴 전년 대비는 **확정 실적끼리만** 비교한다. 추정치를 섞으면
           //    아직 나오지도 않은 실적을 "전년 대비 +1240%" 로 보여 주게 된다.
+          //
+          // 🔴 그리고 **정말 1년 차이일 때만** 그렇게 부른다.
+          //    값이 빈 기간(미공시 등)을 걸러내고 나면 남은 둘이 2~3년 떨어져 있을 수 있는데,
+          //    그래도 화면에는 "전년 대비" 라고 적혀 조용히 거짓말이 된다.
+          //    기간 키(202312)의 연도를 비교해 1년이 아니면 아예 표시하지 않는다.
           const confirmed = fin.periods
-            .map((t, i) => ({ est: t.estimate, v: row.values[i] }))
+            .map((t, i) => ({ key: t.key, est: t.estimate, v: row.values[i] }))
             .filter(x => !x.est && x.v != null);
-          const yoy = deltaPercent(
-            confirmed.length >= 2 ? confirmed[confirmed.length - 2].v : null,
-            confirmed.length >= 2 ? confirmed[confirmed.length - 1].v : null,
-          );
+          let yoy = { text: '—', cls: '' };
+          if (confirmed.length >= 2) {
+            const cur = confirmed[confirmed.length - 1];
+            const prev = confirmed[confirmed.length - 2];
+            const yCur = parseInt(String(cur.key).slice(0, 4), 10);
+            const yPrev = parseInt(String(prev.key).slice(0, 4), 10);
+            if (Number.isFinite(yCur) && Number.isFinite(yPrev) && yCur - yPrev === 1) {
+              yoy = deltaPercent(prev.v, cur.v);
+            }
+          }
           return `<tr>
             <th>${esc(row.label)}</th>
             ${row.valueTexts.map((v, i) => {
