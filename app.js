@@ -6841,12 +6841,20 @@ async function loadStockDetail(code, type) {
   box.hidden = false;
   box.innerHTML = '<div class="scd-loading muted small">불러오는 중…</div>';
   try {
-    const r = await stockApiGet(`/api/stock-detail?code=${encodeURIComponent(code)}`);
+    // 상세와 뉴스를 동시에. 뉴스가 늦거나 실패해도 상세는 그대로 보여 준다.
+    // 뉴스 검색어는 종목명이다 — 코드(005930)로 찾으면 기사가 거의 안 걸린다.
+    const name = (typeof inlineChart === 'object' && inlineChart) ? inlineChart.name : '';
+    const [r, nr] = await Promise.all([
+      stockApiGet(`/api/stock-detail?code=${encodeURIComponent(code)}`),
+      name
+        ? stockApiGet(`/api/stock-news?q=${encodeURIComponent(name)}&limit=5`).catch(() => null)
+        : Promise.resolve(null),
+    ]);
     if (!r || !r.ok) {
       box.innerHTML = '<div class="scd-loading muted small">상세 정보를 불러오지 못했습니다.</div>';
       return;
     }
-    renderStockDetail(box, r);
+    renderStockDetail(box, r, (nr && nr.ok && Array.isArray(nr.news)) ? nr.news : []);
   } catch (e) {
     console.warn('[stock] detail failed', e);
     box.innerHTML = '<div class="scd-loading muted small">상세 정보를 불러오지 못했습니다.</div>';
@@ -6874,7 +6882,25 @@ function formatEokWon(eok) {
   return `${Math.round(eok).toLocaleString('ko-KR')}억`;
 }
 
-function renderStockDetail(box, d) {
+/**
+ * 전년 대비 증감률. 한국 관행대로 오르면 빨강(▲), 내리면 파랑(▼).
+ * ⚠️ 기준이 0 이거나 부호가 바뀌면 퍼센트가 의미를 잃는다(-10 → +5 가 "+150%").
+ *    그럴 때는 숫자를 만들어 내지 말고 '—' 로 둔다.
+ */
+function deltaPercent(prev, cur) {
+  if (prev == null || cur == null || prev === 0) return { text: '—', cls: '' };
+  if ((prev < 0) !== (cur < 0)) return { text: '—', cls: '' };
+  const pct = ((cur - prev) / Math.abs(prev)) * 100;
+  if (!Number.isFinite(pct)) return { text: '—', cls: '' };
+  const up = pct > 0;
+  const sign = up ? '▲' : (pct < 0 ? '▼' : '');
+  return {
+    text: `${sign}${Math.abs(pct).toFixed(1)}%`,
+    cls: up ? 'up' : (pct < 0 ? 'down' : ''),
+  };
+}
+
+function renderStockDetail(box, d, news) {
   const parts = [];
 
   // 로고 + 요약. 로고가 없을 수도 있으므로 있을 때만 그린다.
@@ -6904,35 +6930,81 @@ function renderStockDetail(box, d) {
       <div class="scd-h">재무제표 <span class="muted small">(${esc(fin.unit || '')})</span></div>
       <div class="scd-table-wrap"><table class="scd-table">
         <thead><tr><th></th>${fin.periods.map(t =>
-          `<th>${esc(t.label)}${t.estimate ? '<em class="scd-est">추정</em>' : ''}</th>`).join('')}</tr></thead>
-        <tbody>${fin.rows.map(row => `<tr>
-          <th>${esc(row.label)}</th>
-          ${row.valueTexts.map(v => `<td class="tnum">${esc(v ?? '—')}</td>`).join('')}
-        </tr>`).join('')}</tbody>
+          `<th>${esc(t.label)}${t.estimate ? '<em class="scd-est">추정</em>' : ''}</th>`).join('')}<th>전년 대비</th></tr></thead>
+        <tbody>${fin.rows.map(row => {
+          // 🔴 전년 대비는 **확정 실적끼리만** 비교한다. 추정치를 섞으면
+          //    아직 나오지도 않은 실적을 "전년 대비 +1240%" 로 보여 주게 된다.
+          const confirmed = fin.periods
+            .map((t, i) => ({ est: t.estimate, v: row.values[i] }))
+            .filter(x => !x.est && x.v != null);
+          const yoy = deltaPercent(
+            confirmed.length >= 2 ? confirmed[confirmed.length - 2].v : null,
+            confirmed.length >= 2 ? confirmed[confirmed.length - 1].v : null,
+          );
+          return `<tr>
+            <th>${esc(row.label)}</th>
+            ${row.valueTexts.map((v, i) => {
+              // 조 단위가 넘는 금액은 축약한다. "2,589,355" 보다 "258.9조" 가 빨리 읽힌다.
+              // 비율(%)·배수 항목은 축약하면 안 되므로 자릿수가 큰 것만 바꾼다.
+              const n = row.values[i];
+              const big = n != null && Math.abs(n) >= 10000;
+              return `<td class="tnum" ${big ? `title="${esc(v ?? '')}"` : ''}>${esc(big ? formatEokWon(n) : (v ?? '—'))}</td>`;
+            }).join('')}
+            <td class="tnum ${yoy.cls}">${esc(yoy.text)}</td>
+          </tr>`;
+        }).join('')}</tbody>
       </table></div>
     </div>`);
   }
 
   // 동종업계 비교 — 같은 업종 종목을 나란히.
+  // 🔴 기준 종목(지금 보고 있는 것)을 맨 위에 넣는다. 네이버 응답에는 자기 자신이
+  //    빠져 있어서, 그대로 두면 "무엇과 비교하는지"가 없는 비교표가 된다.
   if (Array.isArray(d.peers) && d.peers.length) {
+    const rows = [];
+    if (p.code) {
+      rows.push({
+        code: p.code, name: p.name, priceText: p.priceText,
+        changeRate: p.changeRate, direction: p.direction,
+        capText: d.selfMarketCapText, self: true,
+      });
+    }
+    for (const x of d.peers) {
+      rows.push({ ...x, capText: formatEokWon(x.marketCapEok), self: false });
+    }
     parts.push(`<div class="scd-block">
       <div class="scd-h">같은 업종 비교</div>
       <div class="scd-table-wrap"><table class="scd-table">
         <thead><tr><th>종목</th><th>현재가</th><th>등락률</th><th>시가총액</th></tr></thead>
-        <tbody>${d.peers.map(x => {
+        <tbody>${rows.map(x => {
           const up = x.direction === 'RISING';
           const dn = x.direction === 'FALLING';
           const cls = up ? 'up' : (dn ? 'down' : '');
           const rate = x.changeRate == null ? '—'
             : `${up ? '+' : (dn ? '-' : '')}${Math.abs(x.changeRate).toFixed(2)}%`;
-          return `<tr>
-            <th>${esc(x.name)}<span class="muted small"> ${esc(x.code)}</span></th>
+          return `<tr class="${x.self ? 'scd-self' : ''}">
+            <th>${esc(x.name)}<span class="muted small"> ${esc(x.code)}</span>${x.self ? '<em class="scd-selftag">보는 중</em>' : ''}</th>
             <td class="tnum">${esc(x.priceText ?? '—')}</td>
             <td class="tnum ${cls}">${esc(rate)}</td>
-            <td class="tnum">${esc(formatEokWon(x.marketValue))}</td>
+            <td class="tnum">${esc(x.capText ?? '—')}</td>
           </tr>`;
         }).join('')}</tbody>
       </table></div>
+    </div>`);
+  }
+
+  // 이 종목 뉴스. 없으면 블록 자체를 안 그린다 — 빈 제목줄만 있으면 고장처럼 보인다.
+  if (Array.isArray(news) && news.length) {
+    parts.push(`<div class="scd-block">
+      <div class="scd-h">이 종목 뉴스</div>
+      <div class="scd-news">${news.map(n => {
+        const href = safeHttpUrl(n.url || '');
+        if (!href) return '';
+        return `<a class="scd-news-item" href="${esc(href)}" target="_blank" rel="noopener noreferrer">
+          <span class="scd-news-title">${esc(n.title || '')}</span>
+          <span class="scd-news-meta muted small">${esc(n.source || '')}</span>
+        </a>`;
+      }).join('')}</div>
     </div>`);
   }
 

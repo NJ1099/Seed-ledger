@@ -2353,10 +2353,21 @@ async function fetchStockDetail(code) {
         priceText: p.closePrice || null,
         changeRate: parseKrNumber(p.fluctuationsRatio),
         direction: p?.compareToPreviousPrice?.name || null,
-        marketValue: parseKrNumber(p.marketValue), // 억 단위 문자열이 온다
+        // 🔴 marketValue 는 **백만원** 단위다. 억으로 착각하면 100배 부풀려진다.
+        //    실측: SK하이닉스 1,350,680,382 → 13,506,803억 = 1,350조. (억으로 읽으면 135,068조)
+        //    화면이 억 단위를 기대하므로 여기서 변환해 넘긴다.
+        marketCapEok: parseKrNumber(p.marketValue) == null ? null : parseKrNumber(p.marketValue) / 100,
         market: p?.stockExchangeType?.nameKor || null,
       })).filter((p) => p.code && p.name)
     : [];
+
+  // 비교표에 **기준 종목 자신**을 넣기 위한 값.
+  // industryCompareInfo 에는 자기 자신이 빠져 있어서, 그대로 두면
+  // "무엇과 비교하는 표인지"가 없는 비교표가 된다.
+  // 시총은 totalInfos 의 이미 다듬어진 문자열("1,520조 324억")을 그대로 쓴다.
+  const selfMarketCapText = (Array.isArray(integration?.totalInfos)
+    ? integration.totalInfos.find((m) => /시총/.test(m?.key || ''))?.value
+    : null) || null;
 
   // 재무제표 — 세로(항목) × 가로(기간) 표를 화면이 바로 그릴 수 있는 모양으로.
   // isConsensus === 'Y' 는 **추정치**다. 확정 실적과 섞어 보여 주면 안 된다.
@@ -2380,6 +2391,7 @@ async function fetchStockDetail(code) {
     profile,
     metrics,
     peers,
+    selfMarketCapText,
     financials: { periods, rows, unit: '억원' },
     // ⚠️ corporationSummary 는 문자열이 아니라 {comment1, comment2, ...} 객체다.
     //    그대로 넘기면 화면에 "[object Object]" 가 찍힌다(실제로 그랬다).
