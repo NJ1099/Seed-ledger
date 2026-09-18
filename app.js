@@ -6862,6 +6862,19 @@ async function loadStockDetail(code, type) {
 }
 
 /**
+ * 이 재무제표 행이 **억원 단위 금액**인가.
+ *
+ * 네이버 financeInfo 는 행마다 단위가 다른데 단위를 따로 주지 않는다.
+ * 그래서 이름으로 알아본다. 목록에 없으면 축약하지 않는다(모르면 건드리지 않는다).
+ * ⚠️ 새 행을 여기 추가할 때는 그 행이 정말 억원인지 먼저 확인할 것 —
+ *    EPS·BPS·주당배당금은 '원', ROE·부채비율·유보율은 '%', PER·PBR 은 '배'다.
+ */
+function isEokRow(label) {
+  return /^(매출액|영업이익|당기순이익|지배주주순이익|비지배주주순이익|자산총계|부채총계|자본총계|영업활동현금흐름|투자활동현금흐름|재무활동현금흐름)$/
+    .test(String(label || '').trim());
+}
+
+/**
  * 억 단위 숫자를 사람이 읽는 단위로.
  *
  * 🔴 그냥 `toLocaleString() + '억'` 을 붙이면 "1,350,680,382억" 같은 게 나온다.
@@ -6870,10 +6883,12 @@ async function loadStockDetail(code, type) {
  */
 function formatEokWon(eok) {
   if (eok == null || !Number.isFinite(eok)) return '—';
-  const abs = Math.abs(eok);
+  // ⚠️ 먼저 정수로 반올림한 뒤에 조/억을 가른다. 순서를 바꾸면(나눈 뒤 반올림)
+  //    나머지가 10000 으로 올라가면서도 조 자리로 못 넘어가 "1조 10,000억" 이 나온다.
+  const abs = Math.round(Math.abs(eok));
   if (abs >= 10000) {
     const jo = Math.floor(abs / 10000);
-    const rest = Math.round(abs % 10000);
+    const rest = abs % 10000;
     const sign = eok < 0 ? '-' : '';
     return rest
       ? `${sign}${jo.toLocaleString('ko-KR')}조 ${rest.toLocaleString('ko-KR')}억`
@@ -6944,10 +6959,15 @@ function renderStockDetail(box, d, news) {
           return `<tr>
             <th>${esc(row.label)}</th>
             ${row.valueTexts.map((v, i) => {
-              // 조 단위가 넘는 금액은 축약한다. "2,589,355" 보다 "258.9조" 가 빨리 읽힌다.
-              // 비율(%)·배수 항목은 축약하면 안 되므로 자릿수가 큰 것만 바꾼다.
+              // 조 단위가 넘는 금액은 축약한다 — "2,589,355" 보다 "258조 9,355억" 이 빨리 읽힌다.
+              //
+              // 🔴 "숫자가 크면 축약" 으로 하면 안 된다. 재무제표 행은 단위가 제각각이다:
+              //    억원(매출액·영업이익) · 원(EPS·BPS·주당배당금) · %(ROE·부채비율·유보율) · 배(PER).
+              //    크기만 보고 걸면 **EPS 47,949원이 "4조 7,949억"** 으로 찍힌다(실제로 그랬다).
+              //    그래서 **억원인 줄을 이름으로 알아본 것만** 축약한다. 모르면 그대로 둔다 —
+              //    안 줄여서 읽기 불편한 것이 틀린 금액을 보여 주는 것보다 낫다.
               const n = row.values[i];
-              const big = n != null && Math.abs(n) >= 10000;
+              const big = isEokRow(row.label) && n != null && Math.abs(n) >= 10000;
               return `<td class="tnum" ${big ? `title="${esc(v ?? '')}"` : ''}>${esc(big ? formatEokWon(n) : (v ?? '—'))}</td>`;
             }).join('')}
             <td class="tnum ${yoy.cls}">${esc(yoy.text)}</td>
