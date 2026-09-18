@@ -2407,6 +2407,13 @@ async function handleStockDetail(req, res) {
   const code = safeStockCode(url.searchParams.get('code'));
   if (!code) return reply(res, 400, { ok: false, error: 'invalid code' });
 
+  // 🔴 속도 제한이 필요하다 — 이 파일의 다른 외부 호출 엔드포인트에는 다 붙어 있다.
+  //    캐시 키가 `__detail:{code}` 라 **없는 코드를 매번 다르게 보내면 캐시를 통째로 우회**하고,
+  //    요청 하나가 네이버로 3번(basic·integration·finance) 나간다.
+  //    두들겨 맞으면 우리 아웃바운드 IP 가 차단되어 **검색·뉴스·급등락까지 같이 죽는다**
+  //    (같은 IP 를 쓰기 때문). 이번 라운드에 krx-auth-check 를 고친 것과 같은 종류다.
+  if (rateLimited('stock-detail', clientIp(req), 30)) return replyRateLimited(res);
+
   const cacheKey = `__detail:${code}`;
   const { entry, stale } = getStockCacheEntry(cacheKey, STOCK_TAB_TTL.detail);
   if (entry && !stale) return reply(res, 200, { ok: true, code, ...entry.payload, cached: true });
