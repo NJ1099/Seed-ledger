@@ -1,16 +1,52 @@
 {
   "version": 2,
-  "updatedAt": "2026-08-14T23:32:40+09:00",
+  "updatedAt": "2026-09-19T06:20:28+09:00",
   "source": "toss-invest-ai-key-events",
   "events": [
     {
-      "id": "ev-20260814-usnas000c7re",
-      "date": "2026-08-14",
-      "title": "어플라이드 머티리얼즈 실적 발표 (오전 5시 이후)",
-      "category": "earnings",
-      "importance": "critical",
-      "tag": "실적",
-      "note": "매출 예상 90억"
+      "id": "ev-20260916-usrslyeci",
+      "date": "2026-09-16",
+      "title": "소매판매 발표 (21:30 KST)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": "이전 5.01 %"
+    },
+    {
+      "id": "ev-20260916-usrsleci",
+      "date": "2026-09-16",
+      "title": "소매판매 발표(전월 대비) (21:30 KST)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": "이전 -0.6 %"
+    },
+    {
+      "id": "ev-20260917-usfomceci",
+      "date": "2026-09-17",
+      "title": "FOMC 회의 결과 발표 (03:00 KST)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": "이전 3.75 %"
+    },
+    {
+      "id": "ev-20260917-usjobeci",
+      "date": "2026-09-17",
+      "title": "신규 실업수당 청구건수 (21:30 KST)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": "이전 206 만 명"
+    },
+    {
+      "id": "ev-20260917-uspfdbeci",
+      "date": "2026-09-17",
+      "title": "필라델피아 연은 제조업 활동지수 발표 (21:30 KST)",
+      "category": "economic",
+      "importance": "high",
+      "tag": "US",
+      "note": "이전 47.4"
     }
   ]
 }

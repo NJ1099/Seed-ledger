@@ -162,6 +162,13 @@ const PUBLIC_FILES = new Set([
   '/app.js',
   '/styles.css',
   '/favicon.ico',
+  // PWA (홈 화면 설치). 여기 빠지면 404 가 나는데 브라우저는 조용히 설치만 안 된다.
+  '/manifest.webmanifest',
+  '/sw.js',
+  '/icons/apple-touch-icon.png',
+  '/icons/icon-192.png',
+  '/icons/icon-512.png',
+  '/icons/icon-maskable-512.png',
 ]);
 const SAFE_TICKER_RE = /^[A-Za-z0-9.^_=-]{1,20}$/;
 
@@ -1411,6 +1418,9 @@ const STOCK_TAB_TTL = {
   movers: 60_000,
   search: 60_000,
   news: 300_000,
+  // 종목 상세 — 재무제표·업종비교는 장중에도 잘 안 바뀐다. 시세만 조금 늦을 뿐이라
+  // 5분이면 충분하고, 그만큼 네이버 쪽 호출을 아낀다.
+  detail: 300_000,
 };
 
 const STOCK_INDICES = [
@@ -2228,6 +2238,184 @@ async function handleStockSearch(req, res) {
   reply(res, 200, { ok: true, q, ...payload });
 }
 
+// ── /api/stock-detail ────────────────────────────────────────────────
+// 종목 하나를 "한눈에" 보여 주기 위한 묶음 조회.
+// 로고·시세 + 투자지표 + 재무제표 + 동종업계 비교를 한 번에 돌려준다.
+// (뉴스는 이미 /api/stock-news 가 있으므로 여기서 중복해 부르지 않는다)
+//
+// 소스는 m.stock.naver.com — 이 파일이 이미 쓰고 있는 호스트다.
+//   basic           시세·등락·로고 이미지
+//   integration     totalInfos(투자지표) · industryCompareInfo(동종업계) · consensusInfo
+//   finance/annual  financeInfo(연간 재무제표)
+//
+// ⚠️ api.stock.naver.com/stock(s)/{code}/integration 은 404/409 다. 호스트가 다르다.
+//    반드시 m.stock.naver.com/api/stock/{code}/... 를 쓸 것.
+
+/** 종목 코드 검증. 경로에 그대로 들어가므로 여기서 막지 않으면 경로 조작이 된다. */
+function safeStockCode(raw) {
+  const s = String(raw || '').trim().toUpperCase();
+  // 국내 6자리 숫자 또는 해외 티커(영문·숫자·점·하이픈). 그 외는 거부.
+  if (!/^[A-Z0-9][A-Z0-9.-]{0,11}$/.test(s)) return null;
+  return s;
+}
+
+async function fetchNaverStockJson(code, path) {
+  const url = `https://m.stock.naver.com/api/stock/${encodeURIComponent(code)}/${path}`;
+  const r = await httpsGet(url, {
+    headers: { 'Referer': 'https://m.stock.naver.com/', 'User-Agent': BROWSER_UA },
+    timeoutMs: 8000,
+  });
+  if (!r.ok) {
+    logLine('warn', 'detail.http', { code, path, status: r.status, err: r.error || null });
+    return null;
+  }
+  try {
+    return JSON.parse(r.body);
+  } catch {
+    logLine('warn', 'detail.parse', { code, path });
+    return null;
+  }
+}
+
+/** "1,234" · "N/A" · "-" → 숫자 또는 null. 화면에서 정렬·비교하려면 숫자여야 한다. */
+function parseKrNumber(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).replace(/,/g, '').trim();
+  if (!s || s === '-' || s.toUpperCase() === 'N/A') return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * 네이버 기업개요를 문장으로 합친다.
+ * `{comment1, comment2, comment3}` 모양이라 그냥 쓰면 "[object Object]" 가 된다.
+ * 문자열이 올 수도 있으므로 양쪽을 다 받는다.
+ */
+function naverSummaryText(raw) {
+  if (!raw) return '';
+  if (typeof raw === 'string') return stripTags(raw).slice(0, 400);
+  if (typeof raw !== 'object') return '';
+  const parts = Object.keys(raw)
+    .filter((k) => /^comment\d+$/.test(k))
+    .sort()
+    .map((k) => stripTags(raw[k]))
+    .filter(Boolean);
+  return parts.join(' ').slice(0, 400);
+}
+
+async function fetchStockDetail(code) {
+  // 셋을 동시에. 하나가 죽어도 나머지는 살린다 —
+  // 반쪽이라도 보여 주는 편이 통째로 실패하는 것보다 낫다.
+  const [basic, integration, finance] = await Promise.all([
+    fetchNaverStockJson(code, 'basic'),
+    fetchNaverStockJson(code, 'integration'),
+    fetchNaverStockJson(code, 'finance/annual'),
+  ]);
+
+  // 🔴 무엇을 못 가져왔는지 반드시 알린다. 빈 값을 "없음"처럼 보여 주면
+  //    사용자가 "이 회사는 재무가 없구나"로 오해한다. 연결 실패와 진짜 빈 값은 다르다.
+  const failed = [];
+  if (!basic) failed.push('basic');
+  if (!integration) failed.push('integration');
+  if (!finance) failed.push('finance');
+
+  const profile = basic ? {
+    code: basic.itemCode || code,
+    name: basic.stockName || '',
+    logo: basic.itemLogoPngUrl || basic.itemLogoUrl || null,
+    price: parseKrNumber(basic.closePrice),
+    priceText: basic.closePrice || null,
+    change: parseKrNumber(basic.compareToPreviousClosePrice),
+    changeRate: parseKrNumber(basic.fluctuationsRatio),
+    direction: basic?.compareToPreviousPrice?.name || null, // RISING / FALLING / ...
+    market: basic?.stockExchangeType?.nameKor || basic.sosok || null,
+    marketStatus: basic.marketStatus || null,
+    tradedAt: basic.localTradedAt || null,
+  } : null;
+
+  // 투자지표 — [{code, key, value}] 를 그대로 살리되 숫자도 같이 담는다.
+  const metrics = Array.isArray(integration?.totalInfos)
+    ? integration.totalInfos.map((m) => ({
+        code: m.code || '',
+        label: m.key || '',
+        value: m.value ?? null,
+        num: parseKrNumber(m.value),
+        direction: m?.compareToPreviousPrice?.name || null,
+      })).filter((m) => m.label)
+    : [];
+
+  // 동종업계 비교 — 같은 업종 종목들. 화면에서 내 종목과 나란히 놓는다.
+  const peers = Array.isArray(integration?.industryCompareInfo)
+    ? integration.industryCompareInfo.map((p) => ({
+        code: p.itemCode || '',
+        name: p.stockName || '',
+        price: parseKrNumber(p.closePrice),
+        priceText: p.closePrice || null,
+        changeRate: parseKrNumber(p.fluctuationsRatio),
+        direction: p?.compareToPreviousPrice?.name || null,
+        marketValue: parseKrNumber(p.marketValue), // 억 단위 문자열이 온다
+        market: p?.stockExchangeType?.nameKor || null,
+      })).filter((p) => p.code && p.name)
+    : [];
+
+  // 재무제표 — 세로(항목) × 가로(기간) 표를 화면이 바로 그릴 수 있는 모양으로.
+  // isConsensus === 'Y' 는 **추정치**다. 확정 실적과 섞어 보여 주면 안 된다.
+  const fi = finance?.financeInfo;
+  const periods = Array.isArray(fi?.trTitleList)
+    ? fi.trTitleList.map((t) => ({
+        key: t.key || '',
+        label: t.title || '',
+        estimate: t.isConsensus === 'Y',
+      })).filter((t) => t.key)
+    : [];
+  const rows = Array.isArray(fi?.rowList)
+    ? fi.rowList.map((r) => ({
+        label: r.title || '',
+        values: periods.map((p) => parseKrNumber(r?.columns?.[p.key]?.value)),
+        valueTexts: periods.map((p) => r?.columns?.[p.key]?.value ?? null),
+      })).filter((r) => r.label)
+    : [];
+
+  return {
+    profile,
+    metrics,
+    peers,
+    financials: { periods, rows, unit: '억원' },
+    // ⚠️ corporationSummary 는 문자열이 아니라 {comment1, comment2, ...} 객체다.
+    //    그대로 넘기면 화면에 "[object Object]" 가 찍힌다(실제로 그랬다).
+    summary: naverSummaryText(finance?.corporationSummary) || stripTags(integration?.description || '').slice(0, 400) || null,
+    industryCode: integration?.industryCode || null,
+    failed,
+  };
+}
+
+async function handleStockDetail(req, res) {
+  if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  const url = new URL(req.url, 'http://x');
+  const code = safeStockCode(url.searchParams.get('code'));
+  if (!code) return reply(res, 400, { ok: false, error: 'invalid code' });
+
+  const cacheKey = `__detail:${code}`;
+  const { entry, stale } = getStockCacheEntry(cacheKey, STOCK_TAB_TTL.detail);
+  if (entry && !stale) return reply(res, 200, { ok: true, code, ...entry.payload, cached: true });
+
+  const payload = await fetchStockDetail(code);
+
+  // 🔴 반쪽 결과를 캐시하지 않는다. 캐시되면 일시적 실패가 TTL 동안 고정되어
+  //    "원래 데이터가 없는 종목"처럼 굳어 버린다.
+  if (!payload.failed.length && payload.profile) {
+    writeStockCacheKey(cacheKey, payload);
+  } else if (entry) {
+    // 새로 못 가져왔으면 낡은 것이라도 준다. 단 stale 임을 밝힌다.
+    return reply(res, 200, { ok: true, code, ...entry.payload, cached: true, stale: true });
+  }
+
+  if (!payload.profile) {
+    return reply(res, 404, { ok: false, error: 'not found', code, failed: payload.failed });
+  }
+  reply(res, 200, { ok: true, code, ...payload });
+}
+
 function stripTags(s) {
   return String(s || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/\s+/g, ' ').trim();
 }
@@ -2528,6 +2716,8 @@ const MIME = {
   '.png':  'image/png',
   '.pdf':  'application/pdf',
   '.woff2':'font/woff2',
+  '.webmanifest': 'application/manifest+json; charset=utf-8',
+  '.ico':  'image/x-icon',
 };
 
 // ============================================================================
@@ -3926,8 +4116,18 @@ async function handleKrxAuthCheck(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
   const hasCreds = !!(process.env.KRX_ID || '').trim() && !!(process.env.KRX_PW || '').trim();
   const sinceLast = Date.now() - krxAuthCheckLastAt;
-  if (sinceLast < KRX_AUTH_CHECK_COOLDOWN) {
-    // 쿨다운 중에는 재로그인 없이 마지막 판정 결과만 돌려준다.
+
+  // 🔴 로그인 "강제"는 관리자만. (보안 점검 2026-09-19)
+  //    이 경로는 운영자 본인의 실제 KRX_ID/KRX_PW 로 data.krx.co.kr 에 진짜 로그인을 일으킨다.
+  //    방어가 전역 쿨다운 60초 하나뿐이라, 주소만 알면 누구나 60초마다 실계정 로그인을
+  //    돌릴 수 있었다 — 하루 1,440회. KRX 가 봇으로 판단하면 **계정이 잠긴다.**
+  //
+  //    통째로 막지 않는 이유: isAdminReq 는 ADMIN_TOKEN 이 없으면 무조건 false 라,
+  //    막아 버리면 토큰을 안 쓰는 운영자는 상태 확인조차 못 한다.
+  //    그래서 관리자가 아니면 **마지막 판정 결과만** 돌려준다(부작용 없음).
+  const mayForce = isAdminReq(req);
+  if (!mayForce || sinceLast < KRX_AUTH_CHECK_COOLDOWN) {
+    // 쿨다운 중이거나 권한이 없으면 재로그인 없이 마지막 판정 결과만 돌려준다.
     const lastCode = krxLastAuth?.errorCode || 'UNKNOWN';
     return reply(res, 200, {
       ok: true,
@@ -3936,7 +4136,12 @@ async function handleKrxAuthCheck(req, res) {
       errorCode: lastCode,
       hint: KRX_AUTH_HINT[lastCode] || lastCode,
       cooldown: true,
-      retryAfterSec: Math.ceil((KRX_AUTH_CHECK_COOLDOWN - sinceLast) / 1000),
+      // 왜 재로그인을 안 했는지 밝힌다. 안 그러면 호출한 쪽이 "쿨다운인가 보다" 하고
+      // 계속 두드린다 — 권한 문제면 영원히 안 풀리는데도.
+      reason: mayForce ? 'cooldown' : 'admin-only',
+      retryAfterSec: mayForce
+        ? Math.max(0, Math.ceil((KRX_AUTH_CHECK_COOLDOWN - sinceLast) / 1000))
+        : null,
       ts: nowKST(),
     });
   }
@@ -3981,6 +4186,7 @@ const server = http.createServer(async (req, res) => {
     if (urlPath === '/api/stock-movers')  return await handleStockMovers(req, res);
     if (urlPath === '/api/stock-search')  return await handleStockSearch(req, res);
     if (urlPath === '/api/stock-news')    return await handleStockNews(req, res);
+    if (urlPath === '/api/stock-detail')  return await handleStockDetail(req, res);
     if (urlPath === '/api/news-push-now') return await handleNewsPushNow(req, res);
     if (urlPath === '/api/pension-flows') return await handlePensionFlows(req, res);
     if (urlPath === '/api/krx-pension-trading') return await handleKrxPensionTrading(req, res);
@@ -5273,6 +5479,8 @@ async function handleSyncPush(req, res) {
       'document', filename, fileBuf, 'application/json',
     );
     // 핀: 가장 최근 백업을 채팅 상단에 고정. 텔레그램은 1회 1핀(직전 핀 자동 해제)이 되므로 unpin 호출 불필요.
+    // 복원이 이 핀 하나만 보므로, 핀 성공 여부가 곧 "복원 가능 여부"다.
+    let pinned = true;
     try {
       await tgPostJson('pinChatMessage', {
         chat_id: chatId,
@@ -5281,9 +5489,21 @@ async function handleSyncPush(req, res) {
       });
     } catch (e) {
       logLine('warn', 'tg.pin.fail', { err: String(e) });
+      pinned = false;
     }
+    // 🔴 핀 실패를 조용히 넘기면 데이터가 날아간다. (2026-09-19 수정)
+    //
+    //   복원(handleSyncPull)은 채팅의 **고정된 메시지 하나만** 본다. 그런데 핀이 실패하면
+    //   새 백업 파일은 올라가 있어도 고정은 옛 백업에 그대로 남는다.
+    //   그 상태에서 다른 기기가 복원하면 **방금 백업한 자산이 아니라 예전 상태**로 돌아간다.
+    //   화면에는 "백업 완료"라고 떴으므로 사용자는 끝까지 알아채지 못한다.
+    //
+    //   그래서 성공 응답에 pinned 를 실어 보낸다. 실패해도 파일 자체는 올라갔으므로
+    //   500 으로 처리하지는 않는다 — 대신 화면이 경고할 수 있게 사실을 알린다.
     return reply(res, 200, {
       ok: true,
+      pinned,
+      pinWarning: pinned ? null : '백업 파일은 올라갔지만 고정에 실패했습니다. 다른 기기에서 복원하면 이전 백업을 받을 수 있습니다.',
       messageId: sent.message_id,
       bytes: fileBuf.length,
       savedAt: payload.savedAt,

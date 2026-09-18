@@ -241,7 +241,21 @@ function localAccountsOp(body) {
     if (!account) throw new Error('account missing');
     const i = data.accounts.findIndex(x => x.id === account.id);
     if (i < 0) throw new Error('not found');
-    data.accounts[i] = safeMergeObj(data.accounts[i], account);
+    // 🔴 계좌 갱신에서는 **null 이 "이 필드를 지워라"** 는 뜻이다. (2026-09-19 수정)
+    //
+    // 왜 필요한가: PDF 재가져오기·증권사 재동기화가 "새 결과에 예수금이 없으면 옛 예수금을
+    // 지운다"는 의도로 `delete upd.cashKRW` 를 했는데, safeMergeObj 는 **합집합 병합**이라
+    // patch 에 없는 키는 건드리지 않는다 — 즉 지워지지 않고 **옛 예수금이 영원히 남았다.**
+    // 그 결과 자산 총액이 실제보다 계속 부풀려지는데 사용자는 알 방법이 없다.
+    // (라운드 22 에서 고쳤다고 적혀 있었지만 실제로는 동작하지 않았다.)
+    //
+    // ⚠️ safeMergeObj 자체를 고치지 않는 이유: 거래·이벤트·breakdown 등 5곳이 같이 쓰는데,
+    //    거기서는 null 이 "지워라"가 아니라 그냥 값일 수 있다. 계좌 경로에만 한정한다.
+    const mergedAccount = safeMergeObj(data.accounts[i], account);
+    for (const k of Object.keys(account || {})) {
+      if (account[k] === null) delete mergedAccount[k];
+    }
+    data.accounts[i] = mergedAccount;
   } else if (op === 'delete') {
     data.accounts = data.accounts.filter(x => x.id !== id);
   } else if (op === 'bulk_create') {
@@ -4478,7 +4492,7 @@ async function replaceAccountFromPdf(accountId, file) {
       source: existing.source || target.source,
     };
     if (target.cashKRW != null) updated.cashKRW = target.cashKRW;
-    else delete updated.cashKRW;
+    else updated.cashKRW = null;  // null = 삭제 신호 (localAccountsOp 참고). delete 는 병합에서 무시된다
     if (target.accountKind && target.accountKind !== '일반') updated.accountKind = target.accountKind;
 
     const resp = await apiPost(API.accounts, { op: 'update', account: updated });
@@ -4540,7 +4554,7 @@ async function mergeBrokerAccounts(accounts) {
       const upd = { ...existing, holdings: a.holdings || [], manualUpdatedAt: a.manualUpdatedAt, source: a.source || existing.source };
       // PDF 갱신과 동일: 새 결과에 예수금이 없으면 기존 stale 예수금을 제거(과대표시 방지).
       if (a.cashKRW != null) upd.cashKRW = a.cashKRW;
-      else delete upd.cashKRW;
+      else upd.cashKRW = null;  // null = 삭제 신호 (localAccountsOp 참고). delete 는 병합에서 무시된다
       await apiPost(API.accounts, { op: 'update', account: upd });
       updated++;
     } else {
@@ -6810,6 +6824,107 @@ function renderInlineStockChart({ type, code, name, market }) {
   $$('#scp-ranges .chip').forEach(c => c.classList.toggle('active', c.getAttribute('data-range') === '1mo'));
   if (panel) panel.classList.remove('hidden');
   loadInlineHistory();
+  loadStockDetail(code, type);
+}
+
+// ── 종목 한눈에 보기 ────────────────────────────────────────────────
+// /api/stock-detail 로 투자지표·재무제표·동종업계를 받아 차트 아래에 붙인다.
+// 차트와 따로 부르는 이유: 하나가 늦거나 실패해도 나머지는 보이게 하려고.
+async function loadStockDetail(code, type) {
+  const box = document.getElementById('scp-detail');
+  if (!box) return;
+
+  // 국내 종목 전용이다. 해외 티커는 이 소스가 재무·업종비교를 안 준다 —
+  // 빈 표를 보여 주느니 아예 감춘다.
+  if (type && type !== 'stock_kr') { box.hidden = true; box.innerHTML = ''; return; }
+
+  box.hidden = false;
+  box.innerHTML = '<div class="scd-loading muted small">불러오는 중…</div>';
+  try {
+    const r = await stockApiGet(`/api/stock-detail?code=${encodeURIComponent(code)}`);
+    if (!r || !r.ok) {
+      box.innerHTML = '<div class="scd-loading muted small">상세 정보를 불러오지 못했습니다.</div>';
+      return;
+    }
+    renderStockDetail(box, r);
+  } catch (e) {
+    console.warn('[stock] detail failed', e);
+    box.innerHTML = '<div class="scd-loading muted small">상세 정보를 불러오지 못했습니다.</div>';
+  }
+}
+
+function renderStockDetail(box, d) {
+  const parts = [];
+
+  // 로고 + 요약. 로고가 없을 수도 있으므로 있을 때만 그린다.
+  const p = d.profile || {};
+  if (p.logo || d.summary) {
+    parts.push(`<div class="scd-top">
+      ${p.logo ? `<img class="scd-logo" src="${esc(p.logo)}" alt="" loading="lazy">` : ''}
+      ${d.summary ? `<div class="scd-summary">${esc(d.summary)}</div>` : ''}
+    </div>`);
+  }
+
+  // 투자지표 — 이름/값 쌍을 격자로.
+  if (Array.isArray(d.metrics) && d.metrics.length) {
+    parts.push(`<div class="scd-block">
+      <div class="scd-h">투자지표</div>
+      <div class="scd-metrics">${d.metrics.map(m => `
+        <div class="scd-metric"><span class="scd-k">${esc(m.label)}</span><span class="scd-v tnum">${esc(m.value ?? '—')}</span></div>
+      `).join('')}</div>
+    </div>`);
+  }
+
+  // 재무제표 — 기간이 가로. 추정치 기간은 따로 표시한다.
+  // 🔴 확정 실적과 추정치를 구분 없이 보여 주면 "이미 난 실적"으로 오해한다.
+  const fin = d.financials || {};
+  if (Array.isArray(fin.rows) && fin.rows.length && Array.isArray(fin.periods) && fin.periods.length) {
+    parts.push(`<div class="scd-block">
+      <div class="scd-h">재무제표 <span class="muted small">(${esc(fin.unit || '')})</span></div>
+      <div class="scd-table-wrap"><table class="scd-table">
+        <thead><tr><th></th>${fin.periods.map(t =>
+          `<th>${esc(t.label)}${t.estimate ? '<em class="scd-est">추정</em>' : ''}</th>`).join('')}</tr></thead>
+        <tbody>${fin.rows.map(row => `<tr>
+          <th>${esc(row.label)}</th>
+          ${row.valueTexts.map(v => `<td class="tnum">${esc(v ?? '—')}</td>`).join('')}
+        </tr>`).join('')}</tbody>
+      </table></div>
+    </div>`);
+  }
+
+  // 동종업계 비교 — 같은 업종 종목을 나란히.
+  if (Array.isArray(d.peers) && d.peers.length) {
+    parts.push(`<div class="scd-block">
+      <div class="scd-h">같은 업종 비교</div>
+      <div class="scd-table-wrap"><table class="scd-table">
+        <thead><tr><th>종목</th><th>현재가</th><th>등락률</th><th>시가총액</th></tr></thead>
+        <tbody>${d.peers.map(x => {
+          const up = x.direction === 'RISING';
+          const dn = x.direction === 'FALLING';
+          const cls = up ? 'up' : (dn ? 'down' : '');
+          const rate = x.changeRate == null ? '—'
+            : `${up ? '+' : (dn ? '-' : '')}${Math.abs(x.changeRate).toFixed(2)}%`;
+          return `<tr>
+            <th>${esc(x.name)}<span class="muted small"> ${esc(x.code)}</span></th>
+            <td class="tnum">${esc(x.priceText ?? '—')}</td>
+            <td class="tnum ${cls}">${esc(rate)}</td>
+            <td class="tnum">${x.marketValue == null ? '—' : esc(x.marketValue.toLocaleString('ko-KR')) + '억'}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table></div>
+    </div>`);
+  }
+
+  // 🔴 못 가져온 것이 있으면 숨기지 말고 밝힌다. 빈 화면을 "원래 없는 것"으로
+  //    오해하면 사용자가 잘못된 판단을 한다.
+  if (Array.isArray(d.failed) && d.failed.length) {
+    parts.push(`<div class="scd-warn small">일부 정보를 불러오지 못했습니다 (${esc(d.failed.join(', '))}). 잠시 뒤 다시 열어 보세요.</div>`);
+  }
+  if (d.stale) {
+    parts.push('<div class="scd-warn small">최신 조회에 실패해 이전에 받아 둔 정보를 보여 주고 있습니다.</div>');
+  }
+
+  box.innerHTML = parts.join('') || '<div class="scd-loading muted small">표시할 상세 정보가 없습니다.</div>';
 }
 
 async function loadInlineHistory() {

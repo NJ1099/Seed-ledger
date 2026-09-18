@@ -89,3 +89,40 @@ test('safeMergeObj 는 프로토타입 오염을 막는다', () => {
   assert.equal(out.ok, 1);
   assert.equal({}.polluted, undefined, '프로토타입이 오염됐다');
 });
+
+// ── 예수금(cashKRW) 삭제 회귀 ────────────────────────────────────────
+// 라운드 22 가 "새 결과에 예수금이 없으면 옛 값을 지운다"고 고쳤다고 적어 뒀지만,
+// 실제로는 동작하지 않았다 — `delete upd.cashKRW` 를 보내도 저장 쪽 safeMergeObj 가
+// **합집합 병합**이라 patch 에 없는 키를 건드리지 않기 때문이다.
+// 그래서 옛 예수금이 영원히 남고 **자산 총액이 계속 부풀려졌다.** 사용자는 알 수 없다.
+// 테스트가 없어서 4개 라운드 동안 아무도 몰랐다. 이제 소스에서 직접 검사한다.
+//
+// ⚠️ 주석을 먼저 걷어내고 검사한다. 위 설명에도 `delete upd.cashKRW` 라는 글자가 있어서
+//    걷어내지 않으면 "아직 delete 를 쓰고 있다"고 잘못 걸린다.
+const SRC_NO_COMMENTS = SRC
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|[^:])\/\/.*$/gm, '$1');
+
+test('예수금: 계좌 갱신은 null 을 "삭제"로 처리한다', () => {
+  const i = SRC_NO_COMMENTS.indexOf('data.accounts[i] = ');
+  assert.notEqual(i, -1, '계좌 update 분기를 찾지 못했다');
+  const around = SRC_NO_COMMENTS.slice(Math.max(0, i - 700), i + 200);
+  assert.match(
+    around,
+    /=== null\)\s*delete/,
+    '계좌 갱신에 null → 삭제 처리가 없다. 이게 없으면 예수금을 지워도 옛 값이 남아 자산이 부풀려진다',
+  );
+});
+
+test('예수금: 재가져오기·재동기화는 delete 가 아니라 null 을 보낸다', () => {
+  assert.doesNotMatch(
+    SRC_NO_COMMENTS,
+    /delete\s+\w+\.cashKRW/,
+    'delete 로 보내면 합집합 병합에서 무시된다. `x.cashKRW = null` 로 보낼 것',
+  );
+  const nulls = SRC_NO_COMMENTS.match(/\.cashKRW\s*=\s*null/g) || [];
+  assert.ok(
+    nulls.length >= 2,
+    `null 삭제 신호가 ${nulls.length}곳뿐이다 — PDF 재가져오기와 증권사 재동기화 두 곳 모두 필요하다`,
+  );
+});

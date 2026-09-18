@@ -4131,3 +4131,30 @@ main {
   /* 도넛 캔버스가 240px 고정이라 여백까지 더하면 넘치는 경우가 있었다. */
   .donut-wrap canvas { width: 200px !important; height: 200px !important; }
 }
+
+/* ── 종목 한눈에 보기 (검색 → 차트 아래 상세) ───────────────────── */
+/* app.js::renderStockDetail 이 채운다. 표가 좁은 화면에서 넘칠 수 있어
+   .scd-table-wrap 이 가로 스크롤을 맡는다 — 페이지 전체가 밀리면 안 된다. */
+.scp-detail { margin-top: 14px; display: grid; gap: 14px; }
+.scd-loading, .scd-warn { padding: 8px 2px; }
+.scd-warn { color: #b4503a; }
+.scd-top { display: flex; gap: 12px; align-items: flex-start; }
+.scd-logo { width: 44px; height: 44px; border-radius: 10px; object-fit: contain; background: #fff; flex: none; }
+.scd-summary { font-size: 12px; line-height: 1.5; opacity: .85; }
+.scd-block { display: grid; gap: 8px; }
+.scd-h { font-weight: 700; font-size: 13px; }
+.scd-metrics { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 6px; }
+.scd-metric { display: flex; justify-content: space-between; gap: 8px;
+  padding: 7px 10px; border-radius: 9px; background: rgba(127,127,127,.09); font-size: 12px; }
+.scd-k { opacity: .7; }
+.scd-v { font-weight: 700; }
+.scd-table-wrap { overflow-x: auto; }
+.scd-table { border-collapse: collapse; width: 100%; font-size: 12px; white-space: nowrap; }
+.scd-table th, .scd-table td { padding: 6px 10px; text-align: right; border-bottom: 1px solid rgba(127,127,127,.18); }
+.scd-table thead th { text-align: right; opacity: .7; font-weight: 600; }
+.scd-table tbody th, .scd-table thead th:first-child { text-align: left; font-weight: 600; }
+.scd-table td.up { color: #d24; }
+.scd-table td.down { color: #2a6fd6; }
+/* 추정치는 확정 실적과 반드시 구분되어야 한다 — 섞이면 "이미 난 실적"으로 읽힌다 */
+.scd-est { display: inline-block; margin-left: 4px; padding: 0 5px; border-radius: 6px;
+  font-style: normal; font-size: 10px; background: rgba(210,160,40,.22); color: #8a5a12; }

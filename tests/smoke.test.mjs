@@ -174,3 +174,41 @@ test('sync push/pull 은 자격증명 없이 401', async () => {
     assert.ok(r.status === 401 || r.status === 503, `${p} 가 ${r.status}`);
   }
 });
+
+// ── PWA (홈 화면 설치) ──────────────────────────────────────
+// 화이트리스트 방식이라 자산을 추가해도 server.js 의 PUBLIC_FILES 에 등록하지 않으면
+// 조용히 404 가 난다. 브라우저는 에러를 띄우지 않고 "설치"만 안 되므로 사람이 못 알아챈다.
+test('PWA 자산이 전부 서빙된다 (화이트리스트 등록 누락 방지)', async () => {
+  const assets = [
+    ['/manifest.webmanifest', 'application/manifest+json'],
+    ['/sw.js', 'text/javascript'],
+    ['/icons/icon-192.png', 'image/png'],
+    ['/icons/icon-512.png', 'image/png'],
+    ['/icons/icon-maskable-512.png', 'image/png'],
+    ['/icons/apple-touch-icon.png', 'image/png'],
+  ];
+  for (const [p, mime] of assets) {
+    const r = await get(p);
+    assert.equal(r.status, 200, `${p} 가 ${r.status} — PUBLIC_FILES 에 등록됐는지 확인`);
+    assert.ok((r.headers.get('content-type') || '').startsWith(mime), `${p} 의 Content-Type 이 ${r.headers.get('content-type')}`);
+  }
+});
+
+test('manifest 가 설치 가능한 형태다 (maskable 아이콘 포함)', async () => {
+  const r = await get('/manifest.webmanifest');
+  const j = await r.json();
+  assert.equal(j.display, 'standalone', '전체화면으로 안 뜨면 앱처럼 보이지 않는다');
+  assert.equal(j.start_url, '/');
+  assert.ok(j.icons.some((i) => i.sizes === '192x192'), '192 아이콘이 있어야 설치 배너가 뜬다');
+  assert.ok(j.icons.some((i) => i.sizes === '512x512'), '512 아이콘 필요');
+  // maskable 이 없으면 안드로이드에서 흰 사각형 안에 아이콘이 박혀 나온다
+  assert.ok(j.icons.some((i) => i.purpose === 'maskable'), 'maskable 아이콘이 빠졌다');
+});
+
+test('서비스 워커가 시세 API 를 캐시하지 않는다', async () => {
+  const r = await get('/sw.js');
+  const src = await r.text();
+  // 🔴 낡은 가격을 보여 주는 자산 앱은 고장난 것보다 나쁘다 — 틀린 줄 모르고 판단하게 된다.
+  assert.match(src, /pathname\.startsWith\('\/api\/'\)/, 'API 우회 분기가 사라졌다');
+  assert.doesNotMatch(src, /cache\.put\(req[\s\S]{0,40}\/api\//, 'API 응답을 캐시하고 있다');
+});
