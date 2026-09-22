@@ -660,6 +660,8 @@ async function fetchNaverHistory(code, range) {
 
 async function handleHistory(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  // 이 핸들러는 캐시가 없어 **매 호출이 곧 야후·업비트 호출**이다(ticker×range×type 조합 무제한).
+  if (rateLimited('history', clientIp(req), 60)) return replyRateLimited(res);
   const url = new URL(req.url, 'http://x');
   const type = url.searchParams.get('type') || '';
   const ticker = url.searchParams.get('ticker') || '';
@@ -705,7 +707,10 @@ async function handleHistory(req, res) {
       return reply(res, 400, { ok: false, error: 'invalid type' });
     }
   } catch (e) {
-    return reply(res, 500, { ok: false, error: e.message });
+    // 전역 catch 와 같은 규율 — `e.message` 를 그대로 내보내면 내부 경로가 노출된다.
+    // 상세는 로그로만 남긴다.
+    logLine('error', 'history.fail', { ticker, type, range, err: String(e) });
+    return reply(res, 500, { ok: false, error: 'internal error' });
   }
   if (!result || !result.ok) {
     return reply(res, 200, { ok: false, error: result?.error || 'no data', ticker, type });
@@ -1097,6 +1102,10 @@ const INDEX_SYMBOL_MAP = {
 
 async function handleQuotes(req, res) {
   if (req.method !== 'POST') return reply(res, 405, { ok: false, error: 'POST only' });
+  // 🔴 요청 하나가 아웃바운드 200~400건이 될 수 있다(티커 200개 × 소스별 1~2회).
+  //    티커 수 상한만으로는 **반복 호출**을 못 막는다. 화면은 15초마다 1회(=4회/분)
+  //    부르므로 60 은 정상 사용의 15배 여유다.
+  if (rateLimited('quotes', clientIp(req), 60)) return replyRateLimited(res);
   let body;
   try { body = JSON.parse((await readBody(req)) || '{}'); }
   catch { return reply(res, 400, { ok: false, error: 'invalid json' }); }
@@ -2221,6 +2230,11 @@ async function fetchStockSearch(q) {
 
 async function handleStockSearch(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  // 🔴 캐시 키가 `__search:{q}` 라 **검색어를 매번 다르게 보내면 캐시를 통째로 우회**한다
+  //    (`__detail:{code}` 와 같은 구조인데 그쪽만 고쳐져 있었다). 게다가 신선한 키를
+  //    대량으로 밀어넣으면 `pruneQuoteCache` 가 오래된 `__indices`·`__movers_kr` 를
+  //    밀어내 아웃바운드가 오히려 더 늘어난다.
+  if (rateLimited('stock-search', clientIp(req), 60)) return replyRateLimited(res);
   const url = new URL(req.url, 'http://x');
   const q = (url.searchParams.get('q') || '').trim();
   if (!q || q.length < 1 || q.length > 30) {
@@ -2407,7 +2421,12 @@ async function handleStockDetail(req, res) {
   const code = safeStockCode(url.searchParams.get('code'));
   if (!code) return reply(res, 400, { ok: false, error: 'invalid code' });
 
-  // 🔴 속도 제한이 필요하다 — 이 파일의 다른 외부 호출 엔드포인트에는 다 붙어 있다.
+  // 🔴 속도 제한이 필요하다.
+  //    ⚠️ 예전 주석은 "이 파일의 다른 외부 호출 엔드포인트에는 다 붙어 있다"라고 적혀
+  //       있었는데 **사실이 아니었다** — 실제로는 이 한 곳만 고쳐졌고 quotes·history·
+  //       stock-search·stock-news·pension-flows·nps-portfolio 는 전부 빠져 있었다.
+  //       그 틀린 문장이 다음 점검을 통과시키는 근거가 됐다(2026-09-22 에 채웠다).
+  //       **"다 붙어 있다"는 식의 단언을 주석에 쓰지 말 것** — 확인은 grep 으로 한다.
   //    캐시 키가 `__detail:{code}` 라 **없는 코드를 매번 다르게 보내면 캐시를 통째로 우회**하고,
   //    요청 하나가 네이버로 3번(basic·integration·finance) 나간다.
   //    두들겨 맞으면 우리 아웃바운드 IP 가 차단되어 **검색·뉴스·급등락까지 같이 죽는다**
@@ -2703,6 +2722,8 @@ async function fetchStockNews(limit, query) {
 
 async function handleStockNews(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
+  // 캐시 키가 `__news:{q}` — 검색과 같은 우회 경로다.
+  if (rateLimited('stock-news', clientIp(req), 40)) return replyRateLimited(res);
   const url = new URL(req.url, 'http://x');
   let limit = parseInt(url.searchParams.get('limit') || '10', 10);
   if (!Number.isFinite(limit) || limit < 1) limit = 10;
@@ -3099,7 +3120,19 @@ async function handlePensionFlows(req, res) {
   let daysBack = parseInt(url.searchParams.get('days') || '30', 10);
   if (!Number.isFinite(daysBack) || daysBack < 1) daysBack = 30;
   if (daysBack > 180) daysBack = 180;
-  const sourceParam = url.searchParams.get('source') || 'auto'; // 'dart' | 'goinsider' | 'auto'
+
+  // 🔴 **화이트리스트로 좁힌다.** 예전에는 임의 문자열이 그대로 통과했고, 그러면
+  //    `!== 'goinsider'` 와 `!== 'dart'` 둘 다 참이라 **DART 파이프라인과 goinsider 폴백이
+  //    매번 함께 돌았다.** 게다가 그 값이 캐시 키에 들어가서 `?source=a1`, `?source=a2` …
+  //    로 24시간 캐시를 100% 우회할 수 있었다 — 운영자의 `DART_API_KEY` 일일 1만 호출
+  //    한도를 태우면 연기금 기능이 자정까지 죽는다.
+  //    바로 옆 `handleKrxPensionTrading`·`handleKrxInvestorFlows` 는 이미 화이트리스트를 쓴다.
+  const PENSION_SOURCES = ['auto', 'dart', 'goinsider'];
+  const rawSource = url.searchParams.get('source') || 'auto';
+  const sourceParam = PENSION_SOURCES.includes(rawSource) ? rawSource : 'auto';
+
+  // 회사마다 majorstock 을 1회씩 부르는 무거운 경로다.
+  if (rateLimited('pension-flows', clientIp(req), 30)) return replyRateLimited(res);
 
   const cacheKey = `__pension:${daysBack}:${sourceParam}`;
   const { entry, stale } = getStockCacheEntry(cacheKey, STOCK_TAB_TTL_PENSION);
@@ -3833,9 +3866,22 @@ async function handleNpsPortfolio(req, res) {
     });
   }
   const url = new URL(req.url, 'http://x');
-  const uddi = url.searchParams.get('uddi') || NPS_PORTFOLIO_DEFAULT_UDDI;
-  const page = parseInt(url.searchParams.get('page') || '1', 10) || 1;
+
+  // 🔴 `uddi` 는 data.go.kr **URL 경로에 그대로 들어간다.** 검증이 없으면 ①캐시 키가
+  //    무한히 늘어나 24시간 캐시를 우회하고 ②요청마다 운영자 서비스키로 호출이 나간다
+  //    (키 형식별 최대 3회 재시도). 호스트는 `httpsGet` 이 `new URL` 로 정규화해
+  //    SSRF 까지는 가지 않지만, 쿼터를 태우는 것만으로 기능이 죽는다.
+  //    형식은 `uddi:` + UUID 고정이다.
+  const rawUddi = url.searchParams.get('uddi') || '';
+  const uddi = /^uddi:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawUddi)
+    ? rawUddi
+    : NPS_PORTFOLIO_DEFAULT_UDDI;
+
+  // 음수·초대형 페이지는 캐시 키만 늘리고 쓸모가 없다.
+  const page = Math.min(Math.max(parseInt(url.searchParams.get('page') || '1', 10) || 1, 1), 1000);
   const perPage = Math.min(parseInt(url.searchParams.get('perPage') || '100', 10) || 100, 1000);
+
+  if (rateLimited('nps-portfolio', clientIp(req), 30)) return replyRateLimited(res);
 
   const cacheKey = `__nps:${uddi}:${page}:${perPage}`;
   const { entry, stale } = getStockCacheEntry(cacheKey, NPS_PORTFOLIO_TTL);
@@ -4887,10 +4933,20 @@ const NEWS_CRON_SECRET = (process.env.NEWS_CRON_SECRET || '').trim();
 let lastNewsPushSlot = '';              // 중복 발송 방지 키 (YYYY-MM-DD:HH:MM)
 let lastManualNewsPush = 0;             // 수동 트리거 쿨다운용 타임스탬프
 
-// HTML parse_mode 용 최소 escape (텔레그램은 & < > 만 escape 하면 됨).
+/**
+ * HTML parse_mode 용 escape.
+ *
+ * ⚠️ 예전 주석은 "텔레그램은 & < > 만 escape 하면 됨"이었는데, 그건 **텍스트 노드에만**
+ *    맞는 말이다. 이 함수의 결과는 `<a href="...">` 의 **속성값**으로도 들어가므로
+ *    `"` 도 반드시 막아야 한다. 뉴스 URL 은 외부에서 온 값이고, 인코딩되지 않은 `"` 가
+ *    하나라도 섞이면 태그가 깨져 `sendMessage` 가 `can't parse entities` 로 실패한다 —
+ *    그러면 **그 회차 일일 뉴스가 통째로 안 나가고 로그에만 남는다**(캐시 TTL 동안
+ *    재시도도 같은 이유로 실패한다).
+ */
 function tgEscapeHtml(s) {
   return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 // 뉴스 전용 봇 토큰으로 sendMessage 호출 (동기화용 tgPostJson 과 토큰 분리).

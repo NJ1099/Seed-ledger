@@ -276,3 +276,127 @@ test('해제(disconnect)가 서버에 폐기를 기록한다', () => {
   const body = SERVER_SRC.slice(start, next > 0 ? next : undefined);
   assert.match(body, /revokeCredsFor\(/, '해제가 폐기를 기록하지 않는다 — 새어 나간 cred 가 계속 먹힌다');
 });
+
+// ── ⑥ 2026-09-22 감사에서 나온 것들 ──────────────────────────
+//
+// 이 절이 고정하는 것은 **"주석의 단언"이 아니라 실제 코드**다. 라운드 34 의
+// `stock-detail` 주석은 "이 파일의 다른 외부 호출 엔드포인트에는 다 붙어 있다"라고
+// 적혀 있었는데 사실이 아니었고(그 한 곳만 고쳐져 있었다), 그 문장이 다음 점검을
+// 통과시키는 근거가 됐다. 그래서 목록을 테스트로 옮긴다.
+
+const APP_SRC = readFileSync(path.join(ROOT, 'app.js'), 'utf8');
+
+/** server.js 에서 `async function 이름(` 부터 다음 최상위 함수 전까지 잘라낸다. */
+function extractHandler(name) {
+  const start = SERVER_SRC.indexOf(`async function ${name}(`);
+  assert.ok(start > 0, `server.js 에서 ${name} 을 찾지 못했다 (이름이 바뀌었는지 확인)`);
+  const next = SERVER_SRC.indexOf('\nasync function ', start + 1);
+  return SERVER_SRC.slice(start, next > 0 ? next : undefined);
+}
+
+test('🔴 외부를 부르는 조회 엔드포인트에는 전부 속도 제한이 있다', () => {
+  // 전부 인증이 없고, 한 요청이 외부 API 호출 1~400건이 된다. 두들겨 맞으면
+  // 아웃바운드 IP 가 차단되어 **검색·뉴스·급등락까지 같이 죽는다**(같은 IP 를 쓴다).
+  const handlers = [
+    'handleQuotes',        // 티커 200개 × 소스별 1~2회 = 최대 400건
+    'handleHistory',       // 캐시가 없어 매 호출이 곧 야후·업비트 호출
+    'handleStockSearch',   // 캐시 키가 `__search:{q}` — 검색어를 바꾸면 캐시 우회
+    'handleStockNews',     // 캐시 키가 `__news:{q}` — 같은 우회 경로
+    'handleStockDetail',   // 라운드 34 에 이 한 곳만 고쳐졌다
+    'handlePensionFlows',  // 회사마다 majorstock 1회 + DART 일일 1만 호출 한도
+    'handleNpsPortfolio',  // 요청마다 운영자 서비스키로 data.go.kr 호출
+  ];
+  const missing = handlers.filter((name) => !/rateLimited\(/.test(extractHandler(name)));
+  assert.deepEqual(missing, [],
+    `속도 제한이 빠진 핸들러: ${missing.join(', ')} — 무인증으로 외부 쿼터를 태울 수 있다`);
+});
+
+test('속도 제한 한도가 정상 사용 여유를 남긴다', () => {
+  // 화면은 15초마다 /api/quotes 를 부른다(= 분당 4회). 한도가 그보다 넉넉해야
+  // 정상 사용자가 차단되지 않는다. 남용 차단과 정상 사용은 이 여유로 갈린다.
+  const m = /rateLimited\('quotes',\s*clientIp\(req\),\s*(\d+)\)/.exec(SERVER_SRC);
+  assert.ok(m, "quotes 의 rateLimited 호출을 찾지 못했다");
+  assert.ok(Number(m[1]) >= 20, `quotes 한도가 ${m[1]}/분 — 화면 폴링(4/분)의 여유가 부족하다`);
+});
+
+test('🔴 pension-flows 의 source 는 화이트리스트다', () => {
+  // 임의 문자열이 통과하면 `!== 'goinsider'` 와 `!== 'dart'` 가 **둘 다 참**이어서
+  // DART 파이프라인과 goinsider 폴백이 매번 함께 돌고, 그 값이 캐시 키에 들어가
+  // `?source=a1`, `?source=a2` … 로 24시간 캐시를 100% 우회할 수 있었다.
+  const body = extractHandler('handlePensionFlows');
+  assert.match(body, /PENSION_SOURCES\s*=\s*\[/, 'source 화이트리스트가 사라졌다');
+  assert.match(body, /PENSION_SOURCES\.includes\(/, '화이트리스트를 검사하지 않는다');
+});
+
+test('nps-portfolio 의 uddi 는 형식을 검사한다', () => {
+  // uddi 는 data.go.kr **URL 경로에 그대로** 들어간다. 검증이 없으면 캐시 키가 무한히
+  // 늘고 요청마다 운영자 키로 호출이 나간다(키 형식별 최대 3회 재시도).
+  const body = extractHandler('handleNpsPortfolio');
+  assert.match(body, /\^uddi:\[0-9a-f\]\{8\}/, 'uddi 형식 검사가 사라졌다');
+});
+
+test('🔴 텔레그램 HTML escape 가 따옴표까지 덮는다', () => {
+  // 결과가 `<a href="...">` **속성값**으로 들어간다. `"` 를 안 막으면 외부 뉴스 URL
+  // 하나 때문에 태그가 깨져 sendMessage 가 실패하고, **그 회차 일일 뉴스가 통째로
+  // 안 나간다**(로그에만 남고, 캐시 TTL 동안 재시도도 같은 이유로 실패한다).
+  const fn = new Function(`${extractFn('tgEscapeHtml')} return tgEscapeHtml;`)();
+  assert.equal(fn('a"b'), 'a&quot;b', '따옴표가 escape 되지 않는다 — href 속성이 깨진다');
+  assert.equal(fn('<&>'), '&lt;&amp;&gt;');
+  // 실제 사용 자리가 속성값이라는 것도 고정한다(텍스트 노드로 바뀌면 이 검사의 의미가 달라진다).
+  assert.match(SERVER_SRC, /href="\$\{tgEscapeHtml\(/, 'href 에 escape 를 통과하지 않은 값이 들어간다');
+});
+
+test('history 의 500 응답이 내부 에러 메시지를 노출하지 않는다', () => {
+  const body = extractHandler('handleHistory');
+  assert.ok(!/reply\(res,\s*500,\s*\{\s*ok:\s*false,\s*error:\s*e\.message\s*\}\)/.test(body),
+    'e.message 를 그대로 내보낸다 — 내부 경로가 노출된다(전역 catch 는 로그로만 보낸다)');
+});
+
+// ── 동기화 첫 복원 — 데이터 유실 방지 ────────────────────────
+test('🔴 첫 페어링은 물어보기 **전에** 로컬을 덮어쓰지 않는다', () => {
+  // 예전에는 `syncPullNow()` 가 복원까지 해 버린 뒤에 "덮어쓸까요?"를 물었다. 그래서
+  //  ① 프롬프트의 "로컬 데이터: N건" 이 사실은 **원격 백업의 건수**였고
+  //  ② "취소"를 누르면 그 덮어써진 데이터를 다시 백업해 **원래 장부를 되돌릴 수 없었다.**
+  const start = APP_SRC.indexOf('async function tryFirstSyncAction');
+  assert.ok(start > 0, 'tryFirstSyncAction 을 찾지 못했다');
+  const next = APP_SRC.indexOf('\nasync function ', start + 1);
+  const body = APP_SRC.slice(start, next > 0 ? next : undefined);
+
+  assert.match(body, /syncPullNow\(\{\s*apply:\s*false\s*\}\)/,
+    '받아오기가 복원까지 해 버린다 — 물어보기 전에 로컬이 사라진다');
+
+  // 로컬 건수를 pull 보다 **먼저** 세는지 — 순서가 이 버그의 핵심이었다.
+  const iCount = body.indexOf('const localCount');
+  const iPull = body.indexOf('syncPullNow(');
+  assert.ok(iCount > 0 && iPull > 0, '로컬 건수 계산 또는 pull 호출을 찾지 못했다');
+  assert.ok(iCount < iPull,
+    '로컬 건수를 pull 뒤에 센다 — 그 숫자는 원격 데이터의 건수가 된다');
+
+  // 확인을 받은 뒤에 실제로 복원하는지.
+  assert.match(body, /restoreFromSyncPayload\(result\.payload\)/,
+    '확인 후 복원하는 호출이 없다 — 복원이 아예 안 된다');
+});
+
+test('syncPullNow 의 기본값은 복원까지 한다 (기존 호출부가 깨지지 않는다)', () => {
+  // 수동 「복원」 버튼은 인자 없이 부른다. 기본값이 false 로 바뀌면 그 버튼이 조용히 죽는다.
+  assert.match(APP_SRC, /async function syncPullNow\(\{\s*apply\s*=\s*true\s*\}\s*=\s*\{\}\)/,
+    'syncPullNow 의 apply 기본값이 true 가 아니다 — 수동 복원 버튼이 아무 일도 하지 않게 된다');
+});
+
+test('🔴 연동 해제가 서버 응답을 확인한다', () => {
+  // 서버는 폐기 기록에 실패하면 일부러 502 를 준다("끊었다고 믿는데 cred 는 살아 있다").
+  // 예전 클라이언트는 그 응답을 통째로 버려서 라운드 32 의 폐기 기능이 무력화됐다.
+  const start = APP_SRC.indexOf('async function syncDisconnectNow');
+  assert.ok(start > 0, 'syncDisconnectNow 를 찾지 못했다');
+  const next = APP_SRC.indexOf('\nasync function ', start + 1);
+  const body = APP_SRC.slice(start, next > 0 ? next : undefined);
+
+  assert.match(body, /const r = await fetch\(/, '응답을 변수로 받지 않는다 — 결과를 볼 수 없다');
+  assert.match(body, /!r\.ok/, '응답 상태를 검사하지 않는다 — 502 가 성공으로 처리된다');
+  assert.match(body, /return \{ revoked, error \}/, '폐기 실패를 호출부에 알리지 않는다');
+
+  // 호출부가 그 결과로 사용자에게 알리는지.
+  assert.match(APP_SRC, /const \{ revoked, error \} = await syncDisconnectNow\(\)/,
+    '호출부가 해제 결과를 받지 않는다');
+  assert.match(APP_SRC, /if \(!revoked\)/, '폐기 실패를 사용자에게 알리지 않는다');
+});

@@ -5358,7 +5358,15 @@ async function syncPushNow() {
   }
 }
 
-async function syncPullNow() {
+/**
+ * 텔레그램에 핀된 백업을 받아온다.
+ *
+ * 🔴 `apply: false` 는 **받아만 오고 localStorage 를 건드리지 않는다.**
+ *    첫 페어링 때 "덮어쓸까요?"를 묻기 전에 쓰라고 만든 것이다 — 예전에는 이 함수가
+ *    무조건 복원까지 해 버려서, 묻는 시점에는 **이미 로컬 장부가 사라진 뒤**였고
+ *    "취소"를 누르면 그 덮어써진 데이터를 다시 백업해 되돌릴 수단조차 없앴다.
+ */
+async function syncPullNow({ apply = true } = {}) {
   const cred = syncReadCred();
   if (!cred) throw new Error('not paired');
   if (syncState.pulling) return null;
@@ -5374,27 +5382,53 @@ async function syncPullNow() {
       if (r.status === 401) syncWriteCred(null);
       throw new Error(j.error || `pull failed (${r.status})`);
     }
-    const n = restoreFromSyncPayload(j.payload);
-    return { ...j, restoredKeys: n };
+    const n = apply ? restoreFromSyncPayload(j.payload) : 0;
+    return { ...j, restoredKeys: n, applied: apply };
   } finally {
     syncState.pulling = false;
     updateSyncBtn();
   }
 }
 
+/**
+ * 이 기기의 동기화 자격을 폐기한다.
+ *
+ * 🔴 **서버 응답을 봐야 한다.** 서버는 폐기 기록에 실패하면 일부러 502 를 주는데
+ *    (`server.js` 의 `sync.revoke.fail` — "끊었다고 믿는데 cred 는 살아 있다"),
+ *    예전에는 그 응답을 통째로 버리고 무조건 "해제됨"으로 처리했다. 그러면 라운드 32 가
+ *    만든 폐기 기능이 실사용 경로에서 무력화되고, 새어 나간 cred 가 만료일까지 살아남는다.
+ *
+ * 로컬 자격은 어느 쪽이든 지운다(이 기기에서 쓰지 못하게 하는 것은 확실히 해 둔다).
+ * 서버 폐기가 실패했을 때는 그 사실을 **호출부가 사용자에게 알릴 수 있도록** 돌려준다.
+ *
+ * @returns {Promise<{revoked: boolean, error: string}>}
+ */
 async function syncDisconnectNow() {
   const cred = syncReadCred();
+  let revoked = true;
+  let error = '';
+
   if (cred) {
     try {
-      await fetch('/api/sync/disconnect', {
+      const r = await fetch('/api/sync/disconnect', {
         method: 'POST',
         headers: { 'Authorization': 'Bearer ' + cred },
       });
-    } catch {}
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) {
+        revoked = false;
+        error = j.hint || j.error || `서버 응답 ${r.status}`;
+      }
+    } catch (e) {
+      revoked = false;
+      error = e.message || String(e);
+    }
   }
+
   syncWriteCred(null);
   syncWriteMeta({});
   updateSyncBtn();
+  return { revoked, error };
 }
 
 function schedulePushDebounced() {
@@ -5643,16 +5677,22 @@ async function tryFirstSyncAction() {
   status.textContent = '☁ 텔레그램 채팅 확인 중…';
   status.className = 'sync-action-status';
   try {
-    const result = await syncPullNow();
+    // 🔴 **로컬은 받아오기 전에 센다.** 예전에는 pull 이 복원까지 해 버린 뒤에 셌기 때문에
+    //    이 숫자가 사실은 "원격 백업의 건수"였고, 사용자는 자기 데이터가 아닌 것을 보고
+    //    판단했다. 그리고 "취소"를 눌러도 로컬은 이미 날아간 상태였다.
+    const localCount = (() => {
+      const a = lsGetAccounts(); const t = lsGetTx(); const s = lsGetSnapshots();
+      return (a.accounts?.length || 0) + (t.transactions?.length || 0) + Object.keys(s).length;
+    })();
+
+    // 물어보기 전에는 덮어쓰지 않는다 (apply: false).
+    const result = await syncPullNow({ apply: false });
     if (result && result.payload) {
-      const localCount = (() => {
-        const a = lsGetAccounts(); const t = lsGetTx(); const s = lsGetSnapshots();
-        return (a.accounts?.length || 0) + (t.transactions?.length || 0) + Object.keys(s).length;
-      })();
       const ok = localCount === 0
         || confirm(`텔레그램에 백업이 있습니다 (${result.savedAt || ''}). 이 기기의 현재 데이터를 그 백업으로 덮어쓸까요?\n\n로컬 데이터: ${localCount}건\n취소하시면 로컬 데이터를 유지하고 다음 백업 때 텔레그램이 갱신됩니다.`);
       if (ok) {
-        // restoreFromSyncPayload 는 syncPullNow 안에서 이미 적용됨. 화면 리로드.
+        // 여기서야 실제로 덮어쓴다.
+        restoreFromSyncPayload(result.payload);
         await loadAll();
         renderAssets(); renderSpend(); renderTotals(); renderDashboard();
         status.textContent = `✓ ${result.savedAt || ''} 백업 복원됨 (${result.bytes.toLocaleString('en-US')} bytes)`;
@@ -5798,8 +5838,17 @@ async function setupSync() {
   });
   document.getElementById('sync-disconnect')?.addEventListener('click', async () => {
     if (!confirm('이 기기의 동기화 자격을 폐기할까요? (텔레그램 채팅의 백업 파일은 그대로 남습니다)')) return;
-    await syncDisconnectNow();
+    const { revoked, error } = await syncDisconnectNow();
     closeSyncModal();
+    // 🔴 서버가 폐기를 기록하지 못했으면 조용히 넘기지 않는다 — 이 기기에서는 끊겼지만
+    //    자격 자체는 아직 살아 있으므로, 사용자가 다시 시도할 수 있게 알린다.
+    if (!revoked) {
+      alert(
+        '이 기기에서는 연동을 끊었지만, 서버에 폐기를 기록하지 못했습니다'
+        + (error ? ` (${error})` : '')
+        + '.\n\n기존 자격이 아직 유효할 수 있으니 잠시 후 다시 페어링해서 한 번 더 해제해 주세요.'
+      );
+    }
   });
 }
 
