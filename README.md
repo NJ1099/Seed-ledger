@@ -20,6 +20,8 @@ npm install
 npm start            # 기본 포트 4274
 # 또는
 PORT=4275 npm start  # 포트 지정
+
+npm test             # node --test · 52건 (logic · smoke · ratelimit)
 ```
 
 브라우저에서 `http://localhost:4274/` 로 접속. 최초 접속 시 계좌·거래가 비어 있고,
@@ -133,21 +135,29 @@ PORT=4275 npm start  # 포트 지정
 ## 파일 구조
 
 ```
-seed-public/
-├── index.html              SPA 쉘
-├── app.js                  전체 프런트엔드 로직 + localStorage 스토어
-├── styles.css              "Liquid Ledger" 디자인 토큰
-├── pdfImport.js            서버 측 PDF 파서 (토스증권 등)
-├── server.js               Node HTTP 서버 (시세·이벤트 프록시)
-├── package.json            의존성: pdf-parse 하나
-├── render.yaml             Render Blueprint
+.
+├── index.html                SPA 쉘
+├── app.js                    전체 프런트엔드 로직 + localStorage 스토어
+├── styles.css                "Liquid Ledger" 디자인 토큰
+├── server.js                 Node HTTP 서버 (시세·이벤트·동기화 프록시)
+├── pdfImport.js              서버 측 PDF 파서 (토스증권 등)
+├── brokerSync.js             증권사 연동 (조회 전용)
+├── sw.js                     서비스 워커 (PWA · 시세 API 는 캐시하지 않는다)
+├── manifest.webmanifest      PWA 매니페스트
+├── icons/                    설치 아이콘 (192/512/maskable/apple-touch)
+├── package.json              의존성: pdf-parse 하나
+├── render.yaml               Render Blueprint
+├── tests/                    node --test (logic · smoke · ratelimit) — 52건
+├── scripts/make-icons.js     아이콘 생성 유틸 (수동 실행)
+├── .github/workflows/        daily-news.yml — 일일 뉴스 발송
 ├── design/
-│   ├── philosophy.md       디자인 철학 문서
-│   └── poster.pdf          A3 포스터
+│   ├── philosophy.md         디자인 철학 문서
+│   └── poster.pdf            A3 포스터
 └── data/
-    ├── events.json         공유 이벤트 목록 (관리자가 직접 편집)
-    ├── quote-cache.json    시세 TTL 캐시 (자동 생성)
-    └── popular-tickers.json  자동 폴러 대상 목록 (자동 생성)
+    ├── events.json           공유 이벤트 목록 (자동 수집 + 관리자 편집)
+    ├── market-calendar.json   주식 캘린더 (실적·FOMC 등)
+    ├── popular-tickers.json  자동 폴러 대상 목록
+    └── quote-cache.json      시세 TTL 캐시 (자동 생성)
 ```
 
 ## 주요 이벤트 (공유 캘린더) 관리

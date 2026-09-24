@@ -7881,7 +7881,7 @@ const mcState = {
   monthIdx: 0,      // months 배열 내 현재 위치
   selected: null,   // 'YYYY-MM-DD'
   renderedDate: null,  // 마지막 렌더 시점의 todayKST() — 자정 경과 감지용
-  meta: null,       // { updatedAt, disclaimer, dstEndDate, marketHours }
+  meta: null,       // { updatedAt, disclaimer } — dstEndDate·marketHours 는 읽는 곳이 없어 뺐다(2026-09-24)
 };
 
 const MC_WEEKDAYS = ['일', '월', '화', '수', '목', '금', '토'];
@@ -8092,7 +8092,6 @@ async function loadMarketCalendar() {
     mcState.meta = {
       updatedAt: j.updatedAt || '',
       disclaimer: j.disclaimer || '',
-      dstEndDate: j.dstEndDate || '',
     };
 
     mcMergeEvents();

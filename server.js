@@ -4136,6 +4136,12 @@ const KRX_AUTH_HINT = {
   CD010:    '비밀번호 변경 필요 — data.krx.co.kr 에 로그인해 비밀번호를 갱신하세요',
   CD011:    '중복 로그인 (skipDup 재시도 후에도 실패)',
   NO_CREDS: 'KRX_ID/KRX_PW 미설정 — 환경변수를 등록하세요',
+  // 🔴 "아직 안 해봄"은 실패가 아니다. 예전에는 이 상태가 UNKNOWN 으로 나가서
+  //    "알 수 없는 로그인 실패 (… IP 차단 가능)" 이라고 **단언**했고, 그 문장 하나로
+  //    HANDOFF 가 몇 달간 「Render IP 차단 의심」을 이어받았다. 실제 원인은 CD010
+  //    (비밀번호 만료)이었고, 강제 판정은 관리자만 할 수 있어 아무도 그 코드를 못 봤다.
+  //    (2026-09-24 · 로컬에서 관리자 토큰으로 강제 로그인해 확인)
+  NOT_CHECKED: '아직 로그인을 시도한 적이 없다 — 실패가 아니다. ADMIN_TOKEN 으로 이 엔드포인트를 부르면 강제 판정한다',
   UNKNOWN:  '알 수 없는 로그인 실패 (자격증명 오류 또는 IP 차단 가능)',
 };
 
@@ -4148,6 +4154,10 @@ async function handleConfigStatus(req, res) {
       DATA_GO_KR_SERVICE_KEY: !!(process.env.DATA_GO_KR_SERVICE_KEY || '').trim(),
       KRX_ID:                 !!(process.env.KRX_ID || '').trim(),
       KRX_PW:                 !!(process.env.KRX_PW || '').trim(),
+      // 🔴 뉴스가 OpenAPI 로 도는지 폴백(Google News RSS)으로 도는지 구분할 방법이
+      //    응답 출처 추측뿐이었다. 키 유무만 있으면 한 번에 갈린다(값은 안 내보낸다).
+      NAVER_CLIENT_ID:        !!(process.env.NAVER_CLIENT_ID || '').trim(),
+      NAVER_CLIENT_SECRET:    !!(process.env.NAVER_CLIENT_SECRET || '').trim(),
     },
     // 마지막 로그인 시도 결과 (아직 시도 전이면 null). /api/krx-auth-check 로 강제 갱신 가능.
     krxAuth: krxLastAuth
@@ -4193,11 +4203,17 @@ async function handleKrxAuthCheck(req, res) {
   const mayForce = isAdminReq(req);
   if (!mayForce || sinceLast < KRX_AUTH_CHECK_COOLDOWN) {
     // 쿨다운 중이거나 권한이 없으면 재로그인 없이 마지막 판정 결과만 돌려준다.
-    const lastCode = krxLastAuth?.errorCode || 'UNKNOWN';
+    // 🔴 시도한 적이 없는 것과 실패한 것을 구분한다. 예전에는 둘 다
+    //    `authenticated:false` + `UNKNOWN` 으로 나가서, 서버를 막 띄운 직후의 초기값이
+    //    "로그인 실패 (IP 차단 가능)" 으로 읽혔다.
+    const checked = !!krxLastAuth;
+    const lastCode = checked ? (krxLastAuth.errorCode || 'UNKNOWN') : 'NOT_CHECKED';
     return reply(res, 200, {
       ok: true,
       hasCreds,
-      authenticated: !!krxLastAuth?.authenticated,
+      // 아직 안 해봤으면 false 가 아니라 null 이다.
+      authenticated: checked ? !!krxLastAuth.authenticated : null,
+      checked,
       errorCode: lastCode,
       hint: KRX_AUTH_HINT[lastCode] || lastCode,
       cooldown: true,
@@ -5161,7 +5177,25 @@ async function handleNewsPushNow(req, res) {
     //    **하루 24회**까지 나갈 수 있었다. 더 나쁜 것은 09:00 에 때리면 키가 09:30 슬롯으로
     //    잡혀 **정규 발송이 `already-sent` 로 건너뛰어졌다** — 외부인이 발송 시각을 정하고
     //    정규 발송을 가로챌 수 있었다. (2026-09-12 점검)
-    if (NEWS_CRON_SECRET && !cronSecretOk(req, url)) {
+    // 🔴 fail-closed. 예전에는 `if (NEWS_CRON_SECRET && !cronSecretOk(...))` 였다 —
+    //    **시크릿이 비면 조건이 거짓이 되어 검사가 통째로 사라졌다.** 남는 방어선은
+    //    창(graceMin)·IP 속도제한·slot 중복차단뿐이라, 창 안에서 외부인이 정규 발송을
+    //    먼저 눌러버릴 수 있었다. 같은 저장소의 `/api/broadcast` 나 형제 프로젝트
+    //    budongsan `/api/telegram/announce` 는 처음부터 fail-closed 였는데 여기만
+    //    열려 있었다(2026-09-24 · 프로덕션 `secretRequired:false` 로 확인).
+    //
+    //    ⚠️ **대가**: 시크릿이 없으면 정규 발송도 멈춘다(503). 그게 조용히 열려 있는
+    //    것보다 낫다 — 503 이면 워크플로 스텝이 빨갛게 실패해서 사람이 알아챈다.
+    //    🔴 Render 환경변수와 GitHub Secret **두 곳에 같은 값**이 있어야 한다.
+    if (!NEWS_CRON_SECRET) {
+      logLine('warn', 'newspush.cron.no-secret', {});
+      return reply(res, 503, {
+        ok: false,
+        error: 'cron-secret-not-configured',
+        hint: 'NEWS_CRON_SECRET 을 Render 환경변수와 GitHub Secret 양쪽에 등록하세요.',
+      });
+    }
+    if (!cronSecretOk(req, url)) {
       logLine('warn', 'newspush.cron.unauthorized', { ip: clientIp(req) });
       return reply(res, 401, { ok: false, error: 'unauthorized' });
     }

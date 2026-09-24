@@ -10,6 +10,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
@@ -158,6 +159,46 @@ test('수동 뉴스 발송은 인증 없이는 절대 발송되지 않는다', a
   const r = await get('/api/news-push-now');
   assert.notEqual(r.status, 200, '무인증 수동 발송이 통과했다 — 채널 스팸 경로가 열려 있다');
   assert.ok([401, 403, 503].includes(r.status), `예상 밖 상태코드 ${r.status}`);
+});
+
+test('scheduled=1 의 시크릿 검사는 fail-closed 다 (소스 단언)', async () => {
+  // 예전에는 `if (NEWS_CRON_SECRET && !cronSecretOk(...))` 라 **시크릿이 비면 조건이
+  // 거짓이 되어 검사가 통째로 사라졌다.** 프로덕션이 실제로 그 상태였다
+  // (2026-09-24 · `/api/config-status` 가 `secretRequired:false`).
+  //
+  // 🔴 **HTTP 로는 이걸 증명할 수 없다.** 테스트 서버에는 NEWS_BOT_TOKEN 이 없어서
+  //    핸들러 맨 앞의 `no-token` 503 이 먼저 반환된다 — fail-open 으로 되돌려도
+  //    응답은 똑같이 503 이라 **테스트가 거짓으로 통과한다**(실제로 그렇게 짰다가
+  //    되돌려 보기에서 걸렸다). 토큰을 넣고 부르면 이번엔 진짜 발송 위험이 생긴다.
+  //    그래서 소스를 직접 본다 — 이 저장소가 ratelimit.test.mjs 에서 쓰는 방식이다.
+  const src = readFileSync(path.join(ROOT, 'server.js'), 'utf8');
+
+  const guard = src.indexOf('if (!NEWS_CRON_SECRET)');
+  assert.notEqual(guard, -1, 'fail-closed 가드(`if (!NEWS_CRON_SECRET)`)가 사라졌다');
+
+  // ⚠️ `cronSecretOk(req, url)` 로 찾으면 **함수 정의**(파일 앞쪽)가 먼저 잡혀서
+  //    정상 코드인데도 "순서가 뒤집혔다"로 실패한다. 호출부 형태로 정확히 찾는다.
+  const check = src.indexOf('if (!cronSecretOk(req, url))');
+  assert.notEqual(check, -1, 'cronSecretOk 호출부를 찾지 못했다 (형태가 바뀌었는지 확인)');
+  assert.ok(guard < check, '가드가 cronSecretOk 검사보다 뒤에 있다 — 순서가 뒤집혔다');
+
+  // 가드가 발송보다 앞에 있어야 한다. 뒤로 가면 시크릿 없이도 발송에 닿는다.
+  const send = src.indexOf("sendDailyNews('scheduled-http')");
+  assert.notEqual(send, -1, "sendDailyNews('scheduled-http') 호출을 찾지 못했다");
+  assert.ok(guard < send, '시크릿 가드가 발송 호출보다 뒤에 있다 — 무인증 발송 경로다');
+
+  // 옛 fail-open 형태가 되살아나지 않았는지.
+  // ⚠️ **주석을 먼저 걷어내고 본다.** server.js 의 주석이 옛 형태를 그대로 인용하고
+  //    있어서(재발 방지 설명), 원본에 그냥 정규식을 걸면 **주석에 걸려 정상 코드가
+  //    실패한다**. 설명을 지우는 게 아니라 검사 쪽을 정확하게 만드는 게 맞다.
+  const codeOnly = src
+    .split('\n')
+    .filter((l) => !l.trim().startsWith('//'))
+    .join('\n');
+  assert.ok(
+    !/if \(NEWS_CRON_SECRET && !cronSecretOk/.test(codeOnly),
+    '옛 fail-open 형태(`if (NEWS_CRON_SECRET && !cronSecretOk`)가 되살아났다',
+  );
 });
 
 // ── 동기화 ─────────────────────────────────────────────────

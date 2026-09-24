@@ -2,7 +2,114 @@
 
 > 다음 세션에서 이어서 작업할 때 가장 먼저 읽어야 하는 문서.
 
-최종 업데이트: 2026-09-22 (라운드 35 — **첫 동기화가 물어보기 전에 로컬 장부를 덮어썼다(취소도 못 되돌림)** · 해제가 서버의 폐기 실패를 버렸다 · 속도 제한 6곳 누락 · 테스트 43 → **52 PASS** · **미배포**)
+최종 업데이트: 2026-09-23 (라운드 35 — **첫 동기화가 물어보기 전에 로컬 장부를 덮어썼다(취소도 못 되돌림)** · 해제가 서버의 폐기 실패를 버렸다 · 속도 제한 6곳 누락 · 테스트 43 → **52 PASS** · ✅ **배포 완료** `a11acef`)
+
+> ⚠️ **배포 클론에서 `npm test` 를 돌리면 `data/events.json` 이 바뀐다 — 커밋에 섞지 말 것.**
+> 테스트가 실제로 토스 API(`wts-info-api.tossinvest.com`)를 불러 캘린더를 새로 쓴다
+> (2026-09-23 실측: `updatedAt` 이 갱신되고 지난 일정이 빠지며 34줄이 갈린다).
+> 이 파일은 **개발본과 배포본이 각자 갱신하는 런타임 데이터**라 원래 갈라져 있고,
+> 그래서 라운드 35 패치를 옮길 때도 `git apply --exclude='data/events.json'` 로 뺐다
+> (빼지 않으면 `patch does not apply` 로 **전체가 거부된다**).
+> 🔴 그때 `git apply --check ... | tail && echo ok` 로 확인하면 **거짓 통과한다** —
+> 파이프의 종료코드는 `tail` 의 것이다. `rc=$?` 로 직접 볼 것.
+
+## 🔌 연결 대기 — 필요한 API·환경변수 (2026-09-24 정리)
+
+전부 **Render 대시보드 → seed-ledger → Environment** 에 넣는다. 없어도 서버는 뜨고,
+해당 기능만 꺼진 채 돈다. **운영 등록 여부는 `/api/config-status`** 로 확인(값은 안 나오고
+boolean 만). 로컬 셸에 없다고 프로덕션에도 없는 게 아니다 — 반드시 그쪽에서 볼 것.
+
+### 🔴 2026-09-24 프로덕션 실측 — 지금 처리해야 할 3건
+
+**① `NEWS_CRON_SECRET` 미설정 → `?scheduled=1` 이 무인증이었다** (GitHub ✅ / Render 대기)
+
+> **2026-09-24 처리**: GitHub Secret 은 등록했고(`NJ1099/Seed-ledger`), 코드도
+> **fail-closed 로 고쳤다**(시크릿이 없으면 503). 🔧 **남은 것은 Render 환경변수 하나** —
+> 값은 로컬 `Seed-ledger-main/.env` 의 `NEWS_CRON_SECRET` 줄에 있다(gitignore 확인됨).
+> 🔴 **Render 에 넣기 전에는 fail-closed 코드를 배포하지 말 것** — 배포하는 순간
+> 정규 발송이 503 으로 멈춘다. 순서: Render 등록 → 배포.
+> ⚠️ 워크플로는 `NJ1099/Seed-ledger` 한 곳에서만 돈다(실측). 모노repo 엔 Actions 가 없어
+> 이중 발송 걱정은 없다.
+
+아래는 발견 당시 기록이다.
+
+`/api/config-status` 가 `newsTrigger.secretRequired: false` 를 보고한다.
+`server.js:5164` 이 **`if (NEWS_CRON_SECRET && !cronSecretOk(...))`** 라 시크릿이 비면
+**검사 자체가 사라진다**(fail-open). 코드 주석도 "🔴 이 경로는 인증이 없다"고 적고 있다.
+`gh secret list` — `NJ1099/Seed-ledger` 0개 · `NJ1099/AI` 0개.
+
+남아 있는 방어선은 라운드 32 가 넣은 것들뿐이다: 발송 slot 창(`graceMin` 420분) ·
+`rateLimited('news-push', ip, 10)` · slot 단위 중복 차단. 그래서 "하루 24회 + 정규 발송
+가로채기"까지는 못 가고, **창 안에서 한 번 먼저 눌러지는** 정도다. 그래도 fail-open 이다.
+
+🔴 **고칠 때 두 곳을 같이 할 것** — Render 에만 넣으면 `daily-news.yml` 이
+`CRON_SECRET: ${{ secrets.NEWS_CRON_SECRET }}` 로 빈 값을 보내 **정규 발송이 401 로 죽는다.**
+같은 값을 GitHub repo Secret(`NEWS_CRON_SECRET`)에도 등록해야 한다.
+(budongsan 라운드 41 이 자기 cron 2곳에서 고친 것과 **똑같은 패턴**이다 — 형제 저장소의
+`/api/telegram/announce` 는 처음부터 `if (!secret) return 503` 이었다.)
+
+**② KRX — 🔴 원인 확정: `CD010` 비밀번호 만료다. IP 차단이 아니었다.**
+
+`ADMIN_TOKEN` 을 실어 `/api/krx-auth-check` 로 **강제 로그인**을 걸면
+`errorCode:"CD010"` = **"비밀번호 변경 필요 — data.krx.co.kr 에 로그인해 비밀번호를
+갱신하세요"** 가 나온다. 로컬에서도 똑같다 — **Render IP 차단이 아니다.**
+
+🔧 **사용자 액션**: data.krx.co.kr 에 로그인해 비밀번호를 갱신하고, 새 값을 **Render
+`KRX_PW` 와 로컬 `.env` 양쪽**에 반영할 것. 그 전까지 `/api/krx-*` 는 `KRX HTTP 400` 이다.
+
+> 🔴 **왜 몇 달을 헤맸나 — 검사가 "안 해봄"을 "실패"라고 단언했다.**
+> `krx-auth-check` 는 관리자가 아니면 재로그인 없이 **마지막 판정값**만 돌려주는데,
+> 한 번도 시도한 적이 없으면 그 값이 `authenticated:false` + `UNKNOWN` 이었고
+> 힌트가 **"알 수 없는 로그인 실패 (자격증명 오류 또는 IP 차단 가능)"** 였다.
+> 서버를 막 띄운 초기 상태가 "로그인 실패"로 읽힌 것이다. 그 문장 하나가
+> 「Render IP 차단 의심」으로 굳어 HANDOFF 에 계속 이월됐다.
+> → **2026-09-24 수정**: 시도 전이면 `authenticated:null` · `checked:false` ·
+> `errorCode:"NOT_CHECKED"` 로 나간다. **"모른다"와 "실패했다"를 구분하지 않는 진단은
+> 진단이 아니다.**
+
+**③ 뉴스가 네이버 OpenAPI 가 아니라 폴백 경로로 돌고 있다**
+`/api/stock-news` 응답 출처가 `v.daum.net` 등 = **Google News RSS 폴백**.
+
+⚠️ **API HUB 이관 함정은 여기선 아니었다.** 로컬 `.env` 의 네이버 키로 두 주소를 직접
+두드려 보니 **구 주소 `openapi.naver.com` 이 정상(items 3건)** 이고 신 주소
+(`naverapihub.apigw.ntruss.com/search/v1/news.json`)는 **404 "URL not found"** 였다
+(2026-09-24 실측). 즉 `server.js:2493` 의 주소는 맞다 — pcbang-order 가 당한 것과
+**반대 상황**이다. 그쪽은 이미지 검색이고 키 세대도 다르다. **남의 프로젝트에서 겪은
+함정을 그대로 가져다 붙이지 말 것.**
+
+남은 가설은 **Render 에 `NAVER_CLIENT_ID`/`_SECRET` 이 없다**는 것이다.
+→ **2026-09-24 수정**: `/api/config-status` 의 `keys` 에 `NAVER_CLIENT_ID`·
+`NAVER_CLIENT_SECRET` boolean 을 추가했다. **배포 후 그 값을 보면 한 번에 갈린다** —
+`true` 인데도 폴백이면 그때 다른 원인을 찾는다.
+
+| 상태 | 환경변수 | 켜지는 것 | 없으면 |
+|---|---|---|---|
+| ✅ | `TELEGRAM_BOT_TOKEN` | 기기 간 동기화 전체(페어링·백업·복원) | `/api/sync/status` 가 off, 동기화 UI 비활성 |
+| ✅ | `ADMIN_TOKEN` | 공지 패널 쓰기 | 읽기만 가능, 작성 불가 |
+| ✅ | `KV_REST_API_URL`/`_TOKEN` (Upstash) | 공지 영속 저장 | `data/notices.json` 폴백 — **Render Free 는 재배포·슬립 때 날아간다** |
+| ✅ | `DART_API_KEY` | 국민연금 5% 공시(`/api/pension-flows`) | `goinsider.kr` 자동 폴백 |
+| ✅ | `DATA_GO_KR_SERVICE_KEY` | 기금 포트폴리오(`/api/nps-portfolio`) | 해당 패널 비활성 |
+| ⚠️ | `KRX_ID`/`KRX_PW` | KRX 세션(`/api/krx-*`) | **키는 있는데 로그인 실패 중** — 위 ② |
+| 🔴 | `NEWS_CRON_SECRET` | `daily-news.yml` 인증(`CRON_SECRET` 으로 전달) | **검사가 통째로 사라진다(fail-open)** — 위 ① |
+| ❓ | `NAVER_CLIENT_ID`/`_SECRET` | 뉴스 원문(OpenAPI) | 폴백 체인(stock.naver → m.stock → finance.naver → Google News RSS) — 위 ③ |
+| — | `TELEGRAM_NEWS_BOT_TOKEN`·`TELEGRAM_NEWS_CHAT_ID` | 일일 뉴스 발송 | 발송 안 됨(발송은 동작 중이라 설정된 것으로 보인다) |
+| — | `PUBLIC_SITE_URL` | 뉴스 메시지 하단 사이트 링크 | 기본값 `https://seed-ledger.onrender.com` |
+
+> 실측 근거(2026-09-24): `/api/config-status` → DART·DATA_GO_KR·KRX_ID·KRX_PW 전부 true ·
+> `/api/sync/status` → `{enabled:true, bot:"Jasan_Management_bot"}` ·
+> `/api/notices` → `adminEnabled:true, persistent:true`.
+
+**미해결 외부 연동**
+- ⬜ **KRX 가 Render IP 를 차단하는 것으로 의심된다**(`/api/krx-pension-trading`). 로컬은 되는데
+  프로덕션에서 실패한다 — 키 문제가 아니라 출구 IP 문제일 수 있다.
+- ⬜ **캘린더 수동 강제 갱신 엔드포인트가 없다** — 지금은 재배포해야 즉시 갱신된다.
+  `/api/events/refresh` POST 를 넣으려면 **비밀키 가드 필수**(공개 DDoS).
+- ⬜ **텔레그램 백업이 평문 JSON**(라운드 31부터 이월). 봇 토큰 하나가 새면 전 사용자 실계좌
+  데이터가 통째로 나간다. 클라이언트 측 암호화 + 기존 백업 마이그레이션이 따른다.
+- ⬜ 대형주(삼성전자·SK하이닉스·LG에너지솔루션) 실적일은 DART `결산실적공시예고` 를 **안 해서**
+  (400일 실측 0건) Yahoo 추정치에 머문다.
+- ⬜ `data/market-calendar.json` 의 **2027 일정은 FOMC 8건뿐**. 휴장일·CPI·고용보고서는
+  **2026-12 이후 공식 발표를 보고** 채울 것 — 추측으로 채우지 말 것.
 
 ## 라운드 35 (2026-09-22) — 동기화 데이터 유실 · 폐기 무력화 · 속도 제한 6곳. 테스트 43 → **52 PASS**
 
@@ -10,8 +117,8 @@
 필요없는 부분과 버그 등을 분석하고 최대한 정리해줘."
 
 읽기 전용 에이전트가 정적 분석하고 **지적을 전부 코드와 직접 대조한 뒤** 고쳤다.
-**되돌려 보기 5/5 전부 잡는 것을 확인**했다. **미배포** — 배포는 `E:/seed-ledger-sync` →
-`NJ1099/Seed-ledger` 로만 반영된다(지금 `server.js`·`app.js` 가 배포 클론과 갈라져 있다).
+**되돌려 보기 5/5 전부 잡는 것을 확인**했다. ✅ **배포 완료** — 배포 클론
+`E:/seed-ledger-sync` → `NJ1099/Seed-ledger` 의 HEAD 가 `a11acef` 다(2026-09-24 실측).
 
 ### 1. 🔴 [높음] 첫 페어링이 **물어보기 전에** 로컬 장부를 덮어썼고, "취소"가 되돌리지 못했다
 
@@ -531,7 +638,7 @@ localStorage 는 보통 5MB, 텔레그램 백업은 **4MB 에서 413**(`SYNC_MAX
 2. **실적일 변경 알림** — 지금은 캘린더를 열어야 안다. DART 예정일이 바뀌면 텔레그램으로 알려주는 것이 자연스러운 다음 단계.
 3. **`data/market-calendar.json` 2027 일정 — FOMC 8건만 채워졌다(라운드 29).** 남은 것은 **미국·한국 증시 휴장일, CPI·고용보고서 발표일**. 휴장일은 KRX 가 보통 전년 12월에, BLS 지표 일정도 전년 말에 공식 발표하므로 **2026-12 이후에 공식 발표를 보고 추가**할 것. 추측으로 채우지 말 것. 해 넘김 표기는 라운드 26 ③ 에서 이미 대비돼 있다.
 4. **실적 카드에서 DART 원문 공시로 링크** — `rceptNo` 를 이미 서버가 들고 있다(`dartReportUrl()` 도 있음). `mcEvCard` 가 `esc()` 로 텍스트만 렌더해서 링크를 넣으려면 카드 구조를 조금 손봐야 한다.
-5. **`loadMarketCalendar` 의 `dstEndDate` 는 죽은 코드** — 라운드 25 이후 미참조(동작 무해). `data/market-calendar.json` 의 같은 필드도 함께 정리 가능.
+5. ~~**`loadMarketCalendar` 의 `dstEndDate` 는 죽은 코드**~~ → ✅ **2026-09-24 제거**. `app.js` 의 `mcState.meta` 대입과 주석에서 뺐다(읽는 곳 0곳 · 개발본·배포 클론 양쪽 확인 · 테스트 52 PASS 유지). **`data/market-calendar.json` 의 `dstEndDate` 필드는 남겨 뒀다** — 코드가 아니라 사람이 조사해 넣은 값(미국 서머타임 종료일)이라 지우지 않았다. 나중에 시장 시간 표시를 붙이면 쓸 자리가 있다.
 
 ### 증권사 연동 (라운드 22 후속)
 
@@ -763,8 +870,6 @@ GET .../marketValue?page=1&pageSize=500
 - Yahoo 가 crumb 정책을 바꾸면 조용히 `items:[]` 가 된다(캘린더는 큐레이션만 정상 표시 — 안전한 실패). `logLine` 의 `yahoo.crumb` / `yahoo.earnings.http` 경고로 판별.
 - ~~국내 종목 실적일이 Yahoo 추정치~~ → **라운드 28 에서 DART 공시 기준으로 교정**(대형주는 여전히 Yahoo 폴백).
 
-## 라운드 26: 주식 캘린더 미검증 발견 4건 실증·수정 (2026-07-20~21) — ✅ 완료·배포됨
-
 ## 라운드 26: 주식 캘린더 미검증 발견 4건 실증·수정 (2026-07-21) — ✅ 완료·배포됨
 
 라운드 24 리뷰의 미검증 발견 4건을 전부 착수. **4건 모두 실증 결과 "진짜" 로 확인됐고(기각 0건), 전부 수정 완료.**
@@ -800,8 +905,6 @@ GET .../marketValue?page=1&pageSize=500
 
 이번 검증 워크플로우(`round26-verify-calendar-findings`)에서 **4건 중 2건(empty·nvda)이 API 오류로 죽었는데, 결과에는 "기각(refuted)" 으로 표시됐다.** 원인은 스크립트가 `agent()` 의 `null` 반환을 `.then(v => ({key, ...v}))` 로 스프레드해 `{key}` 만 남은 truthy 객체를 만들었고, 그것이 `filter(Boolean)` 을 통과해 `!r.real` 조건에 걸린 것. **에러로 죽은 에이전트가 조용히 "기각" 으로 둔갑한다.** 그대로 믿었으면 진짜 결함 2건을 없는 것으로 처리할 뻔했다.
 → 앞으로 워크플로우 후처리에서는 `null` 체크를 스프레드 **전에** 하고(`v => v ? {...} : null`), 결과의 확정/기각 건수와 `agents_error` 수를 대조할 것.
-
-## 라운드 25: 라운드 23 배포 유실 기능 복원 + 캘린더 탭 모바일 연결 (2026-07-20)
 
 ## ⚠️ 배포 절차 (라운드 25 에서 사고가 났던 지점 — 반드시 읽을 것)
 
@@ -948,8 +1051,6 @@ FOMC·CPI·고용보고서·휴장일·실적을 한국시간 기준 월간 달�
 
 ## 라운드 20: 주요 이벤트 자동 갱신 self-heal + 공지 최상단 이동 (2026-06-07)
 
-## 라운드 20: 주요 이벤트 자동 갱신 self-heal + 공지 최상단 이동 (2026-06-07)
-
 사용자: ① 공지를 맨 위로 ② 주요 이벤트가 안 떠서 자동 로딩 수정. 커밋 `926a427`.
 
 - **공지 최상단 이동 (`index.html`)** — `.notice-card` 를 `.dashboard` 첫 자식으로(그래프·KPI 위).
@@ -959,9 +1060,7 @@ FOMC·CPI·고용보고서·휴장일·실적을 한국시간 기준 월간 달�
 - **`daily-news.yml`** — `/api/events` 갱신 트리거 스텝 추가(무방문 시에도 일 2회 갱신).
 - **한계**: toss 가 다음주 일정을 올리기 전(주말)엔 보여줄 미래 일정이 원천적으로 없음 → 최근 과거 일정으로 폴백. 월요일 toss 갱신 시 자동으로 upcoming 표시.
 
-## 라운드 19: 공지 패널 admin/공개 + 뉴스 메시지 사이트 링크 (2026-06-07)
-
-## 라운드 19: 공지(notice) 패널 + 뉴스 사이트 링크 (2026-06-07)
+## 라운드 19: 공지(notice) 패널 admin/공개 + 뉴스 메시지 사이트 링크 (2026-06-07)
 
 사용자 요청: ① 그래프 밑에 공지 패널(admin=나만 작성, 누구나 읽기) ② 뉴스 발송 시 사이트 주소 링크 항상 추가. 커밋 `0587881`.
 
@@ -1019,6 +1118,12 @@ FOMC·CPI·고용보고서·휴장일·실적을 한국시간 기준 월간 달�
 
 ## 현재 상태 한 줄 요약
 Render 에 공개 배포되어 누구나 브라우저 localStorage 로 개인 자산을 기록하고, 서버는 시세·경제캘린더 Top 5 를 자동 수집하며, 텔레그램 봇을 통해 2단계 인증 기반 기기 간 동기화 옵션과 프라이버시 안내를 제공한다. 주식 탭에 8개 경제지표·삼성/SK하이닉스 Hyperliquid 야간선물·국내외 Top 5 등락주·종목 검색·국민연금 매수/매도 표 + 보유 도넛·**연기금/외국인 순매수·순매도 상위 종목(10분 자동 갱신)**·뉴스를 한 화면에 표시.
+
+> 🔴 **위 요약과 아래 「지금 동작하는 것」은 라운드 17(2026-06-06) 시점이다** — 문서 중간에
+> 박혀 있어 현재형으로 읽히지만 18라운드 낡았다(2026-09-24 확인). 이후 추가된 것:
+> **주식 캘린더 탭**(24) · **증권사 연동**(22) · **공포탐욕·김프**(21) · **종목 상세 API**(34) ·
+> **PWA 홈화면 설치**(33) · **속도 제한·cred 만료/폐기**(30~35) · **테스트 52건**(35).
+> 최신 상태는 문서 맨 위 「최종 업데이트」와 각 라운드 절을 볼 것.
 
 ## 라이브 URL / 저장소
 
@@ -1756,26 +1861,9 @@ HIP-3 빌더 DEX 의 `universe[i].name` 은 **`"{dex}:{symbol}"` prefix 형태**
 
 ## 파일 구조
 
-```
-seed-public/
-├── index.html                 SPA 쉘 (자산·거래·그래프·이벤트 탭)
-├── app.js                     프런트엔드 + localStorage 라우팅
-├── styles.css                 Liquid Ledger 디자인 토큰
-├── pdfImport.js               증권사 PDF 파서 (메모리 처리)
-├── server.js                  Node HTTP 서버 + 모든 프록시 + 이벤트 자동 수집
-├── package.json               의존성: pdf-parse
-├── render.yaml                Render Blueprint
-├── README.md                  배포 가이드 + 아키텍처
-├── .gitignore                 node_modules, quote-cache, logs 제외
-├── design/
-│   ├── philosophy.md
-│   └── poster.pdf
-└── data/
-    ├── events.json            Toss 에서 수집한 Top 5 (자동 갱신)
-    ├── popular-tickers.json   공유 시세 자동 폴링 대상
-    ├── quote-cache.json       시세 TTL 캐시 (런타임 생성, gitignore)
-    └── logs/server.log        JSONL 로그 (런타임 생성, gitignore)
-```
+**`README.md` 의 「파일 구조」 한 곳만 본다.** 여기 있던 사본은 삭제했다(2026-09-24) —
+`brokerSync.js`·`sw.js`·`manifest.webmanifest`·`icons/`·`tests/`·`.github/` 가 빠진 채였고,
+**같은 것을 두 곳에 적어 두면 한쪽만 갱신돼 조용히 갈라진다**(실제로 갈라져 있었다).
 
 ## 주요 API 엔드포인트
 
@@ -1802,6 +1890,19 @@ seed-public/
 | POST | `/api/sync/push` | localStorage 스냅샷을 봇이 텔레그램 채팅에 핀 | Bearer cred |
 | POST | `/api/sync/pull` | 텔레그램 채팅의 핀 메시지에서 백업 회수 | Bearer cred |
 | POST | `/api/sync/disconnect` | 핀 해제 + 알림 메시지 | Bearer cred |
+| GET | `/api/stock-detail?code=...` | 종목 상세 (재무제표·EPS 등) | 라운드 34 신설 |
+| GET | `/api/market-calendar` | 주식 캘린더 (실적·FOMC 등 31건 + 가이드) | 라운드 24. 날짜는 **KST 기준** |
+| GET | `/api/earnings-calendar` | 보유 종목 실적 발표 일정 | Yahoo quoteSummary + DART `결산실적공시예고` |
+| GET | `/api/crypto-indicators` | 공포·탐욕 지수 + 김치프리미엄 | 라운드 21 |
+| GET | `/api/sidecar` | 사이드카 패널 집계 (KST 장 시간대 기준) | TTL 30s · graceful (500 안 냄) |
+| GET | `/api/krx-investor-flows` | 연기금·외국인 순매수/순매도 상위 | judal 스타일 두 리스트 분리 |
+| GET | `/api/krx-pension-top-stocks` | 연기금 순매수 상위 종목 | KRX 비공식 |
+| GET | `/api/krx-auth-check` | KRX 세션 쿠키 진단 | Render IP 차단 판별용 |
+| GET | `/api/broker-sync` | 증권사 연동 조회 (토스·한국투자) | 라운드 22 · **조회 전용** |
+| GET | `/api/broker-egress-ip` | 서버 출구 IP 확인 | 증권사 IP 화이트리스트용 |
+| * | `/api/notices` | 공지 | GET 공개 읽기 / 쓰기는 `ADMIN_TOKEN` |
+| POST | `/api/news-push-now` | 수동 뉴스 발송 | **인증 없으면 절대 발송 안 함**(fail-closed · 테스트가 지킨다) |
+| POST | `/api/broadcast` | 임의 텍스트를 고정 채널에 발송 | 🔴 **실제 공개 채널로 나간다.** `ADMIN_TOKEN` 인증. 라운드 25 에 "smoke" 테스트가 실발송된 사고 — 401 확인까지만 할 것 |
 | * | `/api/accounts` `/api/transactions` `/api/snapshot` `/api/snapshots` | 410 Gone | localStorage 로 라우팅하라 |
 | GET | `/data/*` | 403 Forbidden | 원본 JSON 노출 금지 |
 
@@ -1815,16 +1916,22 @@ seed-public/
 
 ## 주요 파일 (빠른 참조)
 
-| 파일 | 역할 |
-|------|------|
-| `server.js:620-631` | `handleEvents` - GET 전용 응답 |
-| `server.js:~803-925` | `fetchTossKeyEvents` + `refreshEvents` - 자동 수집기 |
-| `server.js:499-582` | `handleQuotes` - 시세 프록시 + 캐시 |
-| `server.js:~930-` | Telegram 동기화 모듈 (`tgPostJson`, `signCred`, `handleSync*`) |
-| `app.js:245-275` | 개인 이벤트 localStorage 로직 |
-| `app.js:278-333` | `apiGet`/`apiPost` - 로컬 vs 네트워크 분기 |
-| `app.js:~4090-` | `setupSync` + 페어링/백업/복원 로직 |
-| `data/popular-tickers.json` | 공유 캐시 예열 티커 |
+> 🔴 **줄 번호로 적지 말 것.** 여기 있던 줄 번호 7개는 2026-09-24 확인 시 **전부 틀렸다**
+> (`handleEvents` 를 `server.js:620` 이라 적었는데 실제 1375 · 620행엔 `fetchUpbitHistory` 가
+> 있었다). `server.js` 5,654줄 · `app.js` 8,433줄이 35라운드 동안 자라면서 조용히 어긋난
+> 것이다. **함수명으로 적고 `grep -n` 으로 찾을 것** — 이름은 썩지 않는다.
+
+| 파일 | 찾을 것 | 역할 |
+|------|------|------|
+| `server.js` | `handleEvents` | 공유 캘린더 GET 전용 응답 |
+| `server.js` | `fetchTossKeyEvents` · `refreshEvents` | 토스 캘린더 자동 수집기 |
+| `server.js` | `handleQuotes` | 시세 프록시 + TTL 캐시 |
+| `server.js` | `tgPostJson` · `signCred` · `handleSync*` | Telegram 동기화 모듈 |
+| `app.js` | `localTxOp` · `localSnapshotSave` | 거래·스냅샷 localStorage 로직 |
+| `app.js` | `apiGet` · `apiPost` | 로컬 vs 네트워크 분기 |
+| `app.js` | `setupSync` | 페어링/백업/복원 로직 |
+| `brokerSync.js` | — | 증권사 연동 (조회 전용) |
+| `data/popular-tickers.json` | — | 공유 캐시 예열 티커 |
 
 ## 백업 위치
 
