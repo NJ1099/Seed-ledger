@@ -3470,6 +3470,21 @@ let krxSessionCache = null; // { cookieJar: string, expiresAt: ms, authenticated
 // 마지막 로그인 시도 결과 (진단용 — 자격증명 값은 절대 담지 않음).
 let krxLastAuth = null; // { authenticated: bool, errorCode: string, ts: string }
 
+// 🔴 자격증명 오류면 재로그인을 멈춘다. (2026-09-25 · 실제로 계정이 잠겼다)
+//    KRX 는 비밀번호가 틀릴 때마다 실패 횟수를 세고(CD006 응답의 loginErrCnt/loginErrMaxCnt),
+//    한도를 넘으면 ID 를 잠근다(CD007). 그런데 이 서버는 실패한 세션도 캐시만 해 둘 뿐,
+//    KRX 조회가 400 이면 캐시를 비우고 **즉시 재로그인**했다 — 비밀번호가 틀린 상태에서는
+//    방문자가 KRX 화면을 열 때마다 실패 횟수를 깎아 먹는 구조였다.
+//    이 코드들은 기다린다고 풀리지 않는다. 고치려면 사람이 비밀번호를 바꾸거나 잠금을
+//    풀어야 하고, 환경변수를 바꾸면 Render 가 재시작하므로 차단도 함께 풀린다.
+//    그래서 **시간이 아니라 재시작(또는 관리자의 강제 판정)으로만** 푼다. 시간으로 풀면
+//    틀린 비밀번호가 하루 몇 번씩 조용히 실패 횟수를 쌓는다.
+//    코드 뜻은 KRX 로그인 화면(login.jsp?site=mdc)과 /inc/js/i18n/messages_ko.json 에서 확인.
+const KRX_CRED_ERRORS = new Set(['CD005', 'CD006', 'CD007', 'CD010']);
+let krxAuthBlock = null;    // { errorCode: string, ts: string } — 있으면 자동 로그인 안 함
+// 동시에 들어온 조회들이 각자 로그인하지 않도록 진행 중인 로그인 하나를 나눠 쓴다.
+let krxLoginInFlight = null;
+
 /** 단일 GET/POST 요청을 보내고 Set-Cookie 헤더 배열을 반환 */
 function krxRawRequest(method, urlStr, { headers = {}, formObj = null, timeoutMs = 12_000 } = {}) {
   return new Promise((resolve) => {
@@ -3581,7 +3596,8 @@ async function buildKrxAuthSession() {
   jar = mergeCookies(jar, r3.setCookie);
 
   let errorCode = '';
-  try { errorCode = JSON.parse(r3.body)?._error_code || ''; } catch {}
+  let body = null;
+  try { body = JSON.parse(r3.body); errorCode = body?._error_code || ''; } catch {}
 
   // CD011: 중복 로그인 → skipDup=Y 재전송
   if (errorCode === 'CD011') {
@@ -3596,30 +3612,58 @@ async function buildKrxAuthSession() {
       formObj: { ...loginPayload, skipDup: 'Y' },
     });
     jar = mergeCookies(jar, r3b.setCookie);
-    try { errorCode = JSON.parse(r3b.body)?._error_code || ''; } catch {}
+    body = null;
+    try { body = JSON.parse(r3b.body); errorCode = body?._error_code || ''; } catch {}
   }
 
   const authenticated = errorCode === 'CD001';
+  // CD006 이면 KRX 가 실패 횟수를 같이 준다 — 잠금까지 몇 번 남았는지 로그로 남긴다.
+  const errCnt = body?.loginErrCnt != null ? `${body.loginErrCnt}/${body.loginErrMaxCnt}` : null;
   if (!authenticated) {
-    logLine('warn', 'krx.login.fail', { errorCode, hint: errorCode === 'CD010' ? 'KRX 비밀번호 변경 필요' : '자격증명 오류' });
+    logLine('warn', 'krx.login.fail', { errorCode, errCnt, hint: KRX_AUTH_HINT[errorCode] || '자격증명 오류' });
   } else {
     logLine('info', 'krx.login.ok', { cookieLen: jar.length });
   }
-  return { cookieJar: jar, authenticated, errorCode: errorCode || (authenticated ? 'CD001' : 'UNKNOWN') };
+  return { cookieJar: jar, authenticated, errorCode: errorCode || (authenticated ? 'CD001' : 'UNKNOWN'), errCnt };
 }
 
-async function getKrxSession() {
+/**
+ * KRX 세션 쿠키를 돌려준다.
+ * force=true 는 관리자 강제 판정(/api/krx-auth-check) 전용 — 자격증명 오류 차단을 넘어선다.
+ * 차단 중이면 로그인하지 않고 빈 쿠키('')를 돌려준다. 호출부의 "400 이면 재시도"는
+ * 새 쿠키가 있을 때만 재요청하므로 여기서 멈춘다.
+ */
+async function getKrxSession({ force = false } = {}) {
   if (krxSessionCache && krxSessionCache.expiresAt > Date.now()) return krxSessionCache.cookieJar;
-  const result = await buildKrxAuthSession();
-  krxSessionCache = {
-    cookieJar: result.cookieJar,
-    expiresAt: Date.now() + KRX_SESSION_TTL,
-    authenticated: result.authenticated,
-    errorCode: result.errorCode,
-  };
-  // 진단용 마지막 로그인 결과 기록 (자격증명 값은 미포함).
-  krxLastAuth = { authenticated: result.authenticated, errorCode: result.errorCode, ts: nowKST() };
-  return result.cookieJar;
+  if (krxAuthBlock && !force) return '';
+  if (krxLoginInFlight) return krxLoginInFlight;
+  const p = (async () => {
+    const result = await buildKrxAuthSession();
+    krxSessionCache = {
+      cookieJar: result.cookieJar,
+      expiresAt: Date.now() + KRX_SESSION_TTL,
+      authenticated: result.authenticated,
+      errorCode: result.errorCode,
+    };
+    // 진단용 마지막 로그인 결과 기록 (자격증명 값은 미포함).
+    krxLastAuth = { authenticated: result.authenticated, errorCode: result.errorCode, errCnt: result.errCnt, ts: nowKST() };
+    if (KRX_CRED_ERRORS.has(result.errorCode)) {
+      krxAuthBlock = { errorCode: result.errorCode, ts: krxLastAuth.ts };
+      // 실패한 쿠키를 들고 있어 봐야 조회가 400 만 받는다 — 캐시에서도 뺀다.
+      krxSessionCache = null;
+      logLine('warn', 'krx.login.blocked', {
+        errorCode: result.errorCode,
+        hint: '자동 재로그인 중단 — 비밀번호를 고친 뒤 재시작하거나 관리자 강제 판정으로 푼다',
+      });
+      return '';
+    }
+    if (result.authenticated) krxAuthBlock = null;
+    return result.cookieJar;
+  })();
+  krxLoginInFlight = p;
+  // 기다리던 쪽이 여럿이어도 자기 것일 때만 비운다(뒤에 시작된 로그인을 지우지 않게).
+  p.finally(() => { if (krxLoginInFlight === p) krxLoginInFlight = null; }).catch(() => {});
+  return p;
 }
 
 function ymdNoDash(d) {
@@ -4139,7 +4183,11 @@ const KRX_AUTH_HINT = {
   // 바뀌었고, **옛 비밀번호가 그대로 있는 로컬에서도 같은 CD006** 이 나왔다.
   // 즉 "만료"는 풀렸고 이제 값이 안 맞는 상태다. KRX 는 `_error_code` 만 주고 메시지를
   // 주지 않아 단정은 못 하지만, 관측된 전이(CD010 → 비번 변경 → CD006)가 근거다.
-  CD006:    '자격증명 불일치로 보인다 — 비밀번호를 바꿨다면 KRX_PW 를 Render 와 로컬 .env 양쪽에 갱신하세요',
+  //    → 2026-09-25 KRX 로그인 화면 코드(login.jsp?site=mdc)와 메시지 사전
+  //      (/inc/js/i18n/messages_ko.json)에서 뜻을 **직접 확인**했다. 추측이 맞았다.
+  CD005:    '아이디가 존재하지 않음 — KRX_ID 를 확인하세요',
+  CD006:    '비밀번호 불일치 — KRX_PW 를 Render 와 로컬 .env 양쪽에 같은 값으로 넣으세요 (틀릴 때마다 실패 횟수가 쌓여 잠긴다)',
+  CD007:    '로그인 시도 횟수 초과로 ID 잠금 — data.krx.co.kr 에서 잠금을 푼 뒤 KRX_PW 를 갱신하세요',
   NO_CREDS: 'KRX_ID/KRX_PW 미설정 — 환경변수를 등록하세요',
   // 🔴 "아직 안 해봄"은 실패가 아니다. 예전에는 이 상태가 UNKNOWN 으로 나가서
   //    "알 수 없는 로그인 실패 (… IP 차단 가능)" 이라고 **단언**했고, 그 문장 하나로
@@ -4166,7 +4214,7 @@ async function handleConfigStatus(req, res) {
     },
     // 마지막 로그인 시도 결과 (아직 시도 전이면 null). /api/krx-auth-check 로 강제 갱신 가능.
     krxAuth: krxLastAuth
-      ? { authenticated: krxLastAuth.authenticated, errorCode: krxLastAuth.errorCode, ts: krxLastAuth.ts }
+      ? { authenticated: krxLastAuth.authenticated, errorCode: krxLastAuth.errorCode, errCnt: krxLastAuth.errCnt ?? null, loginBlocked: !!krxAuthBlock, ts: krxLastAuth.ts }
       : null,
     // 🔴 배포 반영 확인용. **200 도, 갱신된 시각도 새 코드의 증거가 아니다** — 예전에
     //    배포 검증에 두 번 속았다(edge 전파 지연 · 응답 캐시). 그래서 "새 코드에만 있는
@@ -4222,6 +4270,8 @@ async function handleKrxAuthCheck(req, res) {
       errorCode: lastCode,
       hint: KRX_AUTH_HINT[lastCode] || lastCode,
       cooldown: true,
+      // 자격증명 오류로 자동 재로그인을 멈춘 상태인지. true 면 재시작이나 강제 판정 전엔 안 풀린다.
+      loginBlocked: !!krxAuthBlock,
       // 왜 재로그인을 안 했는지 밝힌다. 안 그러면 호출한 쪽이 "쿨다운인가 보다" 하고
       // 계속 두드린다 — 권한 문제면 영원히 안 풀리는데도.
       reason: mayForce ? 'cooldown' : 'admin-only',
@@ -4235,7 +4285,8 @@ async function handleKrxAuthCheck(req, res) {
   // 캐시 무효화 후 새 로그인 강제.
   krxSessionCache = null;
   try {
-    await getKrxSession();
+    // 관리자 강제 판정만 자격증명 오류 차단을 넘어선다(재시작 없이 고친 비밀번호를 확인할 때).
+    await getKrxSession({ force: true });
   } catch (e) {
     logLine('warn', 'krx.authcheck.err', { err: String(e) });
   }
