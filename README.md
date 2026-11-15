@@ -21,11 +21,15 @@ npm start            # 기본 포트 4274
 # 또는
 PORT=4275 npm start  # 포트 지정
 
-npm test             # node --test · 52건 (logic · smoke · ratelimit)
+npm test             # node --test · 66건 (logic · stock-search · smoke · ratelimit)
 ```
 
 브라우저에서 `http://localhost:4274/` 로 접속. 최초 접속 시 계좌·거래가 비어 있고,
 자산 탭의 `+` 버튼으로 직접 추가하거나 증권사 PDF 를 드래그·드롭해 일괄 등록할 수 있다.
+
+Node 는 `pdf-parse` 가 요구하는 **20.16 이상(21 제외) 또는 22.3 이상** 이어야 한다.
+`package.json` 의 `engines` 와 같다. 의존성은 `pdf-parse@2.4.5` 하나이고, 이 버전이
+현재 안정 최신이다. `pdfjs-dist` 는 그 패키지가 고정하므로 따로 올리지 않는다.
 
 ## Render 로 배포
 
@@ -145,10 +149,12 @@ npm test             # node --test · 52건 (logic · smoke · ratelimit)
 ├── sw.js                     서비스 워커 (PWA · 시세 API 는 캐시하지 않는다)
 ├── manifest.webmanifest      PWA 매니페스트
 ├── icons/                    설치 아이콘 (192/512/maskable/apple-touch)
-├── package.json              의존성: pdf-parse 하나
+├── package.json              의존성: pdf-parse 하나 (2.4.5, 현재 안정 최신)
+├── stockSearch.js            종목 검색 매칭 (한글·영문·코드·초성, 테스트 대상)
 ├── render.yaml               Render Blueprint
-├── tests/                    node --test (logic · smoke · ratelimit) — 52건
+├── tests/                    node --test (logic · stock-search · smoke · ratelimit)
 ├── scripts/make-icons.js     아이콘 생성 유틸 (수동 실행)
+├── scripts/refresh-stock-symbols.js  종목 폴백 목록 갱신 (수동 실행)
 ├── .github/workflows/        daily-news.yml — 일일 뉴스 발송
 ├── design/
 │   ├── philosophy.md         디자인 철학 문서
@@ -157,7 +163,8 @@ npm test             # node --test · 52건 (logic · smoke · ratelimit)
     ├── events.json           공유 이벤트 목록 (자동 수집 + 관리자 편집)
     ├── market-calendar.json   주식 캘린더 (실적·FOMC 등)
     ├── popular-tickers.json  자동 폴러 대상 목록
-    └── quote-cache.json      시세 TTL 캐시 (자동 생성)
+    ├── stock-symbols.json    종목 검색 폴백 목록 (시총 상위, 장외에도 검색 가능)
+    └── quote-cache.json      시세 TTL 캐시 (자동 생성, 커밋하지 않음)
 ```
 
 ## 주요 이벤트 (공유 캘린더) 관리
@@ -169,6 +176,24 @@ npm test             # node --test · 52건 (logic · smoke · ratelimit)
 - 소스: `https://wts-info-api.tossinvest.com/api/v1/calendar/ai-summary/key-events`
 - 선정 기준: 토스증권이 큐레이션해 내보내는 경제지표 + 주요 실적 발표 중 **미래 일정만** 추린 Top 5
 - 실패 시: 기존 `events.json` 을 그대로 두고 다음 주기에 재시도 (프런트가 빈 목록을 보지 않도록 보수적 처리)
+- 2026-11-15 확인: 이 주소는 `invalid-client-state`(400) 를 반환한다. 인증 없는 대체 주소도
+  같은 응답이라, 묶여 있는 `events.json` 이 마지막 성공 시점(2026-09)에 머문다.
+  주식 캘린더 탭은 별도 파일 `data/market-calendar.json` 을 읽는다.
+
+## 종목 검색
+
+주식 탭 검색창은 `/api/stock-search` 를 250ms 디바운스로 호출한다.
+
+- 비교는 대소문자·공백·`.` `&` `-` 같은 문장부호를 무시한다. `삼성 전자`, `brk b`, `BRK.B` 가 같은 종목으로 모인다.
+- 한글 이름, 영문 별칭, KRX 6자리(및 영숫자) 코드, 미국 티커를 찾는다. `애플` 과 `AAPL` 은 같은 결과다.
+- 검색어가 ㄱ–ㅎ만이면 초성으로 찾는다. `ㅅㅅㅈㅈ` → 삼성전자.
+- 순위는 완전일치, 초성 완전일치, 접두, 초성 접두, 그다음 포함이다.
+- 장외에도 검색되도록 `data/stock-symbols.json`(시가총액 상위)을 먼저 본다.
+  네이버 검색은 `m.stock.naver.com/front-api/search` 만 호출한다. 예전에 쓰던
+  `/search/total`, `ac.finance.naver.com`, `polling .../etcStockNameSearch` 는 404 이거나
+  호스트가 없다. 국내 시총 목록은 주말에 비는 `api.stock.naver.com` 대신
+  `m.stock.naver.com/api/stocks/marketValue` 를 쓴다.
+- 목록을 다시 받으려면 `node scripts/refresh-stock-symbols.js`.
 
 사용자가 앱에서 개별로 추가한 이벤트는 브라우저 `localStorage` 에만 남고,
 서버 이벤트와 합쳐서 표시된다.

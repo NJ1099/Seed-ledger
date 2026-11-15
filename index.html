@@ -599,8 +599,8 @@
     <section class="stock-section">
       <div class="section-title">종목 검색</div>
       <div class="stock-search">
-        <input id="stock-search-input" type="search" placeholder="종목명 또는 코드 (예: 삼성전자, 005930, AAPL)" autocomplete="off" />
-        <div class="stock-search-results" id="stock-search-results" hidden></div>
+        <input id="stock-search-input" type="search" placeholder="종목명, 코드, 초성 (예: 삼성전자, ㅅㅅㅈㅈ, 005930, AAPL, 애플)" autocomplete="off" enterkeyhint="search" />
+        <div class="stock-search-results" id="stock-search-results" role="listbox" hidden></div>
       </div>
       <!-- 검색 결과 선택 시 이 자리에 차트를 인라인으로 렌더 (외부 이탈 없음) -->
       <div class="stock-chart-panel hidden" id="stock-chart-panel">

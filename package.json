@@ -6,13 +6,13 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/logic.test.mjs tests/smoke.test.mjs tests/ratelimit.test.mjs",
+    "test": "node --test tests/logic.test.mjs tests/stock-search.test.mjs tests/smoke.test.mjs tests/ratelimit.test.mjs",
     "test:smoke": "node --test tests/smoke.test.mjs",
     "test:logic": "node --test tests/logic.test.mjs",
     "test:ratelimit": "node --test tests/ratelimit.test.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=20.16.0 <21 || >=22.3.0"
   },
   "dependencies": {
     "pdf-parse": "^2.4.5"

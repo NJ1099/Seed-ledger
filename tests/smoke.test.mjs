@@ -246,6 +246,30 @@ test('manifest 가 설치 가능한 형태다 (maskable 아이콘 포함)', asyn
   assert.ok(j.icons.some((i) => i.purpose === 'maskable'), 'maskable 아이콘이 빠졌다');
 });
 
+test('종목 검색은 한글·코드·초성·공백을 로컬 목록에서 찾는다', async () => {
+  const cases = [
+    ['삼성전자', '005930'],
+    ['삼성 전자', '005930'],
+    ['ㅅㅅㅈㅈ', '005930'],
+    ['005930', '005930'],
+    ['aapl', 'AAPL'],
+    ['애플', 'AAPL'],
+  ];
+  for (const [q, code] of cases) {
+    const r = await get('/api/stock-search?q=' + encodeURIComponent(q));
+    assert.equal(r.status, 200, q);
+    const j = await r.json();
+    assert.equal(j.ok, true, q);
+    assert.ok(Array.isArray(j.results) && j.results.length, `${q} 결과가 비었다`);
+    assert.equal(j.results[0].code, code, `${q} 의 1위가 ${j.results[0] && j.results[0].code}`);
+  }
+});
+
+test('종목 검색은 빈 검색어를 거절한다', async () => {
+  assert.equal((await get('/api/stock-search?q=')).status, 400);
+  assert.equal((await get('/api/stock-search')).status, 400);
+});
+
 test('서비스 워커가 시세 API 를 캐시하지 않는다', async () => {
   const r = await get('/sw.js');
   const src = await r.text();

@@ -1,0 +1,9898 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-15T23:25:46.817Z",
+  "source": "naver marketValue (KOSPI/KOSDAQ via m.stock, NASDAQ/NYSE via api.stock)",
+  "stocks": [
+    {
+      "code": "005930",
+      "name": "삼성전자",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000660",
+      "name": "SK하이닉스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005935",
+      "name": "삼성전자우",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "402340",
+      "name": "SK스퀘어",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "373220",
+      "name": "LG에너지솔루션",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "207940",
+      "name": "삼성바이오로직스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009150",
+      "name": "삼성전기",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "105560",
+      "name": "KB금융",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005380",
+      "name": "현대차",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "032830",
+      "name": "삼성생명",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "068270",
+      "name": "셀트리온",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "028260",
+      "name": "삼성물산",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "055550",
+      "name": "신한지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006400",
+      "name": "삼성SDI",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000270",
+      "name": "기아",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "034730",
+      "name": "SK",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "086790",
+      "name": "하나금융지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "012450",
+      "name": "한화에어로스페이스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "012330",
+      "name": "현대모비스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "034020",
+      "name": "두산에너빌리티",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "329180",
+      "name": "HD현대중공업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "035420",
+      "name": "NAVER",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "316140",
+      "name": "우리금융지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000810",
+      "name": "삼성화재",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "066570",
+      "name": "LG전자",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005490",
+      "name": "POSCO홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "069500",
+      "name": "KODEX 200",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "360750",
+      "name": "TIGER 미국S&P500",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "011200",
+      "name": "HMM",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "138040",
+      "name": "메리츠금융지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "010120",
+      "name": "LS ELECTRIC",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "096770",
+      "name": "SK이노베이션",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "033780",
+      "name": "KT&G",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "010130",
+      "name": "고려아연",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "018260",
+      "name": "삼성에스디에스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "017670",
+      "name": "SK텔레콤",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "015760",
+      "name": "한국전력",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "042700",
+      "name": "한미반도체",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "298040",
+      "name": "효성중공업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009540",
+      "name": "HD한국조선해양",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "051910",
+      "name": "LG화학",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003670",
+      "name": "포스코퓨처엠",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "267260",
+      "name": "HD현대일렉트릭",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "086280",
+      "name": "현대글로비스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "024110",
+      "name": "기업은행",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "042660",
+      "name": "한화오션",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "010140",
+      "name": "삼성중공업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "035720",
+      "name": "카카오",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "028050",
+      "name": "삼성E&A",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "180640",
+      "name": "한진칼",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003550",
+      "name": "LG",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "030200",
+      "name": "KT",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "488770",
+      "name": "KODEX 머니마켓액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "010950",
+      "name": "S-Oil",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006800",
+      "name": "미래에셋증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003490",
+      "name": "대한항공",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "133690",
+      "name": "TIGER 미국나스닥100",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005830",
+      "name": "DB손해보험",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "379800",
+      "name": "KODEX 미국S&P500",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "047810",
+      "name": "한국항공우주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "272210",
+      "name": "한화시스템",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "267250",
+      "name": "HD현대",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "323410",
+      "name": "카카오뱅크",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "379810",
+      "name": "KODEX 미국나스닥100",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000720",
+      "name": "현대건설",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003230",
+      "name": "삼양식품",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "259960",
+      "name": "크래프톤",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000150",
+      "name": "두산",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "278470",
+      "name": "에이피알",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "047050",
+      "name": "포스코인터내셔널",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "102110",
+      "name": "TIGER 200",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0126Z0",
+      "name": "삼성에피스홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005940",
+      "name": "NH투자증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "307950",
+      "name": "현대오토에버",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "079550",
+      "name": "LIG디펜스앤에어로스페이스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "443060",
+      "name": "HD현대마린솔루션",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "078930",
+      "name": "GS",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "064350",
+      "name": "현대로템",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "161390",
+      "name": "한국타이어앤테크놀로지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "064400",
+      "name": "LG씨엔에스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "090430",
+      "name": "아모레퍼시픽",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "021240",
+      "name": "코웨이",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "071050",
+      "name": "한국금융지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "396500",
+      "name": "TIGER 반도체TOP10",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "326030",
+      "name": "SK바이오팜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "011070",
+      "name": "LG이노텍",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "352820",
+      "name": "하이브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "007660",
+      "name": "이수페타시스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "016360",
+      "name": "삼성증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000500",
+      "name": "가온전선",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "032640",
+      "name": "LG유플러스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "459580",
+      "name": "KODEX CD금리액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "278530",
+      "name": "KODEX 200TR",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "128940",
+      "name": "한미약품",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006260",
+      "name": "LS",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000100",
+      "name": "유한양행",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "039490",
+      "name": "키움증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009830",
+      "name": "한화솔루션",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "498400",
+      "name": "KODEX 200타겟위클리커버드콜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "241560",
+      "name": "두산밥캣",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005387",
+      "name": "현대차2우B",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "175330",
+      "name": "JB금융지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "381180",
+      "name": "TIGER 미국필라델피아반도체나스닥",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "047040",
+      "name": "대우건설",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "029780",
+      "name": "삼성카드",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "088980",
+      "name": "맥쿼리인프라",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "458730",
+      "name": "TIGER 미국배당다우존스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "353200",
+      "name": "대덕전자",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "271560",
+      "name": "오리온",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "267270",
+      "name": "HD건설기계",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "377300",
+      "name": "카카오페이",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "091160",
+      "name": "KODEX 반도체",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "229200",
+      "name": "KODEX 코스닥150",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "138930",
+      "name": "BNK금융지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "122630",
+      "name": "KODEX 레버리지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000880",
+      "name": "한화",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0167A0",
+      "name": "SOL AI반도체TOP2플러스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "062040",
+      "name": "산일전기",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "360200",
+      "name": "ACE 미국S&P500",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036570",
+      "name": "NC",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "004020",
+      "name": "현대제철",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "012750",
+      "name": "에스원",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "357870",
+      "name": "TIGER CD금리투자KIS(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0043B0",
+      "name": "TIGER 머니마켓액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "011790",
+      "name": "SKC",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001440",
+      "name": "대한전선",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "010060",
+      "name": "OCI홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000990",
+      "name": "DB하이텍",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "381170",
+      "name": "TIGER 미국테크TOP10 INDXX",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0162Z0",
+      "name": "RISE 삼성전자SK하이닉스채권혼합50",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "148020",
+      "name": "RISE 200",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "034220",
+      "name": "LG디스플레이",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "423160",
+      "name": "KODEX KOFR금리액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "008930",
+      "name": "한미사이언스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "411060",
+      "name": "ACE KRX금현물",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "310970",
+      "name": "TIGER MSCI Korea TR",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036460",
+      "name": "한국가스공사",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "455890",
+      "name": "RISE 머니마켓액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "454910",
+      "name": "두산로보틱스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "051900",
+      "name": "LG생활건강",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "367380",
+      "name": "ACE 미국나스닥100",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005385",
+      "name": "현대차우",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "066970",
+      "name": "엘앤에프",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "022100",
+      "name": "포스코DX",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001040",
+      "name": "CJ",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "273130",
+      "name": "KODEX 종합채권(AA-이상)액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "002380",
+      "name": "KCC",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "088350",
+      "name": "한화생명",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "018880",
+      "name": "한온시스템",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "192820",
+      "name": "코스맥스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "111770",
+      "name": "영원무역",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "302440",
+      "name": "SK바이오사이언스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001450",
+      "name": "현대해상",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "233740",
+      "name": "KODEX 코스닥150레버리지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "035250",
+      "name": "강원랜드",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "031210",
+      "name": "서울보증보험",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "395160",
+      "name": "KODEX AI반도체TOP2플러스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "052690",
+      "name": "한전기술",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "103590",
+      "name": "일진전기",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "026960",
+      "name": "동서",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006360",
+      "name": "GS건설",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "017800",
+      "name": "현대엘리베이터",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009420",
+      "name": "한올바이오파마",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "251270",
+      "name": "넷마블",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "102780",
+      "name": "KODEX 삼성그룹",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "028670",
+      "name": "팬오션",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "481050",
+      "name": "KODEX CD1년금리플러스액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "097950",
+      "name": "CJ제일제당",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "486290",
+      "name": "TIGER 미국나스닥100타겟데일리커버드콜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "395270",
+      "name": "HANARO Fn K-반도체",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "139130",
+      "name": "iM금융지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "161890",
+      "name": "한국콜마",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "011780",
+      "name": "금호석유화학",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "282330",
+      "name": "BGF리테일",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "472150",
+      "name": "TIGER 배당커버드콜액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "457190",
+      "name": "이수스페셜티케미컬",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "004170",
+      "name": "신세계",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "449170",
+      "name": "TIGER KOFR금리액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003690",
+      "name": "코리안리",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "085620",
+      "name": "미래에셋생명",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "383220",
+      "name": "F&F",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "004370",
+      "name": "농심",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "004990",
+      "name": "롯데지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "018670",
+      "name": "SK가스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "385540",
+      "name": "RISE 종합채권(A-이상)액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "082740",
+      "name": "한화엔진",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005850",
+      "name": "에스엘",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "023530",
+      "name": "롯데쇼핑",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "007810",
+      "name": "코리아써키트",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "161510",
+      "name": "PLUS 고배당주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "181710",
+      "name": "NHN",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "279570",
+      "name": "케이뱅크",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009970",
+      "name": "영원무역홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "489790",
+      "name": "한화비전",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "089860",
+      "name": "롯데렌탈",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "007340",
+      "name": "DN오토모티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "375500",
+      "name": "DL이앤씨",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "426030",
+      "name": "TIME 미국나스닥100액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "487240",
+      "name": "KODEX AI전력핵심설비",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "450080",
+      "name": "에코프로머티",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "004800",
+      "name": "효성",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "002790",
+      "name": "아모레퍼시픽홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000240",
+      "name": "한국앤컴퍼니",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "214980",
+      "name": "KODEX 단기채권PLUS",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "081660",
+      "name": "미스토홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "011170",
+      "name": "롯데케미칼",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "020150",
+      "name": "롯데에너지머티리얼즈",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "014680",
+      "name": "한솔케미칼",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "112610",
+      "name": "씨에스윈드",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005440",
+      "name": "현대지에프홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "030000",
+      "name": "제일기획",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001720",
+      "name": "신영증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "336260",
+      "name": "두산퓨얼셀",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "007070",
+      "name": "GS리테���",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "069960",
+      "name": "현대백화점",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "278540",
+      "name": "KODEX MSCI Korea TR",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "139260",
+      "name": "TIGER 200 IT",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "020560",
+      "name": "아시아나항공",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "139480",
+      "name": "이마트",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "441640",
+      "name": "KODEX 미국배당커버드콜액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "284430",
+      "name": "KODEX 200미국채혼합50",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "305720",
+      "name": "KODEX 2차전지산업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "204320",
+      "name": "HL만도",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "477080",
+      "name": "RISE CD금리액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "294870",
+      "name": "IPARK현대산업개발",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "051600",
+      "name": "한전KPS",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "073240",
+      "name": "금호타이어",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006280",
+      "name": "녹십자",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "281820",
+      "name": "케이씨텍",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "456600",
+      "name": "TIME 글로벌AI인공지능액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "610063",
+      "name": "메리츠 KIS CD금리투자 ETN",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000120",
+      "name": "CJ대한통운",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "462870",
+      "name": "시프트업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "379780",
+      "name": "RISE 미국S&P500",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "483650",
+      "name": "달바글로벌",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "368590",
+      "name": "RISE 미국나스닥100",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "329200",
+      "name": "TIGER 리츠부동산인프라",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "103140",
+      "name": "풍산",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006040",
+      "name": "동원산업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "395400",
+      "name": "SK리츠",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "453850",
+      "name": "ACE 미국30년국채액티브(H)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "105190",
+      "name": "ACE 200",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001800",
+      "name": "오리온홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "008770",
+      "name": "호텔신라",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001120",
+      "name": "LX인터내셔널",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "439260",
+      "name": "대한조선",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "294400",
+      "name": "KIWOOM 200TR",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "487340",
+      "name": "ACE 머니마켓액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "023590",
+      "name": "다우기술",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "011210",
+      "name": "현대위아",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0177N0",
+      "name": "KODEX 삼성전자SK하이닉스채권혼합50",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "229640",
+      "name": "LS에코에너지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "292150",
+      "name": "TIGER 코리아TOP10",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "157450",
+      "name": "TIGER 단기통안채",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "298020",
+      "name": "효성티앤씨",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "071970",
+      "name": "HD현대마린엔진",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "475630",
+      "name": "TIGER CD1년금리액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "700026",
+      "name": "하나 CD금리투자 ETN",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "192080",
+      "name": "더블유게임즈",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "446770",
+      "name": "ACE 글로벌반도체TOP4 Plus",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "465580",
+      "name": "ACE 미국빅테크TOP7 Plus",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006120",
+      "name": "SK디스커버리",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "438080",
+      "name": "ACE 미국S&P500미국채혼합50액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "442580",
+      "name": "PLUS 글로벌HBM반도체",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "300720",
+      "name": "한일시멘트",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "448330",
+      "name": "KODEX 삼성전자채권혼합",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "475150",
+      "name": "SK이터닉스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "415640",
+      "name": "KB발해인프라",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "007310",
+      "name": "오뚜기",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "152100",
+      "name": "PLUS 200",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005070",
+      "name": "코스모신소재",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "069620",
+      "name": "대웅제약",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "436140",
+      "name": "SOL 종합채권(AA-이상)액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "232080",
+      "name": "TIGER 코스닥150",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "280360",
+      "name": "롯데웰푸드",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "469830",
+      "name": "SOL 초단기채권액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "012630",
+      "name": "HDC",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "530031",
+      "name": "삼성 레버리지 WTI원유 선물 ETN",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001740",
+      "name": "SK네트웍스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000080",
+      "name": "하이트진로",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001430",
+      "name": "세아베스틸지주",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "226490",
+      "name": "KODEX 코스피",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0139F0",
+      "name": "TIGER 12월자동연장금융채(AA-이상)액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "390390",
+      "name": "KODEX 미국반도체",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000815",
+      "name": "삼성화재우",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "449180",
+      "name": "KODEX 미국S&P500(H)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "356540",
+      "name": "ACE 종합채권(AA-이상)액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "120110",
+      "name": "코오롱인더",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "446720",
+      "name": "SOL 미국배당다우존스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "097230",
+      "name": "HJ중공업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "487230",
+      "name": "KODEX 미국AI전력핵심인프라",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "451540",
+      "name": "TIGER 종합채권(AA-이상)액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "153130",
+      "name": "KODEX 단기채권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0072R0",
+      "name": "TIGER KRX금현물",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "330590",
+      "name": "롯데리츠",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "030190",
+      "name": "NICE평가정보",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "00680K",
+      "name": "미래에셋증권2우B",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "361610",
+      "name": "SK아이이테크놀로지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0219E0",
+      "name": "KODEX 200커버드콜액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0193T0",
+      "name": "KODEX SK하이닉스단일종목레버리지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "402970",
+      "name": "ACE 미국배당다우존스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "093370",
+      "name": "후성",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "091230",
+      "name": "TIGER 반도체",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "455850",
+      "name": "SOL AI반도체소부장",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "479520",
+      "name": "RISE KOFR금리액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "760009",
+      "name": "키움 CD금리투자 ETN",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003240",
+      "name": "태광산업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "494300",
+      "name": "KODEX 미국나스닥100데일리커버드콜OTM",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "192400",
+      "name": "쿠쿠홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003530",
+      "name": "한화투자증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0183J0",
+      "name": "TIGER 미국우주테크",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "496020",
+      "name": "WON 전단채플러스액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "034230",
+      "name": "파라다이스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "466940",
+      "name": "TIGER 은행고배당플러스TOP10",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003540",
+      "name": "대신증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0048J0",
+      "name": "KODEX 미국머니마켓액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005300",
+      "name": "롯데칠성",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003090",
+      "name": "대웅",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009155",
+      "name": "삼성전기우",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "438100",
+      "name": "ACE 미국나스닥100미국채혼합50액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "466920",
+      "name": "SOL 조선TOP3플러스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001820",
+      "name": "삼화콘덴서",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "030610",
+      "name": "교보증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "322000",
+      "name": "HD현대에너지솔루션",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "066575",
+      "name": "LG전자우",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003160",
+      "name": "디아이",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000210",
+      "name": "DL",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009450",
+      "name": "경동나비엔",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "469150",
+      "name": "ACE AI반도체TOP3+",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "137310",
+      "name": "에스디바이오센서",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009240",
+      "name": "한샘",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "445290",
+      "name": "KODEX 로봇액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "479080",
+      "name": "1Q 머니마켓액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "004000",
+      "name": "롯데정밀화학",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "185750",
+      "name": "종근당",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "079160",
+      "name": "CJ CGV",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0193W0",
+      "name": "KODEX 삼성전자단일종목레버리지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "497570",
+      "name": "TIGER 미국필라델피아AI반도체나스닥",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "051915",
+      "name": "LG화학우",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "498410",
+      "name": "KODEX 금융고배당TOP10타겟위클리커버드콜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "451800",
+      "name": "한화리츠",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000155",
+      "name": "두산우",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "305540",
+      "name": "TIGER 2차전지테마",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "252670",
+      "name": "KODEX 200선물인버스2X",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "295040",
+      "name": "SOL 200TR",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "032350",
+      "name": "롯데관광개발",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "550082",
+      "name": "N2 KIS CD금리투자 ETN",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "195870",
+      "name": "해성디에스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0007F0",
+      "name": "KODEX 27-12 회사채(AA-이상)액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "071320",
+      "name": "지역난방공사",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000400",
+      "name": "롯데손해보험",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "272580",
+      "name": "TIGER 단기채권액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0025N0",
+      "name": "TIGER TDF2045 적격",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "237350",
+      "name": "KODEX 코스피100",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003850",
+      "name": "보령",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003470",
+      "name": "유안타증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "315930",
+      "name": "KODEX Top5PlusTR",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "456610",
+      "name": "TIGER 미국달러SOFR금리액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "494890",
+      "name": "KODEX 200액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "017960",
+      "name": "한국카본",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "495050",
+      "name": "RISE 코리아밸류업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "329750",
+      "name": "TIGER 미국달러단기채권액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "476550",
+      "name": "TIGER 미국30년국채커버드콜액티브(H)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "298050",
+      "name": "HS효성첨단소재",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "114800",
+      "name": "KODEX 인버스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "418660",
+      "name": "TIGER 미국나스닥100레버리지(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "004490",
+      "name": "세방전지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "494310",
+      "name": "KODEX 반도체레버리지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000370",
+      "name": "한화손해보험",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0117L0",
+      "name": "KODEX 26-12 금융채(AA-이상)액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003570",
+      "name": "SNT다이내믹스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "580058",
+      "name": "KB KIS CD금리투자 ETN",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "458760",
+      "name": "TIGER 미국배당다우존스타겟커버드콜2호",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "475720",
+      "name": "RISE 200위클리커버드콜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "214320",
+      "name": "이노션",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "482730",
+      "name": "TIGER 미국S&P500타겟데일리커버드콜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "457480",
+      "name": "ACE 테슬라밸류체인액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "481060",
+      "name": "KODEX 미국30년국채타겟커버드콜(합성 H)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "365550",
+      "name": "ESR켄달스퀘어리츠",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "293940",
+      "name": "신한알파리츠",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006340",
+      "name": "대원전선",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "285130",
+      "name": "SK케미칼",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0177R0",
+      "name": "TIGER 반도체TOP10커버드콜액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0220W0",
+      "name": "한화머시너리앤서비스홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0195S0",
+      "name": "TIGER SK하이닉스단일종목레버리지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "490590",
+      "name": "RISE 미국AI밸류체인데일리고정커버드콜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005180",
+      "name": "빙그레",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "453340",
+      "name": "현대그린푸드",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "268280",
+      "name": "미원에스씨",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0117V0",
+      "name": "TIGER 코리아AI전력기기TOP3플러스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "441800",
+      "name": "TIME Korea플러스배당액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "462330",
+      "name": "KODEX 2차전지산업레버리지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "489250",
+      "name": "KODEX 미국배당다우존스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "364980",
+      "name": "TIGER 2차전지TOP10",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001570",
+      "name": "금양",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "071055",
+      "name": "한국금융지주우",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0061Z0",
+      "name": "RISE 단기특수은행채액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "449450",
+      "name": "PLUS K방산",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006110",
+      "name": "삼아알미늄",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0127P0",
+      "name": "ACE 미국대형성장주액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005880",
+      "name": "대한해운",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "064960",
+      "name": "SNT모티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "314250",
+      "name": "KODEX 미국빅테크10(H)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "002960",
+      "name": "한국쉘석유",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "317450",
+      "name": "명인제약",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "495850",
+      "name": "KODEX 코리아밸류업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "077970",
+      "name": "STX엔진",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "079900",
+      "name": "전진건설로봇",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "014820",
+      "name": "동원시스템즈",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "434060",
+      "name": "KODEX TDF2050액티브 적격",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000640",
+      "name": "동아제약",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "477050",
+      "name": "PLUS 머니마켓액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "093050",
+      "name": "LF",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "371460",
+      "name": "TIGER 차이나전기차SOLACTIVE",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "094800",
+      "name": "맵스리얼티",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001680",
+      "name": "대상",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "144600",
+      "name": "KODEX 은선물(H)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "365780",
+      "name": "ACE 국고채10년",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "484790",
+      "name": "KODEX 미국30년국채액티브(H)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "002350",
+      "name": "넥센타이어",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001060",
+      "name": "JW중외제약",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "100090",
+      "name": "SK오션플랜트",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006650",
+      "name": "대한유화",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "451000",
+      "name": "PLUS 종합채권(AA-이상)액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036530",
+      "name": "SNT홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0232A0",
+      "name": "MIDAS 머니마켓액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "251600",
+      "name": "PLUS 고배당주채권혼합",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "491620",
+      "name": "RISE 미국테크100데일리고정커버드콜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "017940",
+      "name": "E1",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "089590",
+      "name": "제주항공",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "383800",
+      "name": "LX홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "100840",
+      "name": "SNT에너지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "069660",
+      "name": "KIWOOM 200",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "090460",
+      "name": "비에이치",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "449190",
+      "name": "KODEX 미국나스닥100(H)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "069260",
+      "name": "TKG휴켐스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "002840",
+      "name": "미원상사",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0019K0",
+      "name": "TIME 미국나스닥100채권혼합50액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "248070",
+      "name": "솔루엠",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0262B0",
+      "name": "TIGER 200커버드콜액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000670",
+      "name": "영풍",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "455030",
+      "name": "KODEX 미국달러SOFR금리액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003300",
+      "name": "한일홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005690",
+      "name": "파미셀",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "011810",
+      "name": "STX",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "284740",
+      "name": "쿠쿠홈시스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0167B0",
+      "name": "SOL 200타겟위클리커버드콜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0148J0",
+      "name": "TIGER 코리아휴머노이드로봇산업",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "435420",
+      "name": "TIGER 미국나스닥100채권혼합50",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "007700",
+      "name": "F&F홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0094M0",
+      "name": "RISE 코리아밸류업위클리고정커버드콜",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "448290",
+      "name": "TIGER 미국S&P500(H)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005090",
+      "name": "SGC에너지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "471230",
+      "name": "KODEX 국고채10년액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0091P0",
+      "name": "TIGER 코리아원자력",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "025540",
+      "name": "한국단자",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "058650",
+      "name": "세아홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "290130",
+      "name": "RISE ESG사회책임투자",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001530",
+      "name": "DI동일",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0195R0",
+      "name": "TIGER 삼성전자단일종목레버리지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009410",
+      "name": "태영건설",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0015B0",
+      "name": "KoAct 미국나스닥성장기업액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "456040",
+      "name": "OCI",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0105E0",
+      "name": "SOL 코리아고배당",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "438330",
+      "name": "TIGER 우량회사채액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "102970",
+      "name": "KODEX 증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "114260",
+      "name": "KODEX 국고채3년",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "490490",
+      "name": "SOL 미국배당미국채혼합50",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "138540",
+      "name": "TIGER 현대차그룹플러스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "488080",
+      "name": "TIGER 반도체TOP10레버리지",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005810",
+      "name": "풍산홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "161000",
+      "name": "애경케미칼",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "251350",
+      "name": "KODEX MSCI선진국",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "471990",
+      "name": "KODEX AI반도체핵심장비",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "114090",
+      "name": "GKL",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "462010",
+      "name": "TIGER 2차전지소재Fn",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "499790",
+      "name": "GS피앤엘",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "016380",
+      "name": "KG스틸",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "012030",
+      "name": "DB",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "104700",
+      "name": "한국철강",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "00104K",
+      "name": "CJ4우(전환)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "336370",
+      "name": "솔루스첨단소재",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0101N0",
+      "name": "RISE AI전력인프라",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "367760",
+      "name": "RISE 네트워크인프라",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "377740",
+      "name": "바이오노트",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "029460",
+      "name": "케이씨",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005250",
+      "name": "녹십자홀딩스",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "466950",
+      "name": "TIGER 글로벌AI액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "476800",
+      "name": "KODEX 한국부동산리츠인프라",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "385550",
+      "name": "RISE 단기채권알파액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "017900",
+      "name": "광전자",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "004690",
+      "name": "삼천리",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "034310",
+      "name": "NICE",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "476760",
+      "name": "ACE 미국30년국채액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "039130",
+      "name": "하나투어",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "001500",
+      "name": "현대차증권",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "491010",
+      "name": "TIGER 글로벌AI전력인프라액티브",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "004700",
+      "name": "조광피혁",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "178920",
+      "name": "PI첨단소재",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "499660",
+      "name": "TIGER CD금리플러스액티브(합성)",
+      "market": "KOSPI",
+      "type": "stock_kr"
+    },
+    {
+      "code": "196170",
+      "name": "알테오젠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "086520",
+      "name": "에코프로",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "247540",
+      "name": "에코프로비엠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036930",
+      "name": "주성엔지니어링",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "277810",
+      "name": "레인보우로보틱스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "222800",
+      "name": "심텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "039030",
+      "name": "이오테크닉스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "000250",
+      "name": "삼천당제약",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "058470",
+      "name": "리노공업",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "028300",
+      "name": "HLB",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "240810",
+      "name": "원익IPS",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "108490",
+      "name": "로보티즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "403870",
+      "name": "HPSP",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "031980",
+      "name": "피에스케이홀딩스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "095340",
+      "name": "ISC",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "319660",
+      "name": "피에스케이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "131290",
+      "name": "티에스이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "214450",
+      "name": "파마리서치",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "030530",
+      "name": "원익홀딩스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "145020",
+      "name": "휴젤",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "141080",
+      "name": "리가켐바이오",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "357780",
+      "name": "솔브레인",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "298380",
+      "name": "에이비엘바이오",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "087010",
+      "name": "펩트론",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "064760",
+      "name": "티씨케이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "080220",
+      "name": "제주반도체",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "010170",
+      "name": "대한광통신",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "140410",
+      "name": "메지온",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "178320",
+      "name": "서진시스템",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "310210",
+      "name": "보로노이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005290",
+      "name": "동진쎄미켐",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "347850",
+      "name": "디앤디파마텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "067310",
+      "name": "하나마이크론",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "226950",
+      "name": "올릭스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "084370",
+      "name": "유진테크",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "068760",
+      "name": "셀트리온제약",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "440110",
+      "name": "파두",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "043260",
+      "name": "성호전자",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "041510",
+      "name": "에스엠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "319400",
+      "name": "현대무벡스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "098460",
+      "name": "고영",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "095610",
+      "name": "테스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "263750",
+      "name": "펄어비스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "058610",
+      "name": "에스피지",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "257720",
+      "name": "실리콘투",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "035900",
+      "name": "JYP Ent.",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "214150",
+      "name": "클래시스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "214370",
+      "name": "케어젠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "437730",
+      "name": "삼현",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036540",
+      "name": "SFA반도체",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "323280",
+      "name": "태성",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "237690",
+      "name": "에스티팜",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "032820",
+      "name": "우리기술",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "131970",
+      "name": "두산테스나",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "218410",
+      "name": "RFHIC",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "140860",
+      "name": "파크시스템스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "089030",
+      "name": "테크윙",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "007390",
+      "name": "네이처셀",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "078600",
+      "name": "대주전자재료",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "039200",
+      "name": "오스코텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "060370",
+      "name": "LS마린솔루션",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003380",
+      "name": "하림지주",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "290650",
+      "name": "엘앤씨바이오",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "053800",
+      "name": "안랩",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "293490",
+      "name": "카카오게임즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "083650",
+      "name": "비에이치아이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0009K0",
+      "name": "에임드바이오",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "096530",
+      "name": "씨젠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "328130",
+      "name": "루닛",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "425420",
+      "name": "티에프이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "204270",
+      "name": "제이앤티씨",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "089970",
+      "name": "브이엠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "183300",
+      "name": "코미코",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "086450",
+      "name": "동국제약",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "232140",
+      "name": "와이씨",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "950160",
+      "name": "코오롱티슈진",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "356860",
+      "name": "티엘비",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "195940",
+      "name": "HK이노엔",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "252990",
+      "name": "샘씨엔에스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "420770",
+      "name": "기가비스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "950260",
+      "name": "인제니아테라퓨틱스(Reg.S)",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "241710",
+      "name": "코스메카코리아",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "166090",
+      "name": "하나머티리얼즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "082920",
+      "name": "비츠로셀",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "251970",
+      "name": "펌텍코리아",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "121600",
+      "name": "나노신소재",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "056190",
+      "name": "SFA",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "035760",
+      "name": "CJ ENM",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "065350",
+      "name": "신성델타테크",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "491000",
+      "name": "리브스메드",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "093320",
+      "name": "케이아이엔엑스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "347700",
+      "name": "스피어",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "122870",
+      "name": "와이지엔터테인먼트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "445680",
+      "name": "큐리옥스바이오시스템즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036830",
+      "name": "솔브레인홀딩스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "101490",
+      "name": "에스앤에스텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "171090",
+      "name": "선익시스템",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "092870",
+      "name": "엑시콘",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "083450",
+      "name": "GST",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "032500",
+      "name": "케이엠더블유",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "031330",
+      "name": "에스에이엠티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "074600",
+      "name": "원익QnC",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "059090",
+      "name": "미코",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "100790",
+      "name": "미래에셋벤처투자",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "281740",
+      "name": "레이크머티리얼즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "219130",
+      "name": "타이거일렉",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "064290",
+      "name": "인텍플러스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "253590",
+      "name": "네오셈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "085660",
+      "name": "차바이오텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0158S0",
+      "name": "엘리스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "253450",
+      "name": "스튜디오드래곤",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "099320",
+      "name": "쎄트렉아이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "127120",
+      "name": "제이에스링크",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "417200",
+      "name": "LS머트리얼즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "295310",
+      "name": "에이치브이엠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "079940",
+      "name": "가비아",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "388720",
+      "name": "유일로보틱스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "126340",
+      "name": "비나텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006730",
+      "name": "서부T&D",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "468530",
+      "name": "프로티나",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "041960",
+      "name": "코미팜",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "032190",
+      "name": "다우데이타",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "102710",
+      "name": "이엔에프테크놀로지",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "053610",
+      "name": "프로텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "144960",
+      "name": "뉴파워프라즈마",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "137400",
+      "name": "피엔티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "119850",
+      "name": "지엔씨에너지",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "161580",
+      "name": "필옵틱스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "048410",
+      "name": "현대바이오",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "023160",
+      "name": "태광",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "038500",
+      "name": "삼표시멘트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "033100",
+      "name": "제룡전기",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "089890",
+      "name": "코세스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "456160",
+      "name": "지투지바이오",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "476060",
+      "name": "온코닉테라퓨틱스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "476830",
+      "name": "알지노믹스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "090710",
+      "name": "휴림로봇",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "222080",
+      "name": "SFA넥셀",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036810",
+      "name": "에프에스티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "290550",
+      "name": "디케이티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "014620",
+      "name": "성광벤드",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "115180",
+      "name": "큐리언트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "090360",
+      "name": "로보스타",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "122640",
+      "name": "예스티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "189300",
+      "name": "인텔리안테크",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "458870",
+      "name": "씨어스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "466100",
+      "name": "클로봇",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "213420",
+      "name": "덕산네오룩스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "327260",
+      "name": "RF머트리얼즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "033790",
+      "name": "피노",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "080580",
+      "name": "오킨스전자",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "159010",
+      "name": "아스플로",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "086900",
+      "name": "메디톡스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "041830",
+      "name": "인바디",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "046890",
+      "name": "서울반도체",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "050890",
+      "name": "쏠리드",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "225570",
+      "name": "넥슨게임즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "376300",
+      "name": "디어유",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "211050",
+      "name": "인카금융서비스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "383310",
+      "name": "에코프로에이치엔",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "033640",
+      "name": "네패스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "160190",
+      "name": "하이젠알앤엠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "112040",
+      "name": "위메이드",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "045100",
+      "name": "한양이엔지",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "174900",
+      "name": "앱클론",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "009520",
+      "name": "포스코엠텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "060250",
+      "name": "NHN KCP",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "358570",
+      "name": "지아이이노베이션",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "399720",
+      "name": "가온칩스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "104830",
+      "name": "원익머트리얼즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "094170",
+      "name": "동운아나텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "034950",
+      "name": "한국기업평가",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "024850",
+      "name": "HLB이노베이션",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "101160",
+      "name": "월덱스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "214430",
+      "name": "아이쓰리시스템",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "037460",
+      "name": "삼지전자",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "490470",
+      "name": "세미파이브",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "078350",
+      "name": "한양디지텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "044490",
+      "name": "태웅",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "098120",
+      "name": "마이크로컨텍솔",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "124500",
+      "name": "아이티센글로벌",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "015750",
+      "name": "성우하이텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "035890",
+      "name": "서희건설",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "215200",
+      "name": "메가스터디교육",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "340570",
+      "name": "티앤엘",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "052020",
+      "name": "에스티큐브",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "187660",
+      "name": "페니트리움바이오",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "078130",
+      "name": "에스엠국일",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "069540",
+      "name": "빛과전자",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "025980",
+      "name": "아난티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "067160",
+      "name": "SOOP",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "107640",
+      "name": "한중엔시에스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "356680",
+      "name": "엑스게이트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "099190",
+      "name": "아이센스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "204620",
+      "name": "글로벌텍스프리",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "039440",
+      "name": "에스티아이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "082270",
+      "name": "젬백스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "236200",
+      "name": "슈프리마",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "121440",
+      "name": "골프존홀딩스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "278280",
+      "name": "천보",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "069080",
+      "name": "웹젠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "348370",
+      "name": "엔켐",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "041190",
+      "name": "우리기술투자",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "019210",
+      "name": "와이지-원",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "125490",
+      "name": "한라캐스트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036800",
+      "name": "나이스정보통신",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "077360",
+      "name": "덕산하이메탈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "095660",
+      "name": "네오위즈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "013030",
+      "name": "하이록코리아",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "079370",
+      "name": "제우스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "368770",
+      "name": "파이버프로",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "033500",
+      "name": "동성화인텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "388210",
+      "name": "씨엠티엑스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "348340",
+      "name": "뉴로메카",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "365340",
+      "name": "성일하이텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "042000",
+      "name": "카페24",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "092730",
+      "name": "네오팜",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "003800",
+      "name": "에이스침대",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "475960",
+      "name": "토모큐브",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "030520",
+      "name": "한컴",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "372320",
+      "name": "큐로셀",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "078020",
+      "name": "LS증권",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "056080",
+      "name": "유진로봇",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "460930",
+      "name": "현대힘스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "397030",
+      "name": "에이프릴바이오",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "018290",
+      "name": "브이티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "200470",
+      "name": "에이팩트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "089010",
+      "name": "켐트로닉스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "475830",
+      "name": "오름테라퓨틱",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "332570",
+      "name": "PS일렉트로닉스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "027360",
+      "name": "아주IB투자",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "078340",
+      "name": "컴투스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "078160",
+      "name": "메디포스트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "272290",
+      "name": "이녹스첨단소재",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "336570",
+      "name": "원텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "170920",
+      "name": "엘티씨",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "017890",
+      "name": "한국알콜",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036620",
+      "name": "감성코퍼레이션",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036710",
+      "name": "심텍홀딩스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "047920",
+      "name": "HLB제약",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "241770",
+      "name": "메카로",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "091580",
+      "name": "상신이디피",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "093520",
+      "name": "매커스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "263860",
+      "name": "지니언스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "025320",
+      "name": "시노펙스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "046970",
+      "name": "우리로",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "092190",
+      "name": "서울바이오시스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "054950",
+      "name": "제이브이엠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "376900",
+      "name": "로킷헬스케어",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "425040",
+      "name": "티이엠씨",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "101730",
+      "name": "위메이드맥스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "206650",
+      "name": "유바이오로직스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "101930",
+      "name": "인화정공",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "441270",
+      "name": "파인엠텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "067630",
+      "name": "HLB생명과학",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "033160",
+      "name": "엠케이전자",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "025770",
+      "name": "한국정보통신",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "486990",
+      "name": "노타",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "348210",
+      "name": "넥스틴",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "114810",
+      "name": "한솔아이원스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "900290",
+      "name": "GRT",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "136480",
+      "name": "하림",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "138080",
+      "name": "오이솔루션",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "060280",
+      "name": "큐렉소",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "064260",
+      "name": "다날",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "199800",
+      "name": "툴젠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "071200",
+      "name": "인피니트헬스케어",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "023410",
+      "name": "유진기업",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "200710",
+      "name": "에이디테크놀로지",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "455900",
+      "name": "엔젤로보틱스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036200",
+      "name": "유니셈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "025900",
+      "name": "동화기업",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "389470",
+      "name": "인벤티지랩",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "309710",
+      "name": "아이티켐",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "035810",
+      "name": "이지홀딩스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "094360",
+      "name": "칩스앤미디어",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "267980",
+      "name": "매일유업",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "182400",
+      "name": "엔케이젠바이오텍코리아",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "117730",
+      "name": "티로보틱스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "215600",
+      "name": "신라젠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "448900",
+      "name": "한국피아이엠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "417840",
+      "name": "저스템",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "052710",
+      "name": "아모텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "069510",
+      "name": "에스텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "448280",
+      "name": "에코아이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "052400",
+      "name": "코나아이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "068930",
+      "name": "디지털대성",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "100120",
+      "name": "뷰웍스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "121800",
+      "name": "비덴트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0162D0",
+      "name": "동원파츠",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "330860",
+      "name": "네패스아크",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "043150",
+      "name": "바텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "018000",
+      "name": "유니슨",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "110990",
+      "name": "디아이티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "035600",
+      "name": "KG이니시스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "377460",
+      "name": "큐에이드",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "389260",
+      "name": "대명에너지",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "086390",
+      "name": "유니테스트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "456010",
+      "name": "아이씨티케이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "084110",
+      "name": "휴온스글로벌",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "200670",
+      "name": "휴메딕스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "060720",
+      "name": "KH바텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "265520",
+      "name": "AP시스템",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "477850",
+      "name": "마키나락스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "352480",
+      "name": "씨앤씨인터내셔널",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "377450",
+      "name": "리파인",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "393890",
+      "name": "더블유씨피",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "051500",
+      "name": "CJ프레시웨이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "049070",
+      "name": "인탑스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036030",
+      "name": "케이티알파",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "099440",
+      "name": "스맥",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "085910",
+      "name": "네오티스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "452280",
+      "name": "한선엔지니어링",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "234340",
+      "name": "헥토파이낸셜",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "073490",
+      "name": "LIG아큐버",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "304360",
+      "name": "에스바이오메딕스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "482630",
+      "name": "삼양엔씨켐",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "439090",
+      "name": "마녀공장",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "006910",
+      "name": "보성파워텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "216080",
+      "name": "제테마",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "424870",
+      "name": "이뮨온시아",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "489460",
+      "name": "바이오비쥬",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "462350",
+      "name": "이노스페이스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "032580",
+      "name": "피델릭스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "115450",
+      "name": "HLB테라퓨틱스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "354320",
+      "name": "알멕",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "228760",
+      "name": "지노믹트리",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "043370",
+      "name": "피에이치에이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "472850",
+      "name": "폰드그룹",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "461300",
+      "name": "아이스크림미디어",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "160980",
+      "name": "싸이맥스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "023760",
+      "name": "한국캐피탈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "452430",
+      "name": "사피엔반도체",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "215000",
+      "name": "골프존",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "053300",
+      "name": "한국정보인증",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "389650",
+      "name": "넥스트바이오메디컬",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "065710",
+      "name": "서호전기",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "092460",
+      "name": "한라IMS",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "446540",
+      "name": "메가터치",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "018310",
+      "name": "삼목에스폼",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "378340",
+      "name": "필에너지",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "005710",
+      "name": "대원산업",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "488900",
+      "name": "비츠로넥스텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "241520",
+      "name": "DSC인베스트먼트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "416180",
+      "name": "신성에스티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "203650",
+      "name": "드림시큐리티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "089980",
+      "name": "상아프론테크",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0147B0",
+      "name": "래블업",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "394280",
+      "name": "오픈엣지테크놀로지",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "389500",
+      "name": "에스비비테크",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "053030",
+      "name": "바이넥스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "484590",
+      "name": "삼양컴텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "294570",
+      "name": "쿠콘",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "036890",
+      "name": "진성티이씨",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "067390",
+      "name": "아스트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "042370",
+      "name": "비츠로테크",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "108860",
+      "name": "셀바스AI",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "380540",
+      "name": "옵티코어",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "190510",
+      "name": "나무가",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "243840",
+      "name": "신흥에스이씨",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "206640",
+      "name": "바디텍메드",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "200130",
+      "name": "콜마비앤에이치",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "114190",
+      "name": "강원에너지",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "493280",
+      "name": "아이엠바이오로직스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "011560",
+      "name": "세보엠이씨",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "340450",
+      "name": "지씨지놈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "180400",
+      "name": "DXVX",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "394800",
+      "name": "쓰리빌리언",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "493410",
+      "name": "넥스아이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "151860",
+      "name": "KG에코솔루션",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "024840",
+      "name": "KBI메탈",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "061970",
+      "name": "LB세미콘",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "405100",
+      "name": "큐알티",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "051160",
+      "name": "지어소프트",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "272110",
+      "name": "케이엔제이",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "0053F0",
+      "name": "티앤이코리아",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "220100",
+      "name": "퓨쳐켐",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "290690",
+      "name": "아리바이오홀딩스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "351320",
+      "name": "넥사다이내믹스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "287840",
+      "name": "인투셀",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "091700",
+      "name": "파트론",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "080720",
+      "name": "한국유니온제약",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "254490",
+      "name": "미래반도체",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "080160",
+      "name": "모두투어",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "119830",
+      "name": "아이텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "445090",
+      "name": "에이직랜드",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "475400",
+      "name": "씨메스로보틱스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "168360",
+      "name": "펨트론",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "451760",
+      "name": "컨텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "237880",
+      "name": "클리오",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "243070",
+      "name": "휴온스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "099430",
+      "name": "바이오플러스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "082800",
+      "name": "비보존 제약",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "016790",
+      "name": "현대사료",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "298830",
+      "name": "슈어소프트테크",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "317330",
+      "name": "덕산테코피아",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "064820",
+      "name": "케이프",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "950170",
+      "name": "JTC",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "098070",
+      "name": "한텍",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "450950",
+      "name": "아스테라시스",
+      "market": "KOSDAQ",
+      "type": "stock_kr"
+    },
+    {
+      "code": "AAPL",
+      "name": "애플",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Apple Inc."
+      ]
+    },
+    {
+      "code": "NVDA",
+      "name": "엔비디아",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "NVIDIA Corporation"
+      ]
+    },
+    {
+      "code": "MSFT",
+      "name": "마이크로소프트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Microsoft Corporation"
+      ]
+    },
+    {
+      "code": "AMZN",
+      "name": "아마존닷컴",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Amazon.com Inc"
+      ]
+    },
+    {
+      "code": "GOOGL",
+      "name": "알파벳 Class A",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Alphabet Inc. Class A"
+      ]
+    },
+    {
+      "code": "SPCX",
+      "name": "스페이스X",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Space Exploration Technologies Corp"
+      ]
+    },
+    {
+      "code": "META",
+      "name": "메타",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Meta Platforms  Inc."
+      ]
+    },
+    {
+      "code": "AVGO",
+      "name": "브로드컴",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Broadcom Inc"
+      ]
+    },
+    {
+      "code": "GOOG",
+      "name": "알파벳 Class C",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Alphabet Inc. Class C"
+      ]
+    },
+    {
+      "code": "TSLA",
+      "name": "테슬라",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Tesla Inc"
+      ]
+    },
+    {
+      "code": "WMT",
+      "name": "월마트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Walmart Inc."
+      ]
+    },
+    {
+      "code": "SKHY",
+      "name": "SK하이닉스 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "SK hynix Inc. ADR"
+      ]
+    },
+    {
+      "code": "MU",
+      "name": "마이크론 테크놀로지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Micron Technology  Inc."
+      ]
+    },
+    {
+      "code": "AMD",
+      "name": "AMD(어드밴스드 마이크로 디바이시스)",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Advanced Micro Devices  Inc."
+      ]
+    },
+    {
+      "code": "ASML",
+      "name": "ASML 홀딩 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "ASML Holding N.V. ADR"
+      ]
+    },
+    {
+      "code": "COST",
+      "name": "코스트코 홀세일",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Costco Wholesale Corp"
+      ]
+    },
+    {
+      "code": "PLTR",
+      "name": "팔란티어 테크놀로지스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Palantir Technologies Inc."
+      ]
+    },
+    {
+      "code": "CSCO",
+      "name": "시스코 시스템즈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Cisco Systems Inc"
+      ]
+    },
+    {
+      "code": "INTC",
+      "name": "인텔",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Intel Corp"
+      ]
+    },
+    {
+      "code": "AMAT",
+      "name": "어플라이드 머티어리얼즈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Applied Materials Inc"
+      ]
+    },
+    {
+      "code": "LRCX",
+      "name": "램 리서치",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Lam Research Corporation"
+      ]
+    },
+    {
+      "code": "TXN",
+      "name": "텍사스 인스트루먼트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Texas Instruments Incorporated"
+      ]
+    },
+    {
+      "code": "PANW",
+      "name": "팔로 알토 네트웍스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Palo Alto Networks  Inc."
+      ]
+    },
+    {
+      "code": "NFLX",
+      "name": "넷플릭스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Netflix  Inc."
+      ]
+    },
+    {
+      "code": "AMGN",
+      "name": "암젠",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Amgen Inc"
+      ]
+    },
+    {
+      "code": "LIN",
+      "name": "린드",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Linde PLC"
+      ]
+    },
+    {
+      "code": "CRWD",
+      "name": "크라우드 스트라이크 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "CrowdStrike Holdings  Inc."
+      ]
+    },
+    {
+      "code": "GILD",
+      "name": "길리어드 사이언시스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Gilead Sciences  Inc."
+      ]
+    },
+    {
+      "code": "ARM",
+      "name": "암 홀딩스 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "ARM Holdings PLC ADR"
+      ]
+    },
+    {
+      "code": "KLAC",
+      "name": "KLA",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "KLA Corporation"
+      ]
+    },
+    {
+      "code": "PEP",
+      "name": "펩시코",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "PepsiCo  Inc."
+      ]
+    },
+    {
+      "code": "ADI",
+      "name": "애널로그 디바이시스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Analog Devices  Inc."
+      ]
+    },
+    {
+      "code": "SHOP",
+      "name": "쇼피파이",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Shopify Inc."
+      ]
+    },
+    {
+      "code": "QCOM",
+      "name": "퀄컴",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "QUALCOMM Incorporated"
+      ]
+    },
+    {
+      "code": "TMUS",
+      "name": "T-모바일 US",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "T-Mobile US Inc"
+      ]
+    },
+    {
+      "code": "ISRG",
+      "name": "인튜이티브 서지컬",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Intuitive Surgical  Inc."
+      ]
+    },
+    {
+      "code": "IBKR",
+      "name": "인터랙티브 브로커스 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Interactive Brokers Group Inc"
+      ]
+    },
+    {
+      "code": "MRVL",
+      "name": "마벨 테크놀로지 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Marvell Technology  Inc."
+      ]
+    },
+    {
+      "code": "VRTX",
+      "name": "버텍스 파마슈티컬",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Vertex Pharmaceuticals Incorporated"
+      ]
+    },
+    {
+      "code": "APP",
+      "name": "앱러빈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "AppLovin Corporation"
+      ]
+    },
+    {
+      "code": "SNDK",
+      "name": "샌디스크",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "SanDisk Corporation"
+      ]
+    },
+    {
+      "code": "ADP",
+      "name": "오토매틱 데이터 프로세싱",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Automatic Data Processing Inc"
+      ]
+    },
+    {
+      "code": "SBUX",
+      "name": "스타벅스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Starbucks Corp"
+      ]
+    },
+    {
+      "code": "STX",
+      "name": "씨게이트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Seagate Technology Holdings PLC"
+      ]
+    },
+    {
+      "code": "BKNG",
+      "name": "부킹 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Booking Holdings Inc."
+      ]
+    },
+    {
+      "code": "SNY",
+      "name": "사노피 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Sanofi SA ADR"
+      ]
+    },
+    {
+      "code": "CME",
+      "name": "CME 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "CME Group Inc."
+      ]
+    },
+    {
+      "code": "PDD",
+      "name": "핀둬둬 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "PDD Holdings Inc. ADR"
+      ]
+    },
+    {
+      "code": "ABNB",
+      "name": "에어비앤비",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Airbnb  Inc."
+      ]
+    },
+    {
+      "code": "WDC",
+      "name": "웨스턴 디지털",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Western Digital Corp"
+      ]
+    },
+    {
+      "code": "MAR",
+      "name": "메리어트 인터내셔널",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Marriott International  Inc."
+      ]
+    },
+    {
+      "code": "EQIX",
+      "name": "이퀴닉스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Equinix  Inc."
+      ]
+    },
+    {
+      "code": "REGN",
+      "name": "리제네론 파마슈티컬스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Regeneron Pharmaceuticals  Inc."
+      ]
+    },
+    {
+      "code": "CEG",
+      "name": "콘스텔레이션 에너지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Constellation Energy Corp"
+      ]
+    },
+    {
+      "code": "CSX",
+      "name": "CSX",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "CSX Corporation"
+      ]
+    },
+    {
+      "code": "ADBE",
+      "name": "어도비",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Adobe Inc"
+      ]
+    },
+    {
+      "code": "FTNT",
+      "name": "포티넷",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Fortinet  Inc."
+      ]
+    },
+    {
+      "code": "INTU",
+      "name": "인튜이트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Intuit Inc."
+      ]
+    },
+    {
+      "code": "MNST",
+      "name": "몬스터 베버리지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Monster Beverage Corporation"
+      ]
+    },
+    {
+      "code": "MRNA",
+      "name": "모더나",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Moderna  Inc."
+      ]
+    },
+    {
+      "code": "CTAS",
+      "name": "신타스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Cintas Corporation"
+      ]
+    },
+    {
+      "code": "CMCSA",
+      "name": "컴캐스트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Comcast Corporation"
+      ]
+    },
+    {
+      "code": "CDNS",
+      "name": "케이던스 디자인 시스템즈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Cadence Design Systems  Inc."
+      ]
+    },
+    {
+      "code": "SNPS",
+      "name": "시놉시스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Synopsys  Inc."
+      ]
+    },
+    {
+      "code": "MDLZ",
+      "name": "몬덜리즈 인터내셔널",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Mondelez International  Inc."
+      ]
+    },
+    {
+      "code": "HLT",
+      "name": "힐튼 월드와이드 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Hilton Worldwide Holdings Inc."
+      ]
+    },
+    {
+      "code": "NTES",
+      "name": "넷이즈 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "NetEase  Inc. ADR"
+      ]
+    },
+    {
+      "code": "MELI",
+      "name": "메르카도리브레",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "MercadoLibre  Inc."
+      ]
+    },
+    {
+      "code": "DASH",
+      "name": "도어대시",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Doordash  Inc."
+      ]
+    },
+    {
+      "code": "ROST",
+      "name": "로스 스토어스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Ross Stores Inc"
+      ]
+    },
+    {
+      "code": "ORLY",
+      "name": "오레일리 오토모티브",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "O'Reilly Automotive  Inc."
+      ]
+    },
+    {
+      "code": "HON",
+      "name": "허니웰 인터내셔널",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Honeywell International Inc."
+      ]
+    },
+    {
+      "code": "AEP",
+      "name": "아메리칸 일렉트릭 파워 컴퍼니",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "American Electric Power Company Inc"
+      ]
+    },
+    {
+      "code": "HOOD",
+      "name": "로빈후드",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Robinhood Markets  Inc."
+      ]
+    },
+    {
+      "code": "MPWR",
+      "name": "모놀리식 파워 시스템즈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Monolithic Power Systems Inc"
+      ]
+    },
+    {
+      "code": "KMB",
+      "name": "킴벌리클라크",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Kimberly-Clark Corporation"
+      ]
+    },
+    {
+      "code": "NXPI",
+      "name": "NXP 세미콘덕터",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "NXP Semiconductors NV"
+      ]
+    },
+    {
+      "code": "DDOG",
+      "name": "데이터도그",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Datadog Inc"
+      ]
+    },
+    {
+      "code": "FAST",
+      "name": "패스널",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Fastenal Company"
+      ]
+    },
+    {
+      "code": "NDAQ",
+      "name": "나스닥",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Nasdaq Inc"
+      ]
+    },
+    {
+      "code": "ARGX",
+      "name": "아겐스 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "argenx SE ADR"
+      ]
+    },
+    {
+      "code": "PCAR",
+      "name": "파카",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Paccar Inc"
+      ]
+    },
+    {
+      "code": "IDXX",
+      "name": "아이덱스 래보라토리스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "IDEXX Laboratories  Inc."
+      ]
+    },
+    {
+      "code": "ADSK",
+      "name": "오토데스크",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Autodesk  Inc."
+      ]
+    },
+    {
+      "code": "LITE",
+      "name": "루멘텀 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Lumentum Holdings Inc."
+      ]
+    },
+    {
+      "code": "EBAY",
+      "name": "이베이",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "eBay Inc."
+      ]
+    },
+    {
+      "code": "XEL",
+      "name": "엑셀 에너지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Xcel Energy Inc"
+      ]
+    },
+    {
+      "code": "HONA",
+      "name": "허니웰 에어로스페이스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Honeywell Aerospace Inc"
+      ]
+    },
+    {
+      "code": "CCEP",
+      "name": "코카-콜라 유로퍼시픽 파트너스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Coca-Cola Europacific Partners PLC"
+      ]
+    },
+    {
+      "code": "MDLN",
+      "name": "메드라인",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Medline Inc."
+      ]
+    },
+    {
+      "code": "FANG",
+      "name": "다이아몬드백 에너지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Diamondback Energy  Inc."
+      ]
+    },
+    {
+      "code": "KDP",
+      "name": "큐리그 닥터 페퍼",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Keurig Dr Pepper Inc"
+      ]
+    },
+    {
+      "code": "PYPL",
+      "name": "페이팔 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "PayPal Holdings  Inc."
+      ]
+    },
+    {
+      "code": "BKR",
+      "name": "베이커 휴즈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Baker Hughes Company"
+      ]
+    },
+    {
+      "code": "EXC",
+      "name": "엑셀론",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Exelon Corp"
+      ]
+    },
+    {
+      "code": "ROP",
+      "name": "로퍼 테크놀로지스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Roper Technologies  Inc."
+      ]
+    },
+    {
+      "code": "TRI",
+      "name": "톰슨 로이터",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Thomson Reuters Corp"
+      ]
+    },
+    {
+      "code": "WDAY",
+      "name": "워크데이",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Workday  Inc."
+      ]
+    },
+    {
+      "code": "MSTR",
+      "name": "스트래티지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Strategy Inc"
+      ]
+    },
+    {
+      "code": "NTRA",
+      "name": "나테라",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Natera  Inc."
+      ]
+    },
+    {
+      "code": "ONC",
+      "name": "비원 메디슨스 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "BeOne Medicines AG ADR"
+      ]
+    },
+    {
+      "code": "FER",
+      "name": "페로비알",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Ferrovial N.V."
+      ]
+    },
+    {
+      "code": "TTWO",
+      "name": "테이크-투 인터랙티브 소프트웨어",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Take-Two Interactive Software  Inc."
+      ]
+    },
+    {
+      "code": "PAYX",
+      "name": "페이첵스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Paychex  Inc."
+      ]
+    },
+    {
+      "code": "RPRX",
+      "name": "로열티 파마",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Royalty Pharma PLC"
+      ]
+    },
+    {
+      "code": "TER",
+      "name": "테라다인",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Teradyne  Inc."
+      ]
+    },
+    {
+      "code": "RKLB",
+      "name": "로켓 랩",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Rocket Lab Corp"
+      ]
+    },
+    {
+      "code": "ALAB",
+      "name": "아스테라 랩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Astera Labs  Inc."
+      ]
+    },
+    {
+      "code": "TEAM",
+      "name": "아틀라시안",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Atlassian Corp"
+      ]
+    },
+    {
+      "code": "GEHC",
+      "name": "GE 헬스케어",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "GE HealthCare Technologies Inc."
+      ]
+    },
+    {
+      "code": "BIIB",
+      "name": "바이오젠",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Biogen Inc."
+      ]
+    },
+    {
+      "code": "RVMD",
+      "name": "레볼루션 메디신",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Revolution Medicines  Inc."
+      ]
+    },
+    {
+      "code": "ODFL",
+      "name": "올드 도미니언 프라이트 라인",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Old Dominion Freight Line  Inc."
+      ]
+    },
+    {
+      "code": "ACGL",
+      "name": "아치 캐피털 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Arch Capital Group Ltd."
+      ]
+    },
+    {
+      "code": "NTAP",
+      "name": "넷앱",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "NetApp Inc"
+      ]
+    },
+    {
+      "code": "VOD",
+      "name": "보다폰 그룹 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Vodafone Group PLC ADR"
+      ]
+    },
+    {
+      "code": "UAL",
+      "name": "유나이티드 에어라인스 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "United Airlines Holdings  Inc."
+      ]
+    },
+    {
+      "code": "JD",
+      "name": "제이디닷컴 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "JD.com  Inc. ADR"
+      ]
+    },
+    {
+      "code": "NBIS",
+      "name": "네비우스 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Nebius Group NV"
+      ]
+    },
+    {
+      "code": "FISV",
+      "name": "파이서브",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Fiserv Inc"
+      ]
+    },
+    {
+      "code": "COIN",
+      "name": "코인베이스 글로벌",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Coinbase Global  Inc."
+      ]
+    },
+    {
+      "code": "MCHP",
+      "name": "마이크로칩 테크놀러지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Microchip Technology Inc"
+      ]
+    },
+    {
+      "code": "ESLT",
+      "name": "엘빗 시스템즈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Elbit Systems Ltd."
+      ]
+    },
+    {
+      "code": "STLD",
+      "name": "스틸 다이내믹스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Steel Dynamics Inc"
+      ]
+    },
+    {
+      "code": "NTRS",
+      "name": "노던 트러스트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Northern Trust Corporation"
+      ]
+    },
+    {
+      "code": "OKTA",
+      "name": "옥타",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Okta  Inc."
+      ]
+    },
+    {
+      "code": "HBAN",
+      "name": "헌팅턴 뱅크셰어스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Huntington Bancshares Inc"
+      ]
+    },
+    {
+      "code": "GMAB",
+      "name": "젠맵 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Genmab A/S ADR"
+      ]
+    },
+    {
+      "code": "ERIC",
+      "name": "텔레폰악티에볼라예트 에릭슨 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Telefonaktiebolaget LM Ericsson ADR"
+      ]
+    },
+    {
+      "code": "ZS",
+      "name": "지스케일러",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Zscaler  Inc."
+      ]
+    },
+    {
+      "code": "ILMN",
+      "name": "일루미나",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Illumina Inc"
+      ]
+    },
+    {
+      "code": "DXCM",
+      "name": "덱스컴",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Dexcom Inc"
+      ]
+    },
+    {
+      "code": "WTW",
+      "name": "윌리스 타워스 왓슨",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Willis Towers Watson Public Limited Company"
+      ]
+    },
+    {
+      "code": "EXPE",
+      "name": "익스피디아그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Expedia Group  Inc."
+      ]
+    },
+    {
+      "code": "RYAAY",
+      "name": "라이언에어 홀딩스 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Ryanair Holdings PLC ADR"
+      ]
+    },
+    {
+      "code": "CPRT",
+      "name": "코파트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Copart Inc"
+      ]
+    },
+    {
+      "code": "CRWV",
+      "name": "코어위브",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "CoreWeave  Inc."
+      ]
+    },
+    {
+      "code": "ZM",
+      "name": "줌 커뮤니케이션스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Zoom Communications  Inc."
+      ]
+    },
+    {
+      "code": "CINF",
+      "name": "신시내티 파이낸셜",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Cincinnati Financial Corporation"
+      ]
+    },
+    {
+      "code": "ECHO",
+      "name": "에코스타",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "EchoStar Corporation"
+      ]
+    },
+    {
+      "code": "ROIV",
+      "name": "로이반트 사이언시스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Roivant Sciences Ltd"
+      ]
+    },
+    {
+      "code": "TCOM",
+      "name": "트립닷컴 그룹 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Trip.com Group Limited ADR"
+      ]
+    },
+    {
+      "code": "ULTA",
+      "name": "울타 뷰티",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Ulta Beauty Inc"
+      ]
+    },
+    {
+      "code": "CTSH",
+      "name": "코그니전트 테크놀로지 솔루션",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Cognizant Technology Solutions Corporation"
+      ]
+    },
+    {
+      "code": "VRSN",
+      "name": "베리사인",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "VeriSign  Inc."
+      ]
+    },
+    {
+      "code": "TW",
+      "name": "트레이드웹 마켓",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Tradeweb Markets Inc"
+      ]
+    },
+    {
+      "code": "FLEX",
+      "name": "플렉스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Flex Ltd"
+      ]
+    },
+    {
+      "code": "ON",
+      "name": "온 세미콘덕터",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "ON Semiconductor Corp"
+      ]
+    },
+    {
+      "code": "BSP",
+      "name": "벤딩 스푼스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Bending Spoons SpA"
+      ]
+    },
+    {
+      "code": "MDB",
+      "name": "몽고DB",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "MongoDB  Inc."
+      ]
+    },
+    {
+      "code": "BIDU",
+      "name": "바이두 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Baidu  Inc. ADR"
+      ]
+    },
+    {
+      "code": "VRSK",
+      "name": "베리스크 애널리틱스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Verisk Analytics  Inc."
+      ]
+    },
+    {
+      "code": "INSM",
+      "name": "인스메드",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Insmed Incorporated"
+      ]
+    },
+    {
+      "code": "CBRS",
+      "name": "세레브라스 시스템스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Cerebras Systems Inc"
+      ]
+    },
+    {
+      "code": "CASY",
+      "name": "케이시스 제너럴 스토어스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Caseys General Stores Inc"
+      ]
+    },
+    {
+      "code": "DLTR",
+      "name": "달러 트리",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Dollar Tree Inc"
+      ]
+    },
+    {
+      "code": "AXON",
+      "name": "액손 엔터프라이스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Axon Enterprise  Inc."
+      ]
+    },
+    {
+      "code": "UTHR",
+      "name": "유나이티드 테라퓨틱스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "United Therapeutics Corporation"
+      ]
+    },
+    {
+      "code": "FWONK",
+      "name": "리버티 미디어 Series C",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Liberty Media Formula One Ord Shs Series C"
+      ]
+    },
+    {
+      "code": "CRDO",
+      "name": "크레도 테크놀로지 그룹 홀딩",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Credo Technology Group Holding Ltd"
+      ]
+    },
+    {
+      "code": "INCY",
+      "name": "인사이트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Incyte Corp"
+      ]
+    },
+    {
+      "code": "PFG",
+      "name": "프린시펄 파이낸셜 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Principal Financial Group Inc"
+      ]
+    },
+    {
+      "code": "VTRS",
+      "name": "비아트리스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Viatris Inc."
+      ]
+    },
+    {
+      "code": "FOXA",
+      "name": "폭스 Class A",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Fox Corporation Class A"
+      ]
+    },
+    {
+      "code": "FCNCA",
+      "name": "퍼스트 시티즌스 뱅크셰어스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "First Citizens BancShares  Inc."
+      ]
+    },
+    {
+      "code": "TROW",
+      "name": "티 로웨 프라이스 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "T. Rowe Price Group  Inc."
+      ]
+    },
+    {
+      "code": "GFS",
+      "name": "글로벌파운드리",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "GLOBALFOUNDRIES Inc."
+      ]
+    },
+    {
+      "code": "ARXS",
+      "name": "ARXIS",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Arxis  Inc."
+      ]
+    },
+    {
+      "code": "LPLA",
+      "name": "LPL 파이낸셜 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "LPL Financial Holdings Inc."
+      ]
+    },
+    {
+      "code": "ENTG",
+      "name": "인테그리스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Entegris Inc"
+      ]
+    },
+    {
+      "code": "ALNY",
+      "name": "앨나일램 파마슈티컬스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Alnylam Pharmaceuticals  Inc."
+      ]
+    },
+    {
+      "code": "AFRM",
+      "name": "어펌 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Affirm Holdings  Inc."
+      ]
+    },
+    {
+      "code": "RGLD",
+      "name": "로얄 골드",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Royal Gold  Inc."
+      ]
+    },
+    {
+      "code": "JBHT",
+      "name": "J.B 헌트 트랜스포트 서비스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "J.B. Hunt Transport Services  Inc."
+      ]
+    },
+    {
+      "code": "CDW",
+      "name": "CDW",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "CDW Corporation"
+      ]
+    },
+    {
+      "code": "PTC",
+      "name": "PTC",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "PTC Inc."
+      ]
+    },
+    {
+      "code": "BNTX",
+      "name": "바이오엔테크 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Biontech SE ADR"
+      ]
+    },
+    {
+      "code": "SWKS",
+      "name": "스카이웍스 솔루션스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Skyworks Solutions  Inc."
+      ]
+    },
+    {
+      "code": "SYM",
+      "name": "심보틱",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Symbotic Inc."
+      ]
+    },
+    {
+      "code": "EVRG",
+      "name": "에버지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Evergy  Inc."
+      ]
+    },
+    {
+      "code": "GH",
+      "name": "가단트 헬쓰",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Guardant Health  Inc."
+      ]
+    },
+    {
+      "code": "EXE",
+      "name": "익스팬드 에너지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Expand Energy Corporation"
+      ]
+    },
+    {
+      "code": "SOFI",
+      "name": "소파이 테크놀로지스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "SoFi Technologies  Inc."
+      ]
+    },
+    {
+      "code": "SBAC",
+      "name": "SBA 커뮤니케이션스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "SBA Communications Corp"
+      ]
+    },
+    {
+      "code": "WWD",
+      "name": "우드워드",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Woodward  Inc."
+      ]
+    },
+    {
+      "code": "LNT",
+      "name": "얼라이언트 에너지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Alliant Energy Corp"
+      ]
+    },
+    {
+      "code": "TSCO",
+      "name": "트랙터 서플라이",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Tractor Supply Company"
+      ]
+    },
+    {
+      "code": "SSNC",
+      "name": "SS&C 테크놀로지스 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "SS&C Technologies Holdings  Inc."
+      ]
+    },
+    {
+      "code": "FTAI",
+      "name": "FTAI 애비에이션",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "FTAI Aviation Ltd."
+      ]
+    },
+    {
+      "code": "FSLR",
+      "name": "퍼스트 솔라",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "First Solar  Inc."
+      ]
+    },
+    {
+      "code": "MEDP",
+      "name": "메드페이스 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Medpace Holdings  Inc."
+      ]
+    },
+    {
+      "code": "ASND",
+      "name": "어센디스 파마 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Ascendis Pharma A/S"
+      ]
+    },
+    {
+      "code": "TPG",
+      "name": "TPG",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "TPG Inc"
+      ]
+    },
+    {
+      "code": "NDSN",
+      "name": "노드슨",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Nordson Corporation"
+      ]
+    },
+    {
+      "code": "EWBC",
+      "name": "이스트 웨스트 뱅코프",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "East West Bancorp  Inc."
+      ]
+    },
+    {
+      "code": "MTSI",
+      "name": "M/A-컴 테크놀로지 솔루션스 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "MACOM Technology Solutions Holdings  Inc."
+      ]
+    },
+    {
+      "code": "RIVN",
+      "name": "리비안 오토모티브",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Rivian Automotive  Inc."
+      ]
+    },
+    {
+      "code": "SMCI",
+      "name": "슈퍼 마이크로 컴퓨터",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Super Micro Computer Inc"
+      ]
+    },
+    {
+      "code": "FFIV",
+      "name": "F5",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "F5  Inc."
+      ]
+    },
+    {
+      "code": "TSEM",
+      "name": "타워 세미컨덕터",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Tower Semiconductor Ltd."
+      ]
+    },
+    {
+      "code": "GEN",
+      "name": "젠 디지털",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Gen Digital Inc."
+      ]
+    },
+    {
+      "code": "HST",
+      "name": "호스트 호텔스 & 리조트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Host Hotels & Resorts  Inc."
+      ]
+    },
+    {
+      "code": "PAA",
+      "name": "Plains All American Pipeline Units",
+      "market": "NASDAQ",
+      "type": "stock_us"
+    },
+    {
+      "code": "KSPI",
+      "name": "카스피.kz 우선주",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Kaspi.kz AO ADR"
+      ]
+    },
+    {
+      "code": "NBIX",
+      "name": "뉴로크린 바이오사이언시스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Neurocrine Biosciences  Inc."
+      ]
+    },
+    {
+      "code": "WMG",
+      "name": "워너 뮤직 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Warner Music Group Corp."
+      ]
+    },
+    {
+      "code": "HAS",
+      "name": "해즈브로",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Hasbro  Inc."
+      ]
+    },
+    {
+      "code": "EXEL",
+      "name": "엑셀리시스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Exelixis Inc"
+      ]
+    },
+    {
+      "code": "NTNX",
+      "name": "뉴타닉스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Nutanix  Inc."
+      ]
+    },
+    {
+      "code": "LAMR",
+      "name": "라마 애드버타이징",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Lamar Advertising Co"
+      ]
+    },
+    {
+      "code": "TLN",
+      "name": "탈렌 에너지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Talen Energy Corporation"
+      ]
+    },
+    {
+      "code": "APA",
+      "name": "APA",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "APA Corporation"
+      ]
+    },
+    {
+      "code": "LSCC",
+      "name": "래티스 세미컨덕터",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Lattice Semiconductor Corporation"
+      ]
+    },
+    {
+      "code": "LOGI",
+      "name": "로지텍 인터내셔널",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Logitech international S.A."
+      ]
+    },
+    {
+      "code": "HTHT",
+      "name": "H 월드 그룹 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "H World Group Limited ADR"
+      ]
+    },
+    {
+      "code": "CHTR",
+      "name": "차터 커뮤니케이션",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Charter Communications  Inc."
+      ]
+    },
+    {
+      "code": "CHRW",
+      "name": "CH 로빈슨 월드와이드",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "C.H. Robinson Worldwide  Inc."
+      ]
+    },
+    {
+      "code": "JAZZ",
+      "name": "재즈 파마슈티컬스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Jazz Pharmaceuticals PLC"
+      ]
+    },
+    {
+      "code": "LECO",
+      "name": "링컨 일렉트릭 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Lincoln Electric Holdings  Inc."
+      ]
+    },
+    {
+      "code": "VNOM",
+      "name": "바이퍼 에너지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Viper Energy Inc"
+      ]
+    },
+    {
+      "code": "ZBRA",
+      "name": "지브라 테크놀로지스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Zebra Technologies Corp"
+      ]
+    },
+    {
+      "code": "BBIO",
+      "name": "브릿지바이오 파머",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "BridgeBio Pharma  Inc."
+      ]
+    },
+    {
+      "code": "DOCU",
+      "name": "도큐사인",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Docusign  Inc."
+      ]
+    },
+    {
+      "code": "CHKP",
+      "name": "체크 포인트 소프트웨어 테크놀로지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Check Point Software Technologies Ltd."
+      ]
+    },
+    {
+      "code": "MANH",
+      "name": "맨해튼 어소시에이츠",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Manhattan Associates  Inc."
+      ]
+    },
+    {
+      "code": "ICLR",
+      "name": "아이콘",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "ICON PLC"
+      ]
+    },
+    {
+      "code": "MKSI",
+      "name": "MKS",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "MKS Incorporated"
+      ]
+    },
+    {
+      "code": "ERIE",
+      "name": "이리 인뎀니티",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Erie Indemnity Co"
+      ]
+    },
+    {
+      "code": "NXT",
+      "name": "넥스트파워",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Nextpower Inc"
+      ]
+    },
+    {
+      "code": "COKE",
+      "name": "코카콜라 콘솔리데이티드",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Coca-Cola Consolidated  Inc."
+      ]
+    },
+    {
+      "code": "REG",
+      "name": "리젠시 센터스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Regency Centers Corp"
+      ]
+    },
+    {
+      "code": "BTSG",
+      "name": "브라이트스프링 헬스 서비스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Brightspring Health Services Inc"
+      ]
+    },
+    {
+      "code": "FROG",
+      "name": "제이프로그",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "JFrog Ltd."
+      ]
+    },
+    {
+      "code": "CG",
+      "name": "칼라일 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Carlyle Group Inc"
+      ]
+    },
+    {
+      "code": "CART",
+      "name": "메이플베어",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Maplebear Inc."
+      ]
+    },
+    {
+      "code": "ARCC",
+      "name": "아레스 캐피탈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Ares Capital Corp"
+      ]
+    },
+    {
+      "code": "FIVE",
+      "name": "파이브 빌로우",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Five Below  Inc."
+      ]
+    },
+    {
+      "code": "FOX",
+      "name": "폭스 Class B",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Fox Corporation Class B"
+      ]
+    },
+    {
+      "code": "SITM",
+      "name": "Si타임",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "SiTime Corporation"
+      ]
+    },
+    {
+      "code": "FUTU",
+      "name": "푸투 홀딩스 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Futu Holdings Limited ADR"
+      ]
+    },
+    {
+      "code": "BSY",
+      "name": "벤틀리 시스템즈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Bentley Systems  Incorporated"
+      ]
+    },
+    {
+      "code": "TIGO",
+      "name": "밀리콤 인터내셔널 셀룰러",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Millicom International Cellular S.A."
+      ]
+    },
+    {
+      "code": "GRAB",
+      "name": "그랩 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Grab Holdings Limited"
+      ]
+    },
+    {
+      "code": "TEM",
+      "name": "템퍼스 AI",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Tempus AI  Inc."
+      ]
+    },
+    {
+      "code": "SEIC",
+      "name": "SEI 인베스트먼트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "SEI Investments Company"
+      ]
+    },
+    {
+      "code": "CHYM",
+      "name": "차임 파이낸셜",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Chime Financial  Inc."
+      ]
+    },
+    {
+      "code": "METAM",
+      "name": "메타 플랫폼스 우선주",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Meta Platforms Depositary Shs Repstg 1 20 Int Mandatory Conv Prf Shs Series A"
+      ]
+    },
+    {
+      "code": "TRMB",
+      "name": "트림블",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Trimble Inc"
+      ]
+    },
+    {
+      "code": "ASTS",
+      "name": "AST 스페이스모바일",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "AST SpaceMobile  Inc."
+      ]
+    },
+    {
+      "code": "CSGP",
+      "name": "코스타 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "CoStar Group  Inc."
+      ]
+    },
+    {
+      "code": "JKHY",
+      "name": "잭 헨리 & 어소시에이츠",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Jack Henry & Associates Inc"
+      ]
+    },
+    {
+      "code": "AKAM",
+      "name": "아카마이 테크놀로지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Akamai Technologies Inc"
+      ]
+    },
+    {
+      "code": "TXRH",
+      "name": "텍사스 로드하우스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Texas Roadhouse Inc"
+      ]
+    },
+    {
+      "code": "COO",
+      "name": "쿠퍼 컴퍼니스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "The Cooper Companies  Inc."
+      ]
+    },
+    {
+      "code": "SAIL",
+      "name": "세일포인트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "SailPoint  Inc."
+      ]
+    },
+    {
+      "code": "ALGN",
+      "name": "얼라인 테크놀로지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Align Technology  Inc."
+      ]
+    },
+    {
+      "code": "LULU",
+      "name": "룰루레몬 애슬레티카",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "lululemon athletica inc."
+      ]
+    },
+    {
+      "code": "GLPI",
+      "name": "게이밍 & 레저 프로퍼티스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Gaming and Leisure Properties  Inc."
+      ]
+    },
+    {
+      "code": "TECH",
+      "name": "바이오-테크네",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Bio-Techne Corporation"
+      ]
+    },
+    {
+      "code": "HALO",
+      "name": "할로자임 테라퓨틱스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Halozyme Therapeutics  Inc."
+      ]
+    },
+    {
+      "code": "WSE",
+      "name": "와이즈 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Wise Group PLC"
+      ]
+    },
+    {
+      "code": "SMMT",
+      "name": "서밋 테라퓨틱스 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Summit Therapeutics Inc."
+      ]
+    },
+    {
+      "code": "DPZ",
+      "name": "도미노피자",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Domino's Pizza  Inc."
+      ]
+    },
+    {
+      "code": "GSAT",
+      "name": "글로벌스타",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Globalstar  Inc."
+      ]
+    },
+    {
+      "code": "BMRN",
+      "name": "바이오마린 파마슈티컬",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "BioMarin Pharmaceutical Inc."
+      ]
+    },
+    {
+      "code": "ENSG",
+      "name": "엔사인 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "The Ensign Group  Inc."
+      ]
+    },
+    {
+      "code": "INIO",
+      "name": "이니오",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Innio NV"
+      ]
+    },
+    {
+      "code": "KYMR",
+      "name": "키메라 테라퓨틱스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Kymera Therapeutics  Inc."
+      ]
+    },
+    {
+      "code": "RGEN",
+      "name": "레플리젠",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Repligen Corporation"
+      ]
+    },
+    {
+      "code": "SIRI",
+      "name": "시리우스 XM 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Sirius XM Holdings Inc."
+      ]
+    },
+    {
+      "code": "SMTC",
+      "name": "셈텍",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Semtech Corporation"
+      ]
+    },
+    {
+      "code": "PODD",
+      "name": "인슐릿",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Insulet Corporation"
+      ]
+    },
+    {
+      "code": "WTFC",
+      "name": "윈트러스트 파이낸셜",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Wintrust Financial Corporation"
+      ]
+    },
+    {
+      "code": "AGNC",
+      "name": "AGNC 인베스트먼트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "AGNC Investment Corp."
+      ]
+    },
+    {
+      "code": "SOLS",
+      "name": "Solstice Advanced Materials Inc",
+      "market": "NASDAQ",
+      "type": "stock_us"
+    },
+    {
+      "code": "UMBF",
+      "name": "UMB 파이낸셜",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "UMB Financial Corporation"
+      ]
+    },
+    {
+      "code": "NVMI",
+      "name": "노바 메저링 인스트루먼츠",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Nova Ltd."
+      ]
+    },
+    {
+      "code": "PCVX",
+      "name": "백사이트",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Vaxcyte  Inc."
+      ]
+    },
+    {
+      "code": "LI",
+      "name": "리 오토 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Li Auto Inc. ADR"
+      ]
+    },
+    {
+      "code": "FRHC",
+      "name": "프리덤 홀딩",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Freedom Holding Corp"
+      ]
+    },
+    {
+      "code": "MDGL",
+      "name": "매드리갈 파마슈티컬스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Madrigal Pharmaceuticals  Inc."
+      ]
+    },
+    {
+      "code": "SYRE",
+      "name": "스파이어 테라퓨틱스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Spyre Therapeutics Inc"
+      ]
+    },
+    {
+      "code": "BPOP",
+      "name": "파퓰러",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Popular  Inc."
+      ]
+    },
+    {
+      "code": "LFUS",
+      "name": "리틀휴즈",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Littelfuse  Inc."
+      ]
+    },
+    {
+      "code": "TTEK",
+      "name": "테트라 테크",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Tetra Tech  Inc."
+      ]
+    },
+    {
+      "code": "TGTX",
+      "name": "TG 테라퓨틱스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "TG Therapeutics  Inc."
+      ]
+    },
+    {
+      "code": "PAYP",
+      "name": "페이페이 ADR",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "PayPay Corp ADR"
+      ]
+    },
+    {
+      "code": "NWSA",
+      "name": "뉴스 코퍼레이션 Class A",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "News Corporation Class A"
+      ]
+    },
+    {
+      "code": "ZION",
+      "name": "자이언스 뱅코프",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Zions Bancorporation  National Association"
+      ]
+    },
+    {
+      "code": "HSIC",
+      "name": "헨리 셰인",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Henry Schein  Inc."
+      ]
+    },
+    {
+      "code": "ONB",
+      "name": "올드 내셔널 뱅코프",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Old National Bancorp"
+      ]
+    },
+    {
+      "code": "MTCH",
+      "name": "매치 그룹",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Match Group  Inc."
+      ]
+    },
+    {
+      "code": "STRC",
+      "name": "스트래티지 우선주 Series A",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Strategy Variable Rate Perpetual Stretch Prf Shs Series A"
+      ]
+    },
+    {
+      "code": "VSAT",
+      "name": "비아샛",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Viasat Inc"
+      ]
+    },
+    {
+      "code": "DKNG",
+      "name": "드래프트킹즈 홀딩스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "DraftKings Inc."
+      ]
+    },
+    {
+      "code": "QNT",
+      "name": "퀀티넘",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Quantinuum Inc"
+      ]
+    },
+    {
+      "code": "DRS",
+      "name": "레오나르도 DRS",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Leonardo DRS Inc"
+      ]
+    },
+    {
+      "code": "PCTY",
+      "name": "페일로시티 홀딩",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Paylocity Holding Corp"
+      ]
+    },
+    {
+      "code": "ENLT",
+      "name": "엔라이트 리뉴어블 에너지",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Enlight Renewable Energy Ltd."
+      ]
+    },
+    {
+      "code": "AEIS",
+      "name": "어드밴스드 에너지 인더스트리스",
+      "market": "NASDAQ",
+      "type": "stock_us",
+      "aliases": [
+        "Advanced Energy Industries  Inc."
+      ]
+    },
+    {
+      "code": "TSM",
+      "name": "TSMC ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Taiwan Semiconductor Manufacturing Company Limited ADR"
+      ]
+    },
+    {
+      "code": "LLY",
+      "name": "일라이 릴리",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Eli Lilly and Company"
+      ]
+    },
+    {
+      "code": "JPM",
+      "name": "제이피모간체이스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "JPMorgan Chase & Co."
+      ]
+    },
+    {
+      "code": "BRK.B",
+      "name": "버크셔 해서웨이 Class B",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Berkshire Hathaway Inc Class B"
+      ]
+    },
+    {
+      "code": "V",
+      "name": "비자",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Visa Inc."
+      ]
+    },
+    {
+      "code": "XOM",
+      "name": "엑슨모빌 홀딩스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Exxonmobil Holdings Corp"
+      ]
+    },
+    {
+      "code": "JNJ",
+      "name": "존슨앤드존슨",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Johnson & Johnson"
+      ]
+    },
+    {
+      "code": "MA",
+      "name": "마스터카드",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Mastercard Incorporated"
+      ]
+    },
+    {
+      "code": "ABBV",
+      "name": "애브비",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "AbbVie Inc."
+      ]
+    },
+    {
+      "code": "CVX",
+      "name": "셰브론",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Chevron Corporation"
+      ]
+    },
+    {
+      "code": "BRK.A",
+      "name": "버크셔 해서웨이 Class A",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Berkshire Hathaway Inc Class A"
+      ]
+    },
+    {
+      "code": "KO",
+      "name": "코카콜라",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Coca-Cola Co"
+      ]
+    },
+    {
+      "code": "PG",
+      "name": "P&G(프록터 & 갬블)",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Procter & Gamble Company"
+      ]
+    },
+    {
+      "code": "ORCL",
+      "name": "오라클",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Oracle Corporation"
+      ]
+    },
+    {
+      "code": "UNH",
+      "name": "유나이티드헬스 그룹",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "UnitedHealth Group Incorporated"
+      ]
+    },
+    {
+      "code": "MRK",
+      "name": "머크 앤 코",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Merck & Co Inc"
+      ]
+    },
+    {
+      "code": "BAC",
+      "name": "뱅크오브아메리카",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Bank of America Corporation"
+      ]
+    },
+    {
+      "code": "HD",
+      "name": "홈디포",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Home Depot  Inc."
+      ]
+    },
+    {
+      "code": "GE",
+      "name": "GE 에어로스페이스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "General Electric Company"
+      ]
+    },
+    {
+      "code": "PM",
+      "name": "필립 모리스 인터내셔널",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Philip Morris International Inc."
+      ]
+    },
+    {
+      "code": "HSBC",
+      "name": "HSBC 홀딩스 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "HSBC Holdings PLC ADR"
+      ]
+    },
+    {
+      "code": "NVS",
+      "name": "노바티스 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Novartis AG ADR"
+      ]
+    },
+    {
+      "code": "WHR PRA",
+      "name": "월풀 우선주 Series A 8.5%",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Whirlpool Dep Shs Repstg 1 20th Int Mandatory Conv Prf Series A"
+      ]
+    },
+    {
+      "code": "MS",
+      "name": "모간스탠리",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Morgan Stanley"
+      ]
+    },
+    {
+      "code": "AZN",
+      "name": "아스트라제네카",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "AstraZeneca PLC"
+      ]
+    },
+    {
+      "code": "SHEL",
+      "name": "쉘 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Shell plc ADR"
+      ]
+    },
+    {
+      "code": "RY",
+      "name": "로열 뱅크 오브 캐나다",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Royal Bank of Canada"
+      ]
+    },
+    {
+      "code": "CAT",
+      "name": "캐터필러",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Caterpillar Inc"
+      ]
+    },
+    {
+      "code": "SAP",
+      "name": "SAP ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "SAP SE ADR"
+      ]
+    },
+    {
+      "code": "RTX",
+      "name": "RTX",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "RTX Corporation"
+      ]
+    },
+    {
+      "code": "GS",
+      "name": "골드만삭스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Goldman Sachs Group  Inc."
+      ]
+    },
+    {
+      "code": "TMO",
+      "name": "써모 피셔 사이언티픽",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Thermo Fisher Scientific Inc."
+      ]
+    },
+    {
+      "code": "WFC",
+      "name": "웰스파고",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Wells Fargo & Company"
+      ]
+    },
+    {
+      "code": "ANET",
+      "name": "아리스타 네트웍스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Arista Networks  Inc."
+      ]
+    },
+    {
+      "code": "TM",
+      "name": "토요타자동차 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "TOYOTA MOTOR CORPORATION ADR"
+      ]
+    },
+    {
+      "code": "MUFG",
+      "name": "미쓰비시 UFJ 파이낸셜 그룹 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Mitsubishi UFJ Financial Group  Inc. ADR"
+      ]
+    },
+    {
+      "code": "BABA",
+      "name": "알리바바 그룹 홀딩 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Alibaba Group Holding Limited ADR"
+      ]
+    },
+    {
+      "code": "IBM",
+      "name": "IBM",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "International Business Machines Corp"
+      ]
+    },
+    {
+      "code": "DELL",
+      "name": "델테크놀로지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Dell Technologies Inc"
+      ]
+    },
+    {
+      "code": "AXP",
+      "name": "아메리칸 익스프레스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "American Express Company"
+      ]
+    },
+    {
+      "code": "GEV",
+      "name": "GE 버노바",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "GE Vernova Inc."
+      ]
+    },
+    {
+      "code": "TTE",
+      "name": "토탈에너지스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "TotalEnergies SE"
+      ]
+    },
+    {
+      "code": "DIS",
+      "name": "월트 디즈니",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Walt Disney Company"
+      ]
+    },
+    {
+      "code": "C",
+      "name": "씨티그룹",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Citigroup Inc."
+      ]
+    },
+    {
+      "code": "TD",
+      "name": "토론토 도미니언 은행",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Toronto-Dominion Bank"
+      ]
+    },
+    {
+      "code": "BHP",
+      "name": "BHP 그룹 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "BHP Group Ltd ADR"
+      ]
+    },
+    {
+      "code": "BLK",
+      "name": "블랙록",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "BlackRock  Inc."
+      ]
+    },
+    {
+      "code": "APH",
+      "name": "암페놀",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Amphenol Corp"
+      ]
+    },
+    {
+      "code": "VZ",
+      "name": "버라이존",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Verizon Communications Inc"
+      ]
+    },
+    {
+      "code": "MCD",
+      "name": "맥도날드",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "McDonald's Corp"
+      ]
+    },
+    {
+      "code": "ABT",
+      "name": "애보트 래보라토리",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Abbott Laboratories"
+      ]
+    },
+    {
+      "code": "DE",
+      "name": "디어",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Deere & Co"
+      ]
+    },
+    {
+      "code": "UNP",
+      "name": "유니온 퍼시픽",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Union Pacific Corporation"
+      ]
+    },
+    {
+      "code": "WELL",
+      "name": "웰타워",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Welltower Inc."
+      ]
+    },
+    {
+      "code": "CRM",
+      "name": "세일즈포스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Salesforce  Inc."
+      ]
+    },
+    {
+      "code": "NEE",
+      "name": "넥스트에라 에너지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "NextEra Energy  Inc."
+      ]
+    },
+    {
+      "code": "SAN",
+      "name": "방코 산탄데르 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Banco Santander S.A. ADR"
+      ]
+    },
+    {
+      "code": "COP",
+      "name": "코노코필립스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "ConocoPhillips"
+      ]
+    },
+    {
+      "code": "PFE",
+      "name": "화이자",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Pfizer Inc."
+      ]
+    },
+    {
+      "code": "DHR",
+      "name": "다나허",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Danaher Corporation"
+      ]
+    },
+    {
+      "code": "SCHW",
+      "name": "찰스 슈왑",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Charles Schwab Corporation"
+      ]
+    },
+    {
+      "code": "UBS",
+      "name": "UBS 그룹 AG",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "UBS Group AG"
+      ]
+    },
+    {
+      "code": "SONY",
+      "name": "소니 그룹 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Sony Group Corporation ADR"
+      ]
+    },
+    {
+      "code": "SMFG",
+      "name": "스미토모 미쓰이 파이낸셜그룹 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Sumitomo Mitsui Financial Group  Inc. ADR"
+      ]
+    },
+    {
+      "code": "T",
+      "name": "AT&T",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "AT&T Inc."
+      ]
+    },
+    {
+      "code": "ACN",
+      "name": "액센추어",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Accenture PLC"
+      ]
+    },
+    {
+      "code": "TJX",
+      "name": "TJX 컴퍼니스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The TJX Companies  Inc."
+      ]
+    },
+    {
+      "code": "BUD",
+      "name": "안호이저부시 인베브 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Anheuser-Busch Inbev SA ADR"
+      ]
+    },
+    {
+      "code": "BX",
+      "name": "블랙스톤",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Blackstone Inc."
+      ]
+    },
+    {
+      "code": "CB",
+      "name": "처브",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Chubb Limited"
+      ]
+    },
+    {
+      "code": "UL",
+      "name": "유니레버 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Unilever PLC ADR"
+      ]
+    },
+    {
+      "code": "BBVA",
+      "name": "방코 빌바오 비스카야 아르헨타리아 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Banco Bilbao Vizcaya Argentaria  S.A. ADR"
+      ]
+    },
+    {
+      "code": "UBER",
+      "name": "우버",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Uber Technologies  Inc."
+      ]
+    },
+    {
+      "code": "SCCO",
+      "name": "서던 코퍼",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Southern Copper Corp"
+      ]
+    },
+    {
+      "code": "NVO",
+      "name": "노보 노디스크 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Novo Nordisk A/S ADR"
+      ]
+    },
+    {
+      "code": "LMT",
+      "name": "록히드 마틴",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Lockheed Martin Corporation"
+      ]
+    },
+    {
+      "code": "SPGI",
+      "name": "S&P 글로벌",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "S&P Global Inc."
+      ]
+    },
+    {
+      "code": "ETN",
+      "name": "이튼",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Eaton Corporation PLC"
+      ]
+    },
+    {
+      "code": "PGR",
+      "name": "프로그레시브",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Progressive Corporation"
+      ]
+    },
+    {
+      "code": "BA",
+      "name": "보잉",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Boeing Co"
+      ]
+    },
+    {
+      "code": "BTI",
+      "name": "브리티쉬 아메리칸 토바코 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "British American Tobacco p.l.c. ADR"
+      ]
+    },
+    {
+      "code": "HDB",
+      "name": "HDFC 뱅크 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "HDFC Bank Limited ADR"
+      ]
+    },
+    {
+      "code": "MDT",
+      "name": "메드트로닉",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Medtronic PLC"
+      ]
+    },
+    {
+      "code": "MO",
+      "name": "알트리아그룹",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Altria Group Inc"
+      ]
+    },
+    {
+      "code": "BMY",
+      "name": "브리스톨-마이어스 스큅",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Bristol-Myers Squibb Company"
+      ]
+    },
+    {
+      "code": "LOW",
+      "name": "로우스 컴퍼니",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Lowe's Companies Inc"
+      ]
+    },
+    {
+      "code": "MCK",
+      "name": "매케슨",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "McKesson Corp"
+      ]
+    },
+    {
+      "code": "SPOT",
+      "name": "스포티파이 테크놀러지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Spotify Technology S.A."
+      ]
+    },
+    {
+      "code": "MFG",
+      "name": "미즈호 파이낸셜그룹 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Mizuho Financial Group  Inc. ADR"
+      ]
+    },
+    {
+      "code": "IBN",
+      "name": "ICICI 뱅크 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "ICICI Bank Limited ADR"
+      ]
+    },
+    {
+      "code": "PLD",
+      "name": "프로로지스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Prologis  Inc."
+      ]
+    },
+    {
+      "code": "PH",
+      "name": "파커-하니핀",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Parker-Hannifin Corporation"
+      ]
+    },
+    {
+      "code": "BMO",
+      "name": "뱅크 오브 몬트리올",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Bank of Montreal"
+      ]
+    },
+    {
+      "code": "BP",
+      "name": "BP ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "BP PLC ADR"
+      ]
+    },
+    {
+      "code": "SYK",
+      "name": "스트라이커",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Stryker Corporation"
+      ]
+    },
+    {
+      "code": "NEM",
+      "name": "뉴몬트",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Newmont Corporation"
+      ]
+    },
+    {
+      "code": "COF",
+      "name": "캐피털 원 파이낸셜",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Capital One Financial Corp"
+      ]
+    },
+    {
+      "code": "CVS",
+      "name": "CVS 헬스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "CVS Health Corporation"
+      ]
+    },
+    {
+      "code": "BNS",
+      "name": "뱅크 오브 노바 스코샤",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Bank of Nova Scotia"
+      ]
+    },
+    {
+      "code": "NET",
+      "name": "클라우드플레어",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Cloudflare  Inc."
+      ]
+    },
+    {
+      "code": "MPC",
+      "name": "매러선 페트롤리엄",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Marathon Petroleum Corporation"
+      ]
+    },
+    {
+      "code": "SO",
+      "name": "서던",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Southern Co"
+      ]
+    },
+    {
+      "code": "EQNR",
+      "name": "에퀴노르 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Equinor ASA ADR"
+      ]
+    },
+    {
+      "code": "ENB",
+      "name": "엔브리지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Enbridge Inc."
+      ]
+    },
+    {
+      "code": "NOW",
+      "name": "서비스나우",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "ServiceNow  Inc."
+      ]
+    },
+    {
+      "code": "VLO",
+      "name": "발레로 에너지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Valero Energy Corp"
+      ]
+    },
+    {
+      "code": "CM",
+      "name": "캐내디언 임페리얼 뱅크 오브 커머스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Canadian Imperial Bank of Commerce"
+      ]
+    },
+    {
+      "code": "HCA",
+      "name": "HCA 헬스케어",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "HCA Healthcare  Inc."
+      ]
+    },
+    {
+      "code": "RIO",
+      "name": "리오 틴토 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Rio Tinto plc ADR"
+      ]
+    },
+    {
+      "code": "PSX",
+      "name": "필립스 66",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Phillips 66"
+      ]
+    },
+    {
+      "code": "BNY",
+      "name": "뉴욕멜론은행",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Bank of New York Mellon Corp"
+      ]
+    },
+    {
+      "code": "SNOW",
+      "name": "스노우플레이크",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Snowflake Inc."
+      ]
+    },
+    {
+      "code": "GSK",
+      "name": "GSK",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "GSK plc ADR"
+      ]
+    },
+    {
+      "code": "CNQ",
+      "name": "캐나다 내추럴 리소시스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Canadian Natural Resources Ltd"
+      ]
+    },
+    {
+      "code": "DUK",
+      "name": "듀크 에너지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Duke Energy Corp"
+      ]
+    },
+    {
+      "code": "BN",
+      "name": "브룩필드",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Brookfield Corporation"
+      ]
+    },
+    {
+      "code": "ICE",
+      "name": "인터컨티넨털 익스체인지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Intercontinental Exchange  Inc."
+      ]
+    },
+    {
+      "code": "MRSH",
+      "name": "마쉬 앤 맥레넌 컴퍼니스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Marsh & McLennan Companies  Inc."
+      ]
+    },
+    {
+      "code": "GLW",
+      "name": "코닝",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Corning Incorporated"
+      ]
+    },
+    {
+      "code": "GD",
+      "name": "제너럴 다이내믹스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "General Dynamics Corp"
+      ]
+    },
+    {
+      "code": "WM",
+      "name": "웨이스트 매니지먼트",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Waste Management Inc"
+      ]
+    },
+    {
+      "code": "UPS",
+      "name": "UPS(유나이티드 파셀 서비스)",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "United Parcel Service Inc"
+      ]
+    },
+    {
+      "code": "USB",
+      "name": "US 뱅코프",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "U.S. Bancorp"
+      ]
+    },
+    {
+      "code": "MMM",
+      "name": "쓰리엠 (3M)",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "3M Company"
+      ]
+    },
+    {
+      "code": "ING",
+      "name": "ING 그룹 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "ING Groep N.V. ADR"
+      ]
+    },
+    {
+      "code": "ELV",
+      "name": "엘레반스 헬스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Elevance Health Inc"
+      ]
+    },
+    {
+      "code": "PNC",
+      "name": "PNC 파이낸셜 서비스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The PNC Financial Services Group  Inc."
+      ]
+    },
+    {
+      "code": "TT",
+      "name": "트레인 테크놀로지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Trane Technologies PLC"
+      ]
+    },
+    {
+      "code": "EMR",
+      "name": "에머슨 일렉트릭",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Emerson Electric Co"
+      ]
+    },
+    {
+      "code": "PWR",
+      "name": "콴타 서비스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Quanta Services Inc"
+      ]
+    },
+    {
+      "code": "AEM",
+      "name": "애그니코 이글 마인스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Agnico Eagle Mines Limited"
+      ]
+    },
+    {
+      "code": "AMT",
+      "name": "아메리칸 타워",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "American Tower Corporation"
+      ]
+    },
+    {
+      "code": "MSI",
+      "name": "모토로라 솔루션스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Motorola Solutions Inc"
+      ]
+    },
+    {
+      "code": "HWM",
+      "name": "하우멧 에어로스페이스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Howmet Aerospace Inc."
+      ]
+    },
+    {
+      "code": "MCO",
+      "name": "무디스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Moody's Corporation"
+      ]
+    },
+    {
+      "code": "KKR",
+      "name": "KKR & Co",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "KKR & Co Inc"
+      ]
+    },
+    {
+      "code": "ECL",
+      "name": "이콜랩",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Ecolab Inc."
+      ]
+    },
+    {
+      "code": "RCL",
+      "name": "로얄 캐리비안 크루즈",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Royal Caribbean Cruises Ltd."
+      ]
+    },
+    {
+      "code": "WMB",
+      "name": "윌리엄스 컴퍼니즈",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Williams Companies  Inc."
+      ]
+    },
+    {
+      "code": "FCX",
+      "name": "프리포트 맥모란",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Freeport-McMoRan Inc"
+      ]
+    },
+    {
+      "code": "NGG",
+      "name": "내셔널 그리드 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "National Grid PLC ADR"
+      ]
+    },
+    {
+      "code": "SHW",
+      "name": "셔윈-윌리엄즈",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Sherwin-Williams Co"
+      ]
+    },
+    {
+      "code": "BAM",
+      "name": "브룩필드 애셋 매니지먼트",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "BROOKFIELD ASSET MANAGEMENT LTD"
+      ]
+    },
+    {
+      "code": "JCI",
+      "name": "존슨 컨트롤스 인터내셔널",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Johnson Controls International PLC"
+      ]
+    },
+    {
+      "code": "TRV",
+      "name": "트래블러스 컴퍼니스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Travelers Companies  Inc."
+      ]
+    },
+    {
+      "code": "EPD",
+      "name": "Enterprise Products Partners Units",
+      "market": "NYSE",
+      "type": "stock_us"
+    },
+    {
+      "code": "E",
+      "name": "에니 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Eni SpA ADR"
+      ]
+    },
+    {
+      "code": "EOG",
+      "name": "EOG 리소시스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "EOG Resources  Inc."
+      ]
+    },
+    {
+      "code": "CP",
+      "name": "캐나디안 퍼시픽 캔자스 시티",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Canadian Pacific Kansas City Limited"
+      ]
+    },
+    {
+      "code": "ITW",
+      "name": "일리노이 툴 웍스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Illinois Tool Works Inc"
+      ]
+    },
+    {
+      "code": "SU",
+      "name": "선코어 에너지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Suncor Energy Inc (Canada)"
+      ]
+    },
+    {
+      "code": "CVNA",
+      "name": "카바나",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Carvana Co"
+      ]
+    },
+    {
+      "code": "ASX",
+      "name": "ASE 테크놀로지 홀딩 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "ASE Technology Holding Co.  Ltd. ADR"
+      ]
+    },
+    {
+      "code": "CL",
+      "name": "콜게이트-팜올리브",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Colgate-Palmolive Company"
+      ]
+    },
+    {
+      "code": "CI",
+      "name": "시그나",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "The Cigna Group"
+      ]
+    },
+    {
+      "code": "NOC",
+      "name": "노스롭 그루만",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Northrop Grumman Corp"
+      ]
+    },
+    {
+      "code": "VRT",
+      "name": "버티브 홀딩스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Vertiv Holdings Co"
+      ]
+    },
+    {
+      "code": "RSG",
+      "name": "리퍼블릭 서비스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Republic Services Inc"
+      ]
+    },
+    {
+      "code": "CNI",
+      "name": "커네디언 내셔널 레일웨이",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Canadian National Railway Co"
+      ]
+    },
+    {
+      "code": "SLB",
+      "name": "SLB",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "SLB N.V."
+      ]
+    },
+    {
+      "code": "BCS",
+      "name": "바클레이즈 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Barclays PLC ADR"
+      ]
+    },
+    {
+      "code": "AMX",
+      "name": "아메리카 모빌 ADR 시리즈 L",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "America Movil SAB de CV ADR"
+      ]
+    },
+    {
+      "code": "FDX",
+      "name": "페덱스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "FedEx Corp"
+      ]
+    },
+    {
+      "code": "SPG",
+      "name": "사이먼 프로퍼티 그룹",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Simon Property Group Inc"
+      ]
+    },
+    {
+      "code": "LYG",
+      "name": "로이즈 뱅킹 그룹 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Lloyds Banking Group PLC ADR"
+      ]
+    },
+    {
+      "code": "NSC",
+      "name": "노퍽서던",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Norfolk Southern Corp"
+      ]
+    },
+    {
+      "code": "TGT",
+      "name": "타겟",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Target Corp"
+      ]
+    },
+    {
+      "code": "APO",
+      "name": "아폴로 글로벌 매니지먼트",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Apollo Global Management  Inc."
+      ]
+    },
+    {
+      "code": "RACE",
+      "name": "페라리",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Ferrari N.V."
+      ]
+    },
+    {
+      "code": "MFC",
+      "name": "매뉴라이프 파이낸셜",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Manulife Financial Corporation"
+      ]
+    },
+    {
+      "code": "AJG",
+      "name": "아서 J 갤러거 앤 코",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Arthur J. Gallagher & Co."
+      ]
+    },
+    {
+      "code": "GM",
+      "name": "제너럴 모터스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "General Motors Co"
+      ]
+    },
+    {
+      "code": "AON",
+      "name": "에이온",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Aon PLC"
+      ]
+    },
+    {
+      "code": "KMI",
+      "name": "킨더 모건",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Kinder Morgan  Inc."
+      ]
+    },
+    {
+      "code": "RELX",
+      "name": "렐엑스 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Relx PLC ADR"
+      ]
+    },
+    {
+      "code": "APD",
+      "name": "에어 프로덕츠 앤 케미컬스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Air Products and Chemicals  Inc."
+      ]
+    },
+    {
+      "code": "GWW",
+      "name": "W W 그레인저",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "WW Grainger Inc"
+      ]
+    },
+    {
+      "code": "URI",
+      "name": "유나이티드 렌탈스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "United Rentals  Inc."
+      ]
+    },
+    {
+      "code": "COR",
+      "name": "센코라",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Cencora  Inc."
+      ]
+    },
+    {
+      "code": "TAK",
+      "name": "다케다 파마슈티컬 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Takeda Pharmaceutical Company Limited ADR"
+      ]
+    },
+    {
+      "code": "PBR",
+      "name": "페트로브라스 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Petroleo Brasileiro ADR Reptg 2"
+      ]
+    },
+    {
+      "code": "DB",
+      "name": "도이치은행",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Deutsche Bank AG"
+      ]
+    },
+    {
+      "code": "DLR",
+      "name": "디지털 리얼티 트러스트",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Digital Realty Trust  Inc."
+      ]
+    },
+    {
+      "code": "TRP",
+      "name": "TC 에너지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "TC Energy Corporation"
+      ]
+    },
+    {
+      "code": "TDG",
+      "name": "트랜스다임 그룹",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "TransDigm Group Incorporated"
+      ]
+    },
+    {
+      "code": "ALL",
+      "name": "올스테이트",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Allstate Corp"
+      ]
+    },
+    {
+      "code": "CAH",
+      "name": "카디널 헬스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Cardinal Health  Inc."
+      ]
+    },
+    {
+      "code": "MET",
+      "name": "메트라이프",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "MetLife  Inc."
+      ]
+    },
+    {
+      "code": "BSX",
+      "name": "보스턴 사이언티픽",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Boston Scientific Corporation"
+      ]
+    },
+    {
+      "code": "HPE",
+      "name": "휴렛패커드 엔터프라이즈",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Hewlett Packard Enterprise Company"
+      ]
+    },
+    {
+      "code": "TRGP",
+      "name": "타르가 리소스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Targa Resources Corp."
+      ]
+    },
+    {
+      "code": "AFL",
+      "name": "애플랙",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Aflac Incorporated"
+      ]
+    },
+    {
+      "code": "LNG",
+      "name": "셰니어 에너지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Cheniere Energy  Inc."
+      ]
+    },
+    {
+      "code": "NWG",
+      "name": "내트웨스트 그룹 ADR",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "NatWest Group PLC ADR"
+      ]
+    },
+    {
+      "code": "PSA",
+      "name": "퍼블릭 스토리지",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Public Storage"
+      ]
+    },
+    {
+      "code": "TEL",
+      "name": "TE 커넥티비티",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "TE Connectivity PLC"
+      ]
+    },
+    {
+      "code": "CMI",
+      "name": "커민스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Cummins Inc"
+      ]
+    },
+    {
+      "code": "CRH",
+      "name": "CRH",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "CRH PLC"
+      ]
+    },
+    {
+      "code": "EW",
+      "name": "에드워즈 라이프사이언시스",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Edwards Lifesciences Corporation"
+      ]
+    },
+    {
+      "code": "B",
+      "name": "바릭 마이닝",
+      "market": "NYSE",
+      "type": "stock_us",
+      "aliases": [
+        "Barrick Mining Corporation"
+      ]
+    }
+  ]
+}
