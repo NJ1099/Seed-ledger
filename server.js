@@ -41,6 +41,15 @@ try {
   console.warn('[brokerSync] 비활성화:', e.message);
 }
 
+const {
+  indexStock,
+  searchStocks,
+  mergeSearchResults,
+  normalizeSearchKey,
+  normalizeTicker,
+  inferStockType,
+} = require('./stockSearch');
+
 const root = __dirname;
 
 // .env 파일 직접 파싱 — zero-deps 정책상 dotenv 패키지 안 씀.
@@ -80,6 +89,7 @@ const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
 const QUOTE_CACHE_FILE = path.join(DATA_DIR, 'quote-cache.json');
 const POPULAR_TICKERS_FILE = path.join(DATA_DIR, 'popular-tickers.json');
 const STOCK_MASTER_FILE = path.join(DATA_DIR, 'stock-master.json');
+const STOCK_SYMBOLS_FILE = path.join(DATA_DIR, 'stock-symbols.json');
 const MARKET_CALENDAR_FILE = path.join(DATA_DIR, 'market-calendar.json');
 const DART_CORPCODE_FILE = path.join(DATA_DIR, 'dart-corpcodes.json');
 const LOG_DIR = path.join(DATA_DIR, 'logs');
@@ -1893,340 +1903,252 @@ const STOCK_MASTER_SEED = [
   { code: 'TSM',   name: 'TSMC (Taiwan Semi)', market: 'NYSE', type: 'stock_us' },
 ];
 
-// 네이버가 pageSize 상한을 100 으로 제한한다. 예전 코드는 500 을 한 번에 요청해서
-// 네 거래소 모두 400(getStockLists.pageSize: must be less than or equal to 100)을 받았고,
-// 종목 마스터 갱신이 계속 실패하고 있었다. 100 씩 나눠 받는다.
+// 네이버가 pageSize 상한을 100 으로 제한한다. 100 씩 나눠 받는다.
+// 국내 시총 API(api.stock.naver.com)는 장외·주말에 stocks 가 빈 배열이다.
+// m.stock.naver.com 은 그때도 종목 목록을 준다. 미국은 반대로 api.stock 이 목록을 준다.
 const MASTER_PAGE_SIZE = 100;
-const MASTER_MAX_PAGES = 5;   // 거래소당 상위 500 종목
+const MASTER_MAX_PAGES = 5;   // 국내 거래소당 상위 500 종목
+const MASTER_US_PAGES = 3;    // 미국 거래소당 상위 300 종목
+const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
 
-async function fetchExchangeMaster(exchange) {
-  // stock.naver.com 의 시총 정렬 API 로 거래소별 상위 종목을 수집한다.
+function stocksFromFile(file) {
+  const parsed = readJSON(file, null);
+  if (!parsed) return [];
+  if (Array.isArray(parsed)) return parsed;
+  if (Array.isArray(parsed.stocks)) return parsed.stocks;
+  return [];
+}
+
+function installMaster(list, updatedAt) {
+  const merged = [];
+  const seen = new Set();
+  for (const raw of [...(list || []), ...STOCK_MASTER_SEED]) {
+    const s = indexStock(raw || {});
+    if (!s.code || seen.has(s.code)) continue;
+    seen.add(s.code);
+    merged.push(s);
+  }
+  STOCK_MASTER.stocks = merged;
+  if (updatedAt) STOCK_MASTER.updatedAt = updatedAt;
+  STOCK_MASTER.loaded = true;
+  return merged.length;
+}
+
+function loadLocalStockMaster() {
+  const cached = stocksFromFile(STOCK_MASTER_FILE);
+  const bundled = stocksFromFile(STOCK_SYMBOLS_FILE);
+  const base = cached.length > 100 ? cached : bundled;
+  const n = installMaster(base, null);
+  if (cached.length > 100) {
+    const meta = readJSON(STOCK_MASTER_FILE, {});
+    STOCK_MASTER.updatedAt = meta && meta.updatedAt || null;
+  }
+  logLine('info', cached.length > 100 ? 'master.cached' : 'master.bundled', {
+    count: n, bundled: bundled.length,
+  });
+}
+
+function masterRowFromKr(it, exchange) {
+  const code = normalizeTicker(it.itemCode || it.symbolCode || '');
+  const name = String(it.stockName || it.stockNameEng || '').trim();
+  if (!code || !name) return null;
+  return { code, name, market: exchange, type: 'stock_kr' };
+}
+
+function masterRowFromUs(it, exchange) {
+  // itemCode 가 비어 있고 reutersCode 가 AAPL.O 인 응답이 있다. 티커는 symbolCode.
+  const code = normalizeTicker(it.symbolCode || it.itemCode || it.reutersCode || '');
+  const name = String(it.stockName || it.stockNameEng || '').trim();
+  if (!code || !name) return null;
+  const row = { code, name, market: exchange, type: 'stock_us' };
+  const eng = String(it.stockNameEng || '').trim();
+  if (eng && eng.toLowerCase() !== name.toLowerCase()) row.aliases = [eng];
+  return row;
+}
+
+async function fetchPagedMaster(urlFor, referer, pages, mapItem, logTag) {
   const out = [];
-  for (let page = 1; page <= MASTER_MAX_PAGES; page++) {
-    const url = `https://api.stock.naver.com/stock/exchange/${exchange}/marketValue?page=${page}&pageSize=${MASTER_PAGE_SIZE}`;
+  for (let page = 1; page <= pages; page++) {
+    const url = urlFor(page);
     const r = await httpsGet(url, {
-      headers: { 'Referer': 'https://stock.naver.com/', 'User-Agent': BROWSER_UA },
+      headers: { 'Referer': referer, 'User-Agent': BROWSER_UA },
+      timeoutMs: 8000,
     });
     if (!r.ok) {
-      logLine('warn', 'master.http', { exchange, page, status: r.status });
+      logLine('warn', 'master.http', { tag: logTag, page, status: r.status });
       break;
     }
-    let items;
+    let items = [];
     try {
       const j = JSON.parse(r.body);
-      items = j?.stocks || j?.items || j?.result?.stocks || j?.list || [];
-      // 장 시간 외에는 marketStatus 가 PREOPEN/CLOSE 이고 목록이 빈 배열로 온다.
-      // API 가 깨진 것과 구분되게 상태를 남긴다.
+      items = j?.stocks || [];
       if (page === 1 && (!Array.isArray(items) || !items.length)) {
-        logLine('info', 'master.empty', { exchange, marketStatus: j?.marketStatus || '', total: j?.totalCount ?? null });
+        logLine('info', 'master.empty', { tag: logTag, marketStatus: j?.marketStatus || '' });
       }
     } catch (e) {
-      logLine('warn', 'master.parse', { exchange, page, err: String(e) });
+      logLine('warn', 'master.parse', { tag: logTag, page, err: String(e) });
       break;
     }
-    if (!Array.isArray(items) || !items.length) break;   // 마지막 페이지 또는 장외
+    if (!Array.isArray(items) || !items.length) break;
     for (const it of items) {
-      const code = it.itemCode || it.code || it.reutersCode || it.symbolCode || null;
-      const name = it.stockName || it.itemName || it.name || null;
-      if (!code || !name) continue;
-      out.push({
-        code: String(code),
-        name: String(name).trim(),
-        market: exchange,
-        type: /^\d{6}$/.test(code) ? 'stock_kr' : 'stock_us',
-      });
+      const row = it ? mapItem(it) : null;
+      if (row) out.push(row);
     }
-    if (items.length < MASTER_PAGE_SIZE) break;   // 더 받을 게 없다
+    if (items.length < MASTER_PAGE_SIZE) break;
   }
   return out;
 }
 
+function fetchKrExchangeMaster(exchange) {
+  return fetchPagedMaster(
+    (page) => `https://m.stock.naver.com/api/stocks/marketValue/${exchange}?page=${page}&pageSize=${MASTER_PAGE_SIZE}`,
+    'https://m.stock.naver.com/',
+    MASTER_MAX_PAGES,
+    (it) => masterRowFromKr(it, exchange),
+    exchange,
+  );
+}
+
+function fetchUsExchangeMaster(exchange) {
+  return fetchPagedMaster(
+    (page) => `https://api.stock.naver.com/stock/exchange/${exchange}/marketValue?page=${page}&pageSize=${MASTER_PAGE_SIZE}`,
+    'https://stock.naver.com/',
+    MASTER_US_PAGES,
+    (it) => masterRowFromUs(it, exchange),
+    exchange,
+  );
+}
+
 async function buildStockMaster() {
-  // 부팅 시 + 매일 1회 호출. 실패해도 시드 데이터로 검색은 계속 동작.
-  const cached = readJSON(STOCK_MASTER_FILE, null);
-  if (cached && Array.isArray(cached.stocks) && cached.stocks.length > 100) {
-    STOCK_MASTER.stocks = cached.stocks;
-    STOCK_MASTER.updatedAt = cached.updatedAt;
-    STOCK_MASTER.loaded = true;
-    logLine('info', 'master.cached', { count: cached.stocks.length });
-  } else {
-    STOCK_MASTER.stocks = [...STOCK_MASTER_SEED];
-    STOCK_MASTER.loaded = true;
-    logLine('info', 'master.seed', { count: STOCK_MASTER_SEED.length });
-  }
-  // 그 다음 backgrond fetch 로 최신화 시도. 실패해도 무방.
-  const exchanges = ['KOSPI', 'KOSDAQ', 'NASDAQ', 'NYSE'];
-  const results = await Promise.all(exchanges.map(fetchExchangeMaster));
+  // 실패해도 loadLocalStockMaster 가 깔아 둔 목록으로 검색은 계속된다.
+  const results = await Promise.all([
+    fetchKrExchangeMaster('KOSPI'),
+    fetchKrExchangeMaster('KOSDAQ'),
+    fetchUsExchangeMaster('NASDAQ'),
+    fetchUsExchangeMaster('NYSE'),
+  ]);
   const fetched = results.flat();
   if (fetched.length > 100) {
-    // 시드 + fetched 병합 (dedupe by type+code)
-    const seen = new Set();
-    const merged = [];
-    for (const s of [...fetched, ...STOCK_MASTER_SEED]) {
-      const key = `${s.type}:${s.code}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push(s);
+    const n = installMaster(fetched, nowKST());
+    try {
+      writeJSON(STOCK_MASTER_FILE, {
+        stocks: STOCK_MASTER.stocks.map((s) => {
+          const row = { code: s.code, name: s.name, market: s.market, type: s.type };
+          if (s.aliases && s.aliases.length) row.aliases = s.aliases;
+          return row;
+        }),
+        updatedAt: STOCK_MASTER.updatedAt,
+      });
+    } catch (e) {
+      logLine('warn', 'master.write', { err: String(e) });
     }
-    STOCK_MASTER.stocks = merged;
-    STOCK_MASTER.updatedAt = nowKST();
-    STOCK_MASTER.loaded = true;
-    try { writeJSON(STOCK_MASTER_FILE, { stocks: merged, updatedAt: STOCK_MASTER.updatedAt }); } catch {}
-    logLine('info', 'master.refresh.ok', { count: merged.length, fetched: fetched.length });
+    logLine('info', 'master.refresh.ok', { count: n, fetched: fetched.length });
   } else {
     logLine('warn', 'master.refresh.fail', { fetched: fetched.length });
   }
 }
 
-function searchInMaster(q) {
-  // 한글 + 영문 + 코드 부분일치. 정확한 prefix 매치를 우선 정렬.
-  if (!STOCK_MASTER.loaded) return [];
-  const lowered = q.toLowerCase().trim();
-  if (!lowered) return [];
-  const out = [];
-  for (const s of STOCK_MASTER.stocks) {
-    const nameLow = s.name.toLowerCase();
-    const codeLow = s.code.toLowerCase();
-    let score = -1;
-    if (nameLow === lowered || codeLow === lowered) score = 0;
-    else if (nameLow.startsWith(lowered) || codeLow.startsWith(lowered)) score = 1;
-    else if (nameLow.includes(lowered) || codeLow.includes(lowered)) score = 2;
-    if (score >= 0) out.push({ ...s, _score: score });
-    if (out.length >= 50) break;
+loadLocalStockMaster();
+
+function mapNaverSearchItem(it) {
+  if (!it) return null;
+  if (it.category && it.category !== 'stock') return null;
+  const code = normalizeTicker(it.code || it.symbolCode || it.reutersCode || '');
+  const name = String(it.name || it.stockName || it.nm || '').trim();
+  if (!code || !name) return null;
+  const nation = String(it.nationCode || it.nation || '').toUpperCase();
+  const market = String(it.typeCode || it.stockExchangeType || it.market || '').toUpperCase();
+  // 홍콩·기타 시장 종목은 이 앱의 시세 경로(국내 6자리·미국 티커)로 조회가 안 된다.
+  if (nation && nation !== 'KOR' && nation !== 'KR' && nation !== 'USA' && nation !== 'US') return null;
+  const type = (nation === 'USA' || nation === 'US') ? 'stock_us'
+    : (nation === 'KOR' || nation === 'KR') ? 'stock_kr'
+    : inferStockType(code, market);
+  return { code, name, market, type };
+}
+
+async function fetchNaverSearchItems(url) {
+  const r = await httpsGet(url, {
+    headers: { 'Referer': 'https://m.stock.naver.com/', 'User-Agent': BROWSER_UA },
+    timeoutMs: 4000,
+  });
+  if (!r.ok) {
+    logLine('warn', 'search.http.naver', { url, status: r.status, err: r.error || null });
+    return [];
   }
-  out.sort((a, b) => a._score - b._score);
-  return out.slice(0, 10).map(({ _score, ...rest }) => rest);
+  try {
+    const j = JSON.parse(r.body);
+    const items = j?.result?.items || j?.items || [];
+    if (!Array.isArray(items)) return [];
+    return items.map(mapNaverSearchItem).filter(Boolean);
+  } catch (e) {
+    logLine('warn', 'search.parse.naver', { url, err: String(e) });
+    return [];
+  }
 }
 
-function searchTypeFromNationCode(nation) {
-  // stock.naver.com API: nation code (KOR / USA / 빈문자) + stockExchangeType (KOSPI/KOSDAQ/NASDAQ/NYSE...)
-  if (!nation) return null;
-  const n = String(nation).toUpperCase();
-  if (n === 'KOR' || n === 'KR') return 'stock_kr';
-  if (n === 'USA' || n === 'US') return 'stock_us';
-  return null;
+async function fetchYahooSearch(q) {
+  const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0`;
+  const r = await httpsGet(url, { timeoutMs: 4000 });
+  if (!r.ok) return [];
+  try {
+    const j = JSON.parse(r.body);
+    const out = [];
+    for (const it of j?.quotes || []) {
+      if (!it || !it.symbol) continue;
+      if (it.quoteType !== 'EQUITY' && it.quoteType !== 'ETF') continue;
+      const ksMatch = /^(\d{6})\.(KS|KQ)$/.exec(it.symbol);
+      if (ksMatch) {
+        out.push({
+          code: ksMatch[1],
+          name: it.shortname || it.longname || ksMatch[1],
+          market: ksMatch[2] === 'KS' ? 'KOSPI' : 'KOSDAQ',
+          type: 'stock_kr',
+        });
+      } else if (/^[A-Z][A-Z.0-9-]*$/.test(it.symbol)) {
+        out.push({
+          code: normalizeTicker(it.symbol),
+          name: it.shortname || it.longname || it.symbol,
+          market: it.exchDisp || it.exchange || 'US',
+          type: 'stock_us',
+        });
+      }
+    }
+    return out;
+  } catch (e) {
+    logLine('warn', 'search.parse.yahoo', { q, err: String(e) });
+    return [];
+  }
 }
-
-// 한글 자동완성용 — 네이버가 단순 UA 를 가끔 거부하므로 진짜 브라우저 UA 로 호출.
-const BROWSER_UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 
 async function fetchStockSearch(q) {
-  const results = [];
-  const seen = new Set();
-  const push = (item) => {
-    if (!item || !item.code) return;
-    const key = `${item.type || ''}:${item.code}`;
-    if (seen.has(key)) return;
-    seen.add(key);
-    results.push(item);
-  };
-
-  // 0차: 메모리 종목 마스터 부분일치 검색 — 한글 + 영문 즉시 매치.
-  // 부팅 시 1회 fetch 한 데이터 또는 시드. Render IP 차단 영향 없음.
-  for (const it of searchInMaster(q)) push(it);
-
-  // 1차: stock.naver.com 통합검색 (한글 + 영문 + 코드 모두 지원)
-  // stock.naver.com/search/{q} 페이지가 호출하는 백엔드. 파라미터 이름이 시기별로
-  // keyword / searchText 둘 다 쓰이므로 양쪽 모두 시도.
-  const stockSearchUrls = [
-    `https://api.stock.naver.com/search/total?keyword=${encodeURIComponent(q)}`,
-    `https://api.stock.naver.com/search/total?searchText=${encodeURIComponent(q)}`,
-    `https://api.stock.naver.com/search?keyword=${encodeURIComponent(q)}`,
-  ];
-  for (const url of stockSearchUrls) {
-    const r = await httpsGet(url, {
-      headers: { 'Referer': 'https://stock.naver.com/', 'User-Agent': BROWSER_UA },
-    });
-    if (!r.ok) {
-      logLine('warn', 'search.http.stock', { url, status: r.status, err: r.error || null });
-      continue;
+  // 0) 로컬 목록은 항상 즉시 매칭된다. 네이버가 죽어도 이 결과가 남는다.
+  const local = STOCK_MASTER.loaded ? STOCK_MASTER.stocks : [];
+  let remote = [];
+  const qEnc = encodeURIComponent(q);
+  // 2026-11 확인: /search/total, m.stock autoComplete(v1), ac.finance.naver.com,
+  // polling etcStockNameSearch, finance.naver.com/search/searchList 는 404 이거나 DNS 가 없다.
+  // 살아 있는 주소는 m.stock.naver.com/front-api/search (q, target, size, page).
+  try {
+    remote = await fetchNaverSearchItems(
+      `https://m.stock.naver.com/front-api/search?q=${qEnc}&target=stock&size=15&page=1`,
+    );
+    if (!remote.length) {
+      remote = await fetchNaverSearchItems(
+        `https://m.stock.naver.com/front-api/search/autoComplete?query=${qEnc}&target=stock&size=10&page=1`,
+      );
     }
-    try {
-      const j = JSON.parse(r.body);
-      const groups = [];
-      if (Array.isArray(j?.searchResult?.stock?.items)) groups.push(...j.searchResult.stock.items);
-      if (Array.isArray(j?.searchResult?.stocks)) groups.push(...j.searchResult.stocks);
-      if (Array.isArray(j?.stock?.items)) groups.push(...j.stock.items);
-      if (Array.isArray(j?.stocks)) groups.push(...j.stocks);
-      if (Array.isArray(j?.result?.stocks)) groups.push(...j.result.stocks);
-      if (Array.isArray(j?.result?.items)) groups.push(...j.result.items);
-      if (Array.isArray(j?.items)) groups.push(...j.items);
-      let added = 0;
-      for (const it of groups) {
-        if (!it) continue;
-        const code = it.itemCode || it.code || it.reutersCode || it.symbol || null;
-        const name = it.stockName || it.itemName || it.name || it.nameEng || null;
-        if (!code || !name) continue;
-        const nation = it.nationCode || it.nation || '';
-        const exchange = it.stockExchangeType?.code || it.stockExchangeType
-          || it.exchangeType || it.market || '';
-        const type = searchTypeFromNationCode(nation)
-          || (/^\d{6}$/.test(code) ? 'stock_kr' : 'stock_us');
-        push({ code: String(code), name: String(name).trim(), market: String(exchange || nation || ''), type });
-        added++;
-      }
-      if (added > 0) {
-        logLine('info', 'search.ok.stock', { url, added });
-        break;
-      }
-    } catch (e) {
-      logLine('warn', 'search.parse.stock', { url, err: String(e) });
-    }
+  } catch (e) {
+    logLine('warn', 'search.naver', { q, err: String(e) });
   }
-
-  // 2차: m.stock.naver.com 자동완성 (모바일)
-  if (results.length < 5) {
-    const url2 = `https://m.stock.naver.com/front-api/v1/search/autoComplete?query=${encodeURIComponent(q)}&target=stock,index,marketIndicator`;
-    const r2 = await httpsGet(url2, {
-      headers: { 'Referer': 'https://m.stock.naver.com/', 'User-Agent': BROWSER_UA },
-    });
-    if (r2.ok) {
-      try {
-        const j = JSON.parse(r2.body);
-        const items = j?.result?.items || j?.items || j?.result || [];
-        if (Array.isArray(items)) {
-          for (const it of items) {
-            const code = it.cd || it.itemCode || it.code || null;
-            const name = it.nm || it.stockName || it.name || null;
-            if (!code || !name) continue;
-            const nation = it.nationCode || it.nation || '';
-            const exchange = it.stockExchangeType?.code || it.stockExchangeType || it.exchange || '';
-            const type = searchTypeFromNationCode(nation)
-              || (/^\d{6}$/.test(code) ? 'stock_kr' : 'stock_us');
-            push({ code: String(code), name: String(name).trim(), market: String(exchange || nation || ''), type });
-          }
-        }
-      } catch (e) {
-        logLine('warn', 'search.parse.m', { q, err: String(e) });
-      }
-    } else {
-      logLine('warn', 'search.http.m', { q, status: r2.status, err: r2.error || null });
-    }
+  // 야후는 한글 질의에 400, 연속 호출에 429 를 낸다. 영문이고 로컬·네이버가 모두 비었을 때만.
+  if (!remote.length && !searchStocks(local, q, 1).length && /^[\x00-\x7F]+$/.test(q)) {
+    remote = await fetchYahooSearch(q);
   }
-
-  // 3차: polling.finance.naver.com 종목명 검색 (한국 종목만, 한글 검증된 endpoint)
-  if (results.length < 5) {
-    const url3p = `https://polling.finance.naver.com/api/sise/etcStockNameSearch.nhn?searchText=${encodeURIComponent(q)}&suggestionLimit=10`;
-    const r3p = await httpsGet(url3p, {
-      headers: { 'Referer': 'https://finance.naver.com/', 'User-Agent': BROWSER_UA },
-    });
-    if (r3p.ok) {
-      try {
-        const j = JSON.parse(r3p.body);
-        const items = j?.result?.items || j?.items || [];
-        if (Array.isArray(items)) {
-          for (const it of items) {
-            const code = it.cd || it.code || it.itemCode || null;
-            const name = it.nm || it.name || it.stockName || null;
-            if (code && /^\d{6}$/.test(code) && name) {
-              push({ code, name: String(name).trim(), market: it.mt || 'KOSPI', type: 'stock_kr' });
-            }
-          }
-        }
-      } catch (e) {
-        logLine('warn', 'search.parse.polling', { q, err: String(e) });
-      }
-    }
-  }
-
-  // 4차: 네이버 금융 자동완성 (구 API — 한국 종목만, 브라우저 UA + r_enc 명시)
-  if (results.length < 5) {
-    const url3 = `https://ac.finance.naver.com/ac?q=${encodeURIComponent(q)}&q_enc=UTF-8&st=111&frm=stock&r_lt=111&r_format=json&r_enc=UTF-8`;
-    const r3 = await httpsGet(url3, {
-      headers: { 'Referer': 'https://finance.naver.com/', 'User-Agent': BROWSER_UA },
-    });
-    if (r3.ok) {
-      try {
-        const j = JSON.parse(r3.body);
-        const groups = j?.items || [];
-        for (const grp of groups) {
-          if (!Array.isArray(grp)) continue;
-          for (const it of grp) {
-            if (!Array.isArray(it) || it.length < 2) continue;
-            const name = it[0]?.[0] || '';
-            const code = it[1]?.[0] || '';
-            const market = it[2]?.[0] || it[3]?.[0] || 'KOSPI';
-            if (code && /^\d{6}$/.test(code) && name) {
-              push({ code, name, market, type: 'stock_kr' });
-            }
-          }
-        }
-      } catch (e) {
-        logLine('warn', 'search.parse.acfinance', { q, err: String(e) });
-      }
-    } else {
-      logLine('warn', 'search.http.acfinance', { q, status: r3.status, err: r3.error || null });
-    }
-  }
-
-  // 4-bis차: finance.naver.com 검색 페이지 HTML 스크래핑 (EUC-KR).
-  // 사용자 요청: 다른 채널이 종목 못 찾을 때 finance.naver.com 의 통합 검색 결과로 폴백.
-  // 결과 페이지 구조: <a href="/item/main.naver?code=NNNNNN">종목명</a>
-  if (results.filter(r => r.type === 'stock_kr').length < 3) {
-    const url4b = `https://finance.naver.com/search/searchList.naver?query=${encodeURIComponent(q)}`;
-    const r4b = await httpsGetBuffer(url4b, {
-      headers: { 'Referer': 'https://finance.naver.com/', 'User-Agent': BROWSER_UA },
-      timeoutMs: 8000,
-    });
-    if (r4b.ok) {
-      try {
-        const html = r4b.body;
-        // 두 패턴 모두 시도: 일반 검색 결과 + 상단 추천 종목.
-        const re = /<a\s+href="\/item\/main\.naver\?code=(\d{6})"[^>]*>([^<]+)<\/a>/g;
-        let mm;
-        let added = 0;
-        while ((mm = re.exec(html)) && added < 10) {
-          const code = mm[1];
-          const name = stripTags(mm[2]).trim();
-          if (!name) continue;
-          // KOSPI/KOSDAQ 구분 정보는 페이지에 없을 수 있어서 기본 KOSPI.
-          push({ code, name, market: 'KOSPI', type: 'stock_kr' });
-          added++;
-        }
-        if (added) logLine('info', 'search.ok.finance', { q, added });
-      } catch (e) {
-        logLine('warn', 'search.parse.finance', { q, err: String(e) });
-      }
-    } else {
-      logLine('warn', 'search.http.finance', { q, status: r4b.status, err: r4b.error || null });
-    }
-  }
-
-  // 4차: Yahoo Finance search (해외 보강)
-  if (results.length < 8) {
-    const url4 = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0`;
-    const r4 = await httpsGet(url4);
-    if (r4.ok) {
-      try {
-        const j = JSON.parse(r4.body);
-        const quotes = j?.quotes || [];
-        for (const it of quotes) {
-          if (!it.symbol) continue;
-          if (it.quoteType !== 'EQUITY' && it.quoteType !== 'ETF') continue;
-          const ksMatch = /^(\d{6})\.(KS|KQ)$/.exec(it.symbol);
-          if (ksMatch) {
-            push({
-              code: ksMatch[1],
-              name: it.shortname || it.longname || ksMatch[1],
-              market: ksMatch[2] === 'KS' ? 'KOSPI' : 'KOSDAQ',
-              type: 'stock_kr',
-            });
-          } else if (/^[A-Z][A-Z.0-9-]*$/.test(it.symbol)) {
-            push({
-              code: it.symbol,
-              name: it.shortname || it.longname || it.symbol,
-              market: it.exchDisp || it.exchange || 'US',
-              type: 'stock_us',
-            });
-          }
-        }
-      } catch (e) {
-        logLine('warn', 'search.parse.yahoo', { q, err: String(e) });
-      }
-    }
-  }
-  return results.slice(0, 10);
+  const merged = mergeSearchResults(local, remote, q, 12);
+  if (remote.length) logLine('info', 'search.ok', { q, remote: remote.length, out: merged.length });
+  return merged;
 }
+
 
 async function handleStockSearch(req, res) {
   if (req.method !== 'GET') return reply(res, 405, { ok: false, error: 'GET only' });
@@ -2240,7 +2162,8 @@ async function handleStockSearch(req, res) {
   if (!q || q.length < 1 || q.length > 30) {
     return reply(res, 400, { ok: false, error: 'invalid q (1-30 chars)' });
   }
-  const cacheKey = `__search:${q.toLowerCase()}`;
+  // 공백·문장부호만 다른 검색어("삼성 전자" / "삼성전자", "BRK.B" / "brk b")는 같은 캐시.
+  const cacheKey = `__search:${normalizeSearchKey(q) || q.toLowerCase()}`;
   const { entry, stale } = getStockCacheEntry(cacheKey, STOCK_TAB_TTL.search);
   if (entry && !stale) {
     return reply(res, 200, { ok: true, q, ...entry.payload, cached: true });

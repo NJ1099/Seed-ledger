@@ -31,6 +31,7 @@ const state = {
   stockRefreshTimer: null,    // 주식 탭 5분 폴링 타이머
   sidecarTimer: null,        // 사이드카 배지 폴링 타이머
   stockSearchDebounce: null,  // 종목 검색 디바운스 핸들
+  stockSearchSeq: 0,          // 늦게 도착한 이전 검색 결과가 최신 결과를 덮지 않게
   pensionDays: 30,            // 국민연금 매수/매도 표 조회 기간 (일)
   krxPensionDays: 30,         // KRX 연기금 일별 매매 조회 기간 (일). 기본 버튼과 같은 값으로 둔다
   flowsDays: 30,              // 연기금·외국인 순매수/순매도 조회 기간 (일)
@@ -6671,8 +6672,11 @@ function buildNaverStockUrl(item) {
   const name = String(item.name || '').trim();
   const market = String(item.market || '').toUpperCase();
   const type = item.type || (/^\d{6}$/.test(code) ? 'stock_kr' : 'stock_us');
-  if (type === 'stock_kr' && /^\d{6}$/.test(code)) {
-    return `https://finance.naver.com/item/main.naver?code=${code}`;
+  if (type === 'stock_kr' && /^[0-9A-Z]{6}$/i.test(code)) {
+    // 숫자 6자리는 finance.naver 가 우선주·ETF 까지 연다.
+    // 영숫자가 섞인 신규 코드(0162Z0 등)는 finance 가 stock.naver 국내 페이지로 보낸다.
+    if (/^\d{6}$/.test(code)) return `https://finance.naver.com/item/main.naver?code=${code}`;
+    return `https://stock.naver.com/domestic/stock/${encodeURIComponent(code)}/total`;
   }
   if (type === 'stock_us' && code) {
     if (market === 'NASDAQ') return `https://stock.naver.com/worldstock/stock/${code}.O/total`;
@@ -6707,23 +6711,38 @@ function setupStockSearch() {
   const input = $('#stock-search-input');
   const out = $('#stock-search-results');
   if (!input || !out) return;
+  input.setAttribute('role', 'combobox');
+  input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-controls', 'stock-search-results');
+  input.setAttribute('aria-expanded', 'false');
+  const setOpen = (open) => {
+    out.hidden = !open;
+    input.setAttribute('aria-expanded', open ? 'true' : 'false');
+  };
   input.addEventListener('input', () => {
     const q = input.value.trim();
     if (state.stockSearchDebounce) clearTimeout(state.stockSearchDebounce);
+    state.stockSearchSeq += 1;
     if (!q) {
-      out.hidden = true;
+      setOpen(false);
       out.innerHTML = '';
       return;
     }
-    state.stockSearchDebounce = setTimeout(() => runStockSearch(q), 250);
+    const seq = state.stockSearchSeq;
+    // 한 글자마다 서버를 치지 않는다. 한글 조합 중에도 초성으로 찾을 수 있게 input 을 막지 않는다.
+    state.stockSearchDebounce = setTimeout(() => runStockSearch(q, seq), 250);
   });
   input.addEventListener('focus', () => {
-    if (out.innerHTML) out.hidden = false;
+    if (out.innerHTML) setOpen(true);
   });
-  // 외부 클릭 시 닫힘
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Escape') setOpen(false);
+  });
+  // 외부 클릭 시 닫힘. 이미 떠난 검색의 응답이 다시 열지 않게 순번을 넘긴다.
   document.addEventListener('click', (ev) => {
     if (!ev.target.closest('.stock-search')) {
-      out.hidden = true;
+      state.stockSearchSeq += 1;
+      setOpen(false);
     }
   });
   // 결과 클릭 → 사이트 내 인라인 차트로 표시 (외부 이탈 없음. 네이버는 패널 헤더 링크로 opt-in).
@@ -6736,18 +6755,26 @@ function setupStockSearch() {
     const market = item.getAttribute('data-market');
     const type = item.getAttribute('data-type');
     renderInlineStockChart({ type, code, name, market });
-    out.hidden = true;
+    setOpen(false);
     if (name) input.value = name;
   });
 }
 
-async function runStockSearch(q) {
+async function runStockSearch(q, seq) {
   const out = $('#stock-search-results');
+  const input = $('#stock-search-input');
   if (!out) return;
+  const stillCurrent = () => seq === state.stockSearchSeq;
+  // 디바운스 사이에 입력을 지웠거나 바깥을 눌러 닫았으면 패널을 다시 열지 않는다.
+  if (!stillCurrent()) return;
+  out.innerHTML = '<div class="search-empty" role="status">검색 중…</div>';
+  out.hidden = false;
+  if (input) input.setAttribute('aria-expanded', 'true');
   try {
     const r = await stockApiGet(`/api/stock-search?q=${encodeURIComponent(q)}`);
+    if (!stillCurrent()) return;
     if (!r || !r.ok || !Array.isArray(r.results) || !r.results.length) {
-      out.innerHTML = '<div class="search-empty">검색 결과가 없습니다.</div>';
+      out.innerHTML = `<div class="search-empty" role="status">‘${esc(q)}’에 맞는 종목이 없습니다. 이름, 코드, 초성으로 다시 검색해 보세요.</div>`;
       out.hidden = false;
       return;
     }
@@ -6767,11 +6794,13 @@ async function runStockSearch(q) {
       </a>`;
     }).join('');
     out.hidden = false;
+    if (input) input.setAttribute('aria-expanded', 'true');
     // 결과 도착 즉시 가격 batch 조회 → 각 row 의 가격 영역 채움.
     fillSearchPrices(r.results);
   } catch (e) {
     console.warn('[stock] search failed', e);
-    out.innerHTML = '<div class="search-empty">검색 오류</div>';
+    if (!stillCurrent()) return;
+    out.innerHTML = '<div class="search-empty" role="status">검색에 실패했습니다. 잠시 후 다시 시도해 주세요.</div>';
     out.hidden = false;
   }
 }
